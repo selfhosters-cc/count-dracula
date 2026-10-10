@@ -56,6 +56,14 @@ _Avoid_: Neighbourhood, radius, zone (that's the Household's time zone), nearby 
 For nearby figures, a Household whose live, non-Rehearsal Event has counted at least one kid in the last 30 minutes. Only Active Households count toward an Area's minimum of 5 and its totals.
 _Avoid_: Live household, online household
 
+**Site-wide total**:
+The kids counted right now across every Household with a live, non-Rehearsal Event, and how many such Households there are, with the top costume counted in at least 3 of them. Rounded to 5s, refreshed every 10 minutes, and hidden below 5 Households. It shows on the door phone when there are no nearby figures, and on the public sign-up page.
+_Avoid_: Global count, total tonight (there's no single "tonight" across time zones)
+
+**Estimated past event**:
+A counts-only past Event a Household without a past night gets by typing in last year's total. The total is spread over a fixed typical half-hour curve to give a ghost to race, and it's labelled "last year (estimated)" wherever it shows.
+_Avoid_: Fake ghost, seed, Expected kids (that's this year's guess for the golden range)
+
 **Suspended**:
 A Household the Operator has switched off without deleting anything: its Managers see a notice instead of `/setup`, its phones, TV link and Night summary links are refused, and it drops out of nearby figures. Unsuspending restores everything.
 _Avoid_: Banned, disabled, blocked, deleted
