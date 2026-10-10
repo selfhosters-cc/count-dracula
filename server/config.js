@@ -10,6 +10,7 @@ export function loadConfig(configPath) {
   return {
     adminPin: String(raw.adminPin ?? ''),
     port: raw.port ?? 3131,
+    lanUrl: raw.lanUrl ?? null, // what "Add a helper" puts in its QR code; null → this machine's LAN address
     dbPath: fromConfigDir(raw.dbPath ?? 'count-dracula.sqlite'),
     switches: raw.switches ?? {},
     soundboard: (raw.soundboard ?? []).map((slot) => ({ label: slot.label, file: slot.file })),

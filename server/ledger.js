@@ -51,6 +51,10 @@ const SCHEMA = `
     state TEXT NOT NULL,
     kid_id TEXT
   );
+  CREATE TABLE IF NOT EXISTS kv (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS fired_moments (
     event_id INTEGER NOT NULL REFERENCES events(id),
     moment TEXT NOT NULL,
@@ -63,6 +67,10 @@ const SCHEMA = `
 
 // A command the Ledger refuses; the HTTP layer answers 400.
 export class BadCommand extends Error {}
+
+// The TV's volume and mutes from the ☰ menu. Global, not per event: a level tuned at the rehearsal
+// should survive Go live (builder's latitude, spec §16).
+const DEFAULT_MIX = { volume: 1, mutes: { ambience: false, bloops: false, everything: false } }
 
 // A tap that reaches the server more than this long after it was tapped is late (spec §2).
 const LATE_AFTER_MS = 10_000
@@ -82,6 +90,7 @@ export function openLedger(db, config) {
   const switches = { ...DEFAULT_SWITCHES, ...config.switches }
   const now = config.now ?? Date.now
   const random = config.random ?? Math.random
+  const lanUrl = typeof config.lanUrl === 'function' ? config.lanUrl : () => config.lanUrl ?? null
 
   db.exec('PRAGMA journal_mode = WAL')
   db.exec(SCHEMA)
@@ -266,6 +275,14 @@ export function openLedger(db, config) {
       return row ? [{ type: 'kid.removed', kidId, golden: goldenSummary(event) }] : []
     },
 
+    // ---- The ☰ menu's TV controls (spec §5): any phone with the join key.
+    mix({ volume, mutes = {} }) {
+      if (!Number.isFinite(volume) || volume < 0 || volume > 1) throw new BadCommand('Volume runs from 0 to 1')
+      const mix = { volume, mutes: { ambience: !!mutes.ambience, bloops: !!mutes.bloops, everything: !!mutes.everything } }
+      db.query("INSERT OR REPLACE INTO kv (key, value) VALUES ('mix', ?)").run(JSON.stringify(mix))
+      return [{ type: 'mix.changed', mix }]
+    },
+
     // ---- Setup (spec §6). Creating an event doesn't make it live.
     // "Copy costumes from" brings names, emoji, order, sounds and the Visit window, with zero counts.
     createEvent({ name, copyTagsFrom }) {
@@ -383,6 +400,11 @@ export function openLedger(db, config) {
     return { tag, event: writableEvent(tag.event_id) }
   }
 
+  function currentMix() {
+    const row = db.query("SELECT value FROM kv WHERE key = 'mix'").get()
+    return row ? JSON.parse(row.value) : DEFAULT_MIX
+  }
+
   // Past events are read-only (spec §2).
   function writableEvent(eventId) {
     const event = eventById(eventId)
@@ -437,7 +459,7 @@ export function openLedger(db, config) {
           .map(toKid),
         ghost: ghostOf(event),
         golden: goldenSummary(event),
-        settings: { switches },
+        settings: { switches, mix: currentMix(), lanUrl: lanUrl() },
         seq,
       }
     },

@@ -17,9 +17,9 @@ The ☰ sheet over the phone counting screen, **open to any phone with the join 
 
 ## Acceptance criteria
 
-- [ ] Any joined phone can open ☰; a phone without the key can't change anything
-- [ ] The volume slider changes the TV level live
-- [ ] Each mute silences its group, and 🔇 shows on the TV while any mute is on
-- [ ] With ambience muted, the TV's audio path stays awake (the next bloop plays in full after a long gap)
-- [ ] Scanning the QR code on a non-Tailscale phone opens the LAN URL already joined
-- [ ] The QR code never renders on `/tv`
+- [x] Any joined phone can open ☰; a phone without the key can't change anything
+- [x] The volume slider changes the TV level live
+- [x] Each mute silences its group, and 🔇 shows on the TV while any mute is on
+- [x] With ambience muted, the TV's audio path stays awake (the next bloop plays in full after a long gap)
+- [x] Scanning the QR code on a non-Tailscale phone opens the LAN URL already joined
+- [x] The QR code never renders on `/tv`

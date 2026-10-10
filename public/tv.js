@@ -23,6 +23,7 @@ const showStart = () => ($('start').hidden = sound.running)
 audio.onStateChange(showStart)
 showStart()
 if (sound.running) sound.unlock() // the kiosk's autoplay flag (ticket 37) starts it without a click
+// (the mix from the snapshot is applied when it arrives, below)
 $('start').addEventListener('click', async () => {
   await sound.unlock()
   showStart()
@@ -154,6 +155,14 @@ function renderGoldenPill(state) {
   $('golden-left').textContent = left
 }
 
+// The ☰ menu's volume and mutes: into the sound engine, and 🔇 in the top bar while any mute is on.
+function applyMix(state) {
+  const mix = state.settings.mix
+  if (!mix) return
+  sound.mix(mix)
+  $('muted').hidden = !Object.values(mix.mutes).some(Boolean)
+}
+
 function renderRace(state, animate = true) {
   race.update(state, Date.now(), animate)
   $('pace').textContent = paceText(state)
@@ -179,8 +188,10 @@ live.on(({ state, cause, delta }) => {
     wasDisconnected = false
     renderRace(state)
     renderGoldenPill(state)
+    applyMix(state)
     return
   }
+  if (delta.type === 'mix.changed') return applyMix(state)
   renderRace(state)
   renderGoldenPill(state)
   if (delta.type === 'kid.added') {

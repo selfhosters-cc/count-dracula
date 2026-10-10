@@ -34,6 +34,8 @@
       border: 2px solid #ffcf3a; color: #ffcf3a; font-weight: 700; font-size: clamp(12px, 1.8vw, 30px); white-space: nowrap; }
     .golden-pill[hidden] { display: none; }
     .golden-pill b { font-family: var(--f-display); font-weight: 400; }
+    .muted { font-size: clamp(14px, 2vw, 34px); opacity: .8; }
+    .muted[hidden] { display: none; }
     .clock { font-family: var(--f-display); font-size: clamp(14px, 2.2vw, 36px); color: var(--ink-dim); }
     .hero { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
     .hero .big { font-family: var(--f-display); font-size: clamp(64px, 15vw, 300px); line-height: .9; }
@@ -86,6 +88,7 @@
       <div class="title">Count Dracula</div>
       <div style="display: flex; gap: 1.5vw; align-items: center">
         <span class="golden-pill" id="golden-pill" hidden>🎫 <b id="golden-left"></b> golden tickets left</span>
+        <span class="muted" id="muted" hidden title="Sound muted from a phone">🔇</span>
         <span class="clock" id="clock"></span>
       </div>
     </div>

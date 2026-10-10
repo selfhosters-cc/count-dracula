@@ -178,7 +178,7 @@ describe('snapshot', () => {
         ],
       },
       golden: { left: 5, nextIsGolden: false },
-      settings: { switches: expect.any(Object) },
+      settings: { switches: expect.any(Object), mix: expect.any(Object), lanUrl: null },
       seq: 1,
     })
     expect(JSON.stringify(snap)).not.toContain(ledger.joinKey())
@@ -732,5 +732,42 @@ describe('golden tickets: winning', () => {
 
     expect(Object.keys(ledger.snapshot().golden).sort()).toEqual(['left', 'nextIsGolden'])
     expect(ledger.events().some((e) => 'tickets' in e)).toBe(false)
+  })
+})
+
+describe('TV mix (☰ volume and mutes)', () => {
+  const quiet = { volume: 0.4, mutes: { ambience: true, bloops: false, everything: false } }
+
+  test('starts at full volume with nothing muted', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+
+    expect(ledger.snapshot().settings.mix).toEqual({ volume: 1, mutes: { ambience: false, bloops: false, everything: false } })
+  })
+
+  test('any change goes to the TV as a delta and into the snapshot', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+
+    expect(ledger.apply({ type: 'mix', ...quiet })).toMatchObject([{ type: 'mix.changed', mix: quiet }])
+    expect(ledger.snapshot().settings.mix).toEqual(quiet)
+  })
+
+  test('is global: it survives a restart and Go live', () => {
+    const db = new Database(':memory:')
+    const ledger = openLedger(db, { ghostSeed })
+    ledger.apply({ type: 'mix', ...quiet })
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
+    ledger.apply({ type: 'goLive', eventId: event.id })
+
+    expect(openLedger(db, { ghostSeed }).snapshot().settings.mix).toEqual(quiet)
+  })
+
+  test.each([
+    ['a volume above 1', { volume: 1.5, mutes: {} }],
+    ['a negative volume', { volume: -0.1, mutes: {} }],
+    ['no volume', { mutes: {} }],
+  ])('refuses %s', (_, mix) => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+
+    expect(() => ledger.apply({ type: 'mix', ...mix })).toThrow(BadCommand)
   })
 })

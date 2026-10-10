@@ -88,6 +88,8 @@ function applyDelta(state, delta) {
       const kids = state.kids.map((k) => (ids.has(k.id) ? { ...k, tagId: delta.tagId } : k))
       return { ...state, seq: delta.seq, kids }
     }
+    case 'mix.changed':
+      return { ...state, seq: delta.seq, settings: { ...state.settings, mix: delta.mix } }
     case 'tag.added':
       return { ...state, seq: delta.seq, tags: [...state.tags, delta.tag] }
     case 'tag.updated':

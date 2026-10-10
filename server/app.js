@@ -1,5 +1,6 @@
 // The HTTP layer stays thin: check the join key, parse the body, call ledger.apply, publish the deltas.
 import { Database } from 'bun:sqlite'
+import { networkInterfaces } from 'node:os'
 import { resolve, sep } from 'node:path'
 import { loadConfig } from './config.js'
 import { BadCommand, openLedger } from './ledger.js'
@@ -12,7 +13,8 @@ const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey'
 
 export function startServer({ configPath, port, heartbeatMs }) {
   const config = loadConfig(configPath)
-  const ledger = openLedger(new Database(config.dbPath, { create: true }), config)
+  let lanUrl = config.lanUrl // resolved once the server is listening, if the config doesn't say
+  const ledger = openLedger(new Database(config.dbPath, { create: true }), { ...config, lanUrl: () => lanUrl })
   const hub = createHub({ heartbeatMs })
 
   const routes = {
@@ -36,6 +38,10 @@ export function startServer({ configPath, port, heartbeatMs }) {
       const deltas = ledger.apply(command)
       hub.publish(deltas)
       return Response.json({ deltas, joinKey: ledger.joinKey() })
+    }),
+    'POST /api/mix': write(async (req) => {
+      const { volume, mutes } = await req.json()
+      hub.publish(ledger.apply({ type: 'mix', volume, mutes }))
     }),
     'POST /api/catch-up': write(async (req) => {
       const { tag, n, kid } = await req.json()
@@ -77,6 +83,8 @@ export function startServer({ configPath, port, heartbeatMs }) {
     },
   })
 
+  lanUrl ??= lanAddress(server.port)
+
   return {
     url: server.url.origin,
     ledger,
@@ -100,6 +108,15 @@ async function serveStatic(pathname) {
   if (!path.startsWith(dir + sep) || path.endsWith('.test.js')) return notFound()
   const file = Bun.file(path)
   return (await file.exists()) ? new Response(file) : notFound()
+}
+
+// This machine's first LAN IPv4 address: what a helper's phone on the home Wi-Fi can reach.
+function lanAddress(port) {
+  for (const addresses of Object.values(networkInterfaces())) {
+    const lan = addresses?.find((a) => a.family === 'IPv4' && !a.internal)
+    if (lan) return `http://${lan.address}:${port}`
+  }
+  return null
 }
 
 function notFound() {

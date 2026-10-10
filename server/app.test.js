@@ -285,3 +285,40 @@ describe('admin (Setup)', () => {
     stream.close()
   })
 })
+
+describe('☰ menu', () => {
+  test('changing the TV mix needs the join key, and reaches the TV as a delta', async () => {
+    const app = start()
+    const stream = await openStream(app)
+    await stream.next()
+    const post = (key) =>
+      fetch(`${app.url}/api/mix`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Join-Key': key },
+        body: JSON.stringify({ volume: 0.5, mutes: { everything: true } }),
+      })
+
+    expect((await post('wrong')).status).toBe(403)
+    expect((await post(app.ledger.joinKey())).status).toBe(200)
+    expect((await stream.next()).data).toMatchObject({ type: 'mix.changed', mix: { volume: 0.5, mutes: { everything: true } } })
+    stream.close()
+  })
+
+  test('"Add a helper" uses the LAN URL from the config file', async () => {
+    const app = start({ lanUrl: 'http://192.168.1.50:3131' })
+
+    const snap = await (await fetch(`${app.url}/api/snapshot`)).json()
+
+    expect(snap.settings.lanUrl).toBe('http://192.168.1.50:3131')
+  })
+
+  test("without one, it falls back to this machine's LAN address and port", async () => {
+    const app = start()
+
+    const snap = await (await fetch(`${app.url}/api/snapshot`)).json()
+
+    expect(snap.settings.lanUrl).toMatch(/^http:\/\/(\d{1,3}\.){3}\d{1,3}:\d+$/)
+    expect(snap.settings.lanUrl).not.toContain('127.0.0.1')
+    expect(snap.settings.lanUrl.endsWith(`:${new URL(app.url).port}`)).toBe(true)
+  })
+})
