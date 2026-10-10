@@ -455,6 +455,19 @@ live?.on(({ state, cause, delta }) => {
   }
 })
 
+// ---- stay awake: a screen Wake Lock on HTTPS (a bonus; the laptop's own settings are what's relied on)
+async function keepAwake() {
+  if (!('wakeLock' in navigator) || !isSecureContext || document.visibilityState !== 'visible') return
+  try {
+    await navigator.wakeLock.request('screen')
+  } catch {} // refused (battery saver, policy): the OS settings still hold
+}
+keepAwake()
+document.addEventListener('visibilitychange', keepAwake) // the lock drops whenever the page is hidden
+
+// ---- /tv?border: a test pattern for checking overscan on the real TV (spec §14)
+if (new URLSearchParams(location.search).has('border')) document.body.classList.add('overscan-test')
+
 // ---- the 🦇 chip and the clock
 setInterval(() => {
   if (!live) return

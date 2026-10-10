@@ -117,6 +117,10 @@
       font-size: clamp(16px, 2.4vw, 46px); font-weight: 600; color: var(--ink); }
     #confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 45; }
 
+    /* /tv?border: everything inside the red frame should be visible; the white corner ticks mark the edge */
+    body.overscan-test::after { content: 'Overscan test: all four red edges and white corners must be visible'; position: fixed; inset: 0;
+      z-index: 99; border: 6px solid #ff2b2b; outline: 2px solid #fff; outline-offset: -14px; display: grid; place-content: center;
+      color: #fff; font-size: 2vw; background: rgba(0, 0, 0, .35); pointer-events: none; }
     /* Disconnected: decorative, never alarming (spec §7 States) */
     /* "Start the night": shown whenever the AudioContext isn't running (spec §7 States) */
     #start { position: fixed; inset: 0; z-index: 50; display: grid; place-content: center; gap: 2vh; text-align: center;
