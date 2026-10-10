@@ -47,3 +47,7 @@ _Avoid_: Neighbourhood, radius, zone (that's the Household's time zone), nearby 
 **Active Household**:
 For nearby figures, a Household whose live, non-Rehearsal Event has counted at least one kid in the last 30 minutes. Only Active Households count toward an Area's minimum of 5 and its totals.
 _Avoid_: Live household, online household
+
+**Suspended**:
+A Household the Operator has switched off without deleting anything: its Managers see a notice instead of `/setup`, its phones, TV link and Night summary links are refused, and it drops out of nearby figures. Unsuspending restores everything.
+_Avoid_: Banned, disabled, blocked, deleted
