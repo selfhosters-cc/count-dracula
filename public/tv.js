@@ -67,12 +67,12 @@ function play(show) {
   playing = show
   if (!show) {
     if (ending?.kind === 'takeover') animate($('takeover'), { opacity: 0 }, { duration: 0.4 })
+    else if (ending?.kind === 'milestone') animate($('tomb'), { transform: 'translateY(120%)' }, { duration: 0.5, ease: 'easeIn' }) // back underground
     else animate(pop, { opacity: 0, scale: 0.9 }, { duration: 0.25 })
     return
   }
   if (show.kind === 'milestone') return playMilestone(show)
   if (show.kind === 'takeover') return playTakeover(show)
-  pop.classList.remove('ms')
   const merged = show.from !== show.to
   sound.cue(merging ? 'scale' : 'bloop', { step: show.to - show.from })
   pop.innerHTML = merged ? `<small>Welcome, kids</small>#${show.from}–${show.to}!` : `<small>You're kid</small>#${show.from}!`
@@ -86,13 +86,17 @@ function play(show) {
   })
 }
 
-// Every 50th: the big white chip, emoji confetti and a cartoon organ (spec §8).
+// Every 50th: a headstone rises out of the ground with the milestone carved on it, emoji confetti and a
+// cartoon organ (spec §8; the headstone was the user's idea while building, Oct 10).
 function playMilestone({ number }) {
-  const pop = $('pop')
-  pop.classList.add('ms')
-  pop.innerHTML = `<small>Milestone</small>#${number}! 🎉`
-  animate(pop, { opacity: 1, scale: [0.3, 1] }, { type: 'spring', bounce: 0.5, duration: 0.5 })
-  emojiConfetti(['🎃', '🍬'], 3)
+  const text = `#${number}`
+  const size = text.length > 4 ? 78 : 96 // "#1000" still fits the stone
+  for (const id of ['tomb-number', 'tomb-number-hi']) {
+    $(id).textContent = text
+    $(id).setAttribute('font-size', size)
+  }
+  animate($('tomb'), { transform: ['translateY(120%) rotate(-4deg)', 'translateY(-4%) rotate(2deg)', 'translateY(0%) rotate(0deg)'] }, { duration: 0.9, ease: 'easeOut' })
+  emojiConfetti(['🎃', '🍬', '🦇'], 3)
   sound.cue('sting:50')
 }
 

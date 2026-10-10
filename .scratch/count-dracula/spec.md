@@ -296,7 +296,7 @@ These are the baseline timings; tune them at the rehearsal.
 |---|---|---|
 | **Kid pop** | An orange "YOU'RE KID #N!" chip at the centre, small confetti | ~1.5 s |
 | **Merged pop** | Kids arriving inside the pop's window merge into "WELCOME, KIDS #N–M!" | capped at ~3 s |
-| **Every 50th** | A bigger white chip "MILESTONE #150! 🎉", emoji confetti | ~3 s |
+| **Every 50th** | A headstone rises out of a grassy mound with the milestone carved on it ("R.I.P. · MILESTONE · #150"), emoji confetti, then sinks back. *(Replaced the white chip, Oct 10, at the user's request.)* | ~3 s |
 | **#100 / #200 / #300** | Full-screen takeover, Creepster headline, emoji confetti | 5–6 s |
 | **Beat last year** (Race-against total + 1, i.e. #347) | Full-screen takeover | 5–6 s |
 | **Golden ticket** | Full-screen takeover in a gold palette: "KID #N WINS! You found a golden ticket!" | 5–6 s |
