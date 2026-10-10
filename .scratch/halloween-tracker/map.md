@@ -31,6 +31,7 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 <!-- one line per closed ticket: [title](issues/NN-slug.md) — gist -->
 
 - [Last year's numbers](issues/01-last-years-numbers.md) — 346 kids from 17:42 to 20:00, peak 119 in 19:00–19:30; natural drop-off, so 346 is a fair target; ghost line flat after 20:00.
+- [Fun-features shortlist](issues/04-fun-features-shortlist.md) — 8 must-haves in build order (kid pop → ghost race → milestones → 5 secret golden tickets → leaderboard → trend alert → soundboard → pumpkin patch); 4 nice-to-haves; 4 cut.
 - [Live-update stack](issues/02-live-update-stack.md) — Bun + bun:sqlite, POST taps + SSE with a snapshot on connect, phone-generated IDs for idempotent offline taps, no-build TV with Chart.js/Motion/confetti.
 - [Laptop kiosk setup](issues/03-laptop-kiosk-setup.md) — "Start the night" click plus Chrome autoplay flag and `--kiosk`; OS-level keep-awake; 1080p60 with TV "Just Scan"; Web Audio with capped overlaps; 11-step rehearsal checklist.
 
@@ -41,6 +42,7 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 - **End-of-night recap** — a summary screen once the night winds down; maybe a shareable image.
 - **Failure resilience** — phone outbox + snapshot-on-reconnect covers Wi-Fi blips (see Live-update stack); still open: server/laptop crash recovery and a manual fallback if everything dies.
 - **Visit window tuning** — the actual grouping threshold; may want to be adjustable live.
+- **Event setup** — creating an event before the night: name, tags set up ahead of time, golden ticket count and draw, entering ghost data, choosing which event is live. Probably a small admin view on the phone.
 - **Tag presentation** — colour/emoji assignment per tag, how many tags fit on TV and phone.
 - **Final spec assembly** — rolling every decision into the hand-off spec.
 
@@ -48,3 +50,4 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 
 - Multi-household / neighbourhood leaderboard — scoped to one household (charting decision); a separate effort for another year.
 - Accounts / sign-up — single household, trusted devices.
+- Candy meter, photo booth/camera, kid self-tap tablet, weather — cut in [Fun-features shortlist](issues/04-fun-features-shortlist.md): no candy shortage last year, privacy with a street-facing TV, accuracy, low value.
