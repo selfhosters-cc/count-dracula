@@ -1,7 +1,7 @@
 # Public hosting and abuse
 
 Type: grilling (HITL)
-Status: open
+Status: claimed
 Blocked by: 03, 04, 06
 
 ## Question
