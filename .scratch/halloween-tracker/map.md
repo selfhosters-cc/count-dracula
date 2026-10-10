@@ -31,10 +31,11 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 <!-- one line per closed ticket: [title](issues/NN-slug.md) — gist -->
 
 - [Live-update stack](issues/02-live-update-stack.md) — Bun + bun:sqlite, POST taps + SSE with a snapshot on connect, phone-generated IDs for idempotent offline taps, no-build TV with Chart.js/Motion/confetti.
+- [Laptop kiosk setup](issues/03-laptop-kiosk-setup.md) — "Start the night" click plus Chrome autoplay flag and `--kiosk`; OS-level keep-awake; 1080p60 with TV "Just Scan"; Web Audio with capped overlaps; 11-step rehearsal checklist.
 
 ## Not yet specified
 
-- **Dress rehearsal** — what the Oct 24 rehearsal must exercise and what "pass" means.
+- **Dress rehearsal** — what the Oct 24 rehearsal must exercise and what "pass" means. Laptop kiosk setup supplies an 11-step hardware checklist; still open: app-level scenarios (burst of 10 kids, phone offline, server restart).
 - **Idle / attract mode** — what the TV shows when nobody's at the door (could be most of the night).
 - **End-of-night recap** — a summary screen once the night winds down; maybe a shareable image.
 - **Failure resilience** — phone outbox + snapshot-on-reconnect covers Wi-Fi blips (see Live-update stack); still open: server/laptop crash recovery and a manual fallback if everything dies.

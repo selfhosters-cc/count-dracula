@@ -1,7 +1,7 @@
 # Last year's numbers
 
 Type: task (HITL)
-Status: open
+Status: claimed
 Blocked by:
 
 ## Question
