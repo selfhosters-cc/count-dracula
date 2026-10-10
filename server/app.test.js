@@ -218,10 +218,10 @@ describe('pages', () => {
     expect(res.headers.get('Content-Type')).toStartWith(type)
   })
 
-  test('serves nothing outside public/', async () => {
+  test('serves nothing outside public/, and no test files', async () => {
     const app = start()
 
-    for (const path of ['/..%2fserver%2fapp.js', '/%2e%2e/server/app.js', '/nope.html']) {
+    for (const path of ['/..%2fserver%2fapp.js', '/%2e%2e/server/app.js', '/nope.html', '/outbox.test.js']) {
       expect((await fetch(`${app.url}${path}`)).status).toBe(404)
     }
   })

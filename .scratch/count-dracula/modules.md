@@ -117,13 +117,16 @@ The TV's "never celebrate a snapshot" rule is one check: `cause === 'delta'`.
 const outbox = createOutbox({ send, storage, clock })
 outbox.tap(tagId) → entry
 outbox.undo() → { local: entry } | { server: kidId }   // pop an unsent tap, or ask the server
-outbox.pending
-outbox.status                                           // 'ok' | { waiting: n } | { down: n }
+outbox.pending                                          // not yet acknowledged; persisted
+outbox.unconfirmed                                      // acknowledged, not yet seen in the live state
+outbox.sync({ cause, state })                           // feed it every live-state update
+outbox.retryNow()                                       // on `online` / `visibilitychange`
+outbox.status                                           // 'ok' | { waiting: n } | { down: n } | 'sent'
 
 doorView(liveState, outbox) → { total, untagged, perTag, recent, goldenBanner, … }
 ```
 
-**Outbox hides:** UUIDs from `crypto.getRandomValues`, the localStorage outbox, retries on a timer and on `online`/`visibilitychange`, dropping entries once acknowledged, and the ~5 s and ~2 min thresholds.
+**Outbox hides:** UUIDs from `crypto.getRandomValues`, the localStorage outbox, retries on a timer and on `online`/`visibilitychange`, dropping entries once acknowledged (they stay `unconfirmed` until the live state shows them, so the door count doesn't dip while the stream reconnects after a server restart), and the ~5 s and ~2 min thresholds.
 
 **Seam:** `send`, `storage` and `clock` are injected. Production uses `fetch`, `localStorage` and `Date`, and tests use fakes. That's two adapters, so this is a real seam.
 

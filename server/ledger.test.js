@@ -150,7 +150,7 @@ describe('feature switches', () => {
 
 describe('snapshot', () => {
   test('carries the live event, tags, kids, ghost, settings and seq, and never the join key', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed, now: () => 6_000 })
     ledger.apply(tap('kid-a', { tappedAt: 5_000, phoneName: 'Mom' }))
 
     const snap = ledger.snapshot()
@@ -163,7 +163,7 @@ describe('snapshot', () => {
         countsOnly: false,
       },
       tags: [],
-      kids: [{ id: 'kid-a', number: 1, tagId: null, phoneName: 'Mom', tappedAt: 5_000, source: 'tap' }],
+      kids: [{ id: 'kid-a', number: 1, tagId: null, phoneName: 'Mom', tappedAt: 5_000, late: false, source: 'tap' }],
       ghost: {
         eventId: expect.any(Number),
         buckets: [
@@ -178,5 +178,34 @@ describe('snapshot', () => {
       seq: 1,
     })
     expect(JSON.stringify(snap)).not.toContain(ledger.joinKey())
+  })
+})
+
+describe('late taps', () => {
+  function ledgerAt(nowMs) {
+    return openLedger(new Database(':memory:'), { ghostSeed, now: () => nowMs })
+  }
+
+  test.each([
+    ['on time', 0, false],
+    ['exactly 10 s', 10_000, false],
+    ['10.001 s', 10_001, true],
+    ['after a long outage', 45 * 60_000, true],
+  ])('a kid that lands %s after its tap (%i ms) is late: %p', (_, lagMs, late) => {
+    const ledger = ledgerAt(1_000_000 + lagMs)
+
+    const [delta] = ledger.apply(tap('a', { tappedAt: 1_000_000 }))
+
+    expect(delta.kid.late).toBe(late)
+    expect(ledger.snapshot().kids[0].late).toBe(late)
+  })
+
+  test('are still numbered when they land', () => {
+    const ledger = ledgerAt(100_000)
+    ledger.apply(tap('fresh', { tappedAt: 99_000 }))
+
+    const [delta] = ledger.apply(tap('queued', { tappedAt: 1_000 }))
+
+    expect(delta.kid).toMatchObject({ number: 2, late: true })
   })
 })

@@ -9,53 +9,120 @@
            display: flex; flex-direction: column; align-items: center; gap: 1.5rem; padding: 2rem 1rem; }
     #count { font-size: 5rem; font-weight: 800; }
     #add { font-size: 2rem; padding: 1.5rem 3rem; border: 0; border-radius: 1rem; background: #f60; color: #111; }
-    #status { min-height: 1.5em; opacity: 0.7; }
+    #pill { min-height: 1.5em; text-align: center; }
+    #pill .waiting { background: #c80; color: #111; padding: 0.3rem 0.8rem; border-radius: 999px; font-weight: 700; }
+    #pill .sent { color: #6c6; font-weight: 700; }
+    #pill .down { margin-top: 0.4rem; font-size: 0.9rem; }
+    #problem { color: #f66; min-height: 1.2em; }
+    #who { position: fixed; inset: 0; background: #111; display: none; flex-direction: column;
+           align-items: center; justify-content: center; gap: 1rem; }
+    #who button, #who input { font-size: 1.5rem; padding: 0.8rem 1.5rem; border-radius: 0.6rem; width: 14rem; }
+    #who button { border: 0; background: #333; color: #eee; }
   </style>
 </head>
 <body>
+  <div id="pill"></div>
   <div id="event"></div>
   <div id="count">–</div>
   <button id="add">+1 Kid</button>
-  <div id="status"></div>
+  <div id="problem"></div>
+
+  <form id="who">
+    <h1>Who's tapping?</h1>
+    <button type="button" data-name="Dad">Dad</button>
+    <button type="button" data-name="Mom">Mom</button>
+    <button type="button" data-name="Grandma">Grandma</button>
+    <input id="custom" placeholder="Someone else…" autocomplete="off">
+    <button type="submit">OK</button>
+  </form>
+
   <script type="module">
     import { connectLive } from '/live.js'
+    import { createOutbox } from '/outbox.js'
+    import { doorView } from '/door-view.js'
+
+    const $ = (id) => document.getElementById(id)
 
     // The join key arrives as ?key=… once (QR code or tailnet hand-off) and is remembered.
     const params = new URLSearchParams(location.search)
     if (params.get('key')) localStorage.setItem('cd.joinKey', params.get('key'))
-    if (params.get('name')) localStorage.setItem('cd.phoneName', params.get('name'))
     const joinKey = localStorage.getItem('cd.joinKey') ?? ''
-    const phoneName = localStorage.getItem('cd.phoneName') ?? 'Phone'
 
-    const $ = (id) => document.getElementById(id)
-    const live = connectLive()
-    live.on(({ state }) => {
-      $('event').textContent = state?.event.name ?? ''
-      $('count').textContent = state ? state.kids.length : '–'
-    })
+    let problem = ''
 
-    // Plain HTTP on the LAN: no crypto.randomUUID, so build a v4 UUID by hand.
-    function uuid() {
-      const b = crypto.getRandomValues(new Uint8Array(16))
-      b[6] = (b[6] & 0x0f) | 0x40
-      b[8] = (b[8] & 0x3f) | 0x80
-      const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
-      return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+    async function send(entry) {
+      const res = await fetch('/api/taps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Join-Key': joinKey },
+        body: JSON.stringify(entry),
+        signal: AbortSignal.timeout(8_000),
+      })
+      problem = res.status === 403 ? 'Wrong join key: taps are kept until it is fixed' : ''
+      if (res.status === 400) return // the server will never take it; don't block the queue behind it
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
     }
 
-    $('add').addEventListener('click', async () => {
-      const tap = { id: uuid(), tagId: null, tappedAt: Date.now(), phoneName }
-      try {
-        const res = await fetch('/api/taps', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Join-Key': joinKey },
-          body: JSON.stringify(tap),
-        })
-        $('status').textContent = res.ok ? '' : res.status === 403 ? 'Wrong join key' : `Error ${res.status}`
-      } catch {
-        $('status').textContent = 'Not sent: no connection'
+    const clock = {
+      now: () => Date.now(),
+      setTimeout: (fn, ms) => setTimeout(fn, ms),
+      clearTimeout: (id) => clearTimeout(id),
+    }
+
+    function start(phoneName) {
+      $('who').style.display = 'none'
+      const outbox = createOutbox({ send, storage: localStorage, clock, phoneName })
+      const live = connectLive()
+
+      function render() {
+        const view = doorView(live.state, outbox)
+        $('event').textContent = live.state?.event.name ?? ''
+        $('count').textContent = view.total ?? '–'
+        $('pill').innerHTML = pillHtml(outbox.status)
+        $('problem').textContent = problem
       }
-    })
+
+      live.on((update) => {
+        outbox.sync(update)
+        render()
+      })
+      setInterval(render, 500) // acks and the 5 s / 2 min thresholds
+      $('add').addEventListener('click', () => {
+        outbox.tap(null)
+        render()
+      })
+      addEventListener('online', () => outbox.retryNow())
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') outbox.retryNow()
+      })
+      render()
+    }
+
+    function pillHtml(status) {
+      if (status === 'sent') return '<span class="sent">✓ sent</span>'
+      if (status === 'ok') return ''
+      const n = status.waiting ?? status.down
+      const line = status.down ? `<div class="down">Server's down — keep tapping, don't reload.</div>` : ''
+      return `<span class="waiting">⏳ ${n} waiting to send</span>${line}`
+    }
+
+    // First open: ask once, remember on the phone.
+    const savedName = localStorage.getItem('cd.phoneName')
+    if (savedName) {
+      start(savedName)
+    } else {
+      $('who').style.display = 'flex'
+      const choose = (name) => {
+        name = name.trim()
+        if (!name) return
+        localStorage.setItem('cd.phoneName', name)
+        start(name)
+      }
+      for (const b of $('who').querySelectorAll('[data-name]')) b.addEventListener('click', () => choose(b.dataset.name))
+      $('who').addEventListener('submit', (e) => {
+        e.preventDefault()
+        choose($('custom').value)
+      })
+    }
   </script>
 </body>
 </html>

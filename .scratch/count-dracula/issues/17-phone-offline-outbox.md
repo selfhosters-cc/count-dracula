@@ -18,10 +18,10 @@ Phones keep counting with no time limit when the Wi-Fi or server drops, and noth
 
 ## Acceptance criteria
 
-- [ ] The phone name is asked once, persists across reloads and shows on stored kids
-- [ ] In airplane mode the phone keeps counting; the pill appears after ~5 s and the "Server's down" line after ~2 min
-- [ ] On reconnect the outbox drains, "✓ sent" shows, and the server count rises by exactly the number tapped
-- [ ] Killing the server mid-burst and restarting it loses and doubles nothing (the retries are idempotent)
-- [ ] Kids that arrive more than 10 s after being tapped are flagged late in storage and in the delta
-- [ ] Works over plain HTTP with no secure-context APIs
-- [ ] Tests cover outbox retry/ack and late-tap flagging
+- [x] The phone name is asked once, persists across reloads and shows on stored kids
+- [x] In airplane mode the phone keeps counting; the pill appears after ~5 s and the "Server's down" line after ~2 min
+- [x] On reconnect the outbox drains, "✓ sent" shows, and the server count rises by exactly the number tapped
+- [x] Killing the server mid-burst and restarting it loses and doubles nothing (the retries are idempotent)
+- [x] Kids that arrive more than 10 s after being tapped are flagged late in storage and in the delta
+- [x] Works over plain HTTP with no secure-context APIs
+- [x] Tests cover outbox retry/ack and late-tap flagging

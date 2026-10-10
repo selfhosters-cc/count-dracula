@@ -68,7 +68,7 @@ async function serveStatic(pathname) {
   } catch {
     return notFound()
   }
-  if (!path.startsWith(PUBLIC_DIR + sep)) return notFound()
+  if (!path.startsWith(PUBLIC_DIR + sep) || path.endsWith('.test.js')) return notFound()
   const file = Bun.file(path)
   return (await file.exists()) ? new Response(file) : notFound()
 }

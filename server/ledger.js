@@ -38,6 +38,7 @@ const SCHEMA = `
     phone_name TEXT,
     tapped_at INTEGER NOT NULL,
     received_at INTEGER NOT NULL,
+    late INTEGER NOT NULL DEFAULT 0,
     deleted_at INTEGER,
     source TEXT NOT NULL DEFAULT 'tap',
     backfill_batch_id INTEGER
@@ -46,6 +47,9 @@ const SCHEMA = `
 
 // A command the Ledger refuses; the HTTP layer answers 400.
 export class BadCommand extends Error {}
+
+// A tap that reaches the server more than this long after it was tapped is late (spec §2).
+const LATE_AFTER_MS = 10_000
 
 // Must 3–9 (spec §12). Each later feature honours its own switch.
 const DEFAULT_SWITCHES = {
@@ -60,6 +64,7 @@ const DEFAULT_SWITCHES = {
 
 export function openLedger(db, config) {
   const switches = { ...DEFAULT_SWITCHES, ...config.switches }
+  const now = config.now ?? Date.now
 
   db.exec('PRAGMA journal_mode = WAL')
   db.exec(SCHEMA)
@@ -84,8 +89,8 @@ export function openLedger(db, config) {
   let seq = 0
 
   const insertKid = db.query(`
-    INSERT INTO kids (id, event_id, number, tag_id, phone_name, tapped_at, received_at, source)
-    VALUES ($id, $eventId, $number, $tagId, $phoneName, $tappedAt, $receivedAt, 'tap')
+    INSERT INTO kids (id, event_id, number, tag_id, phone_name, tapped_at, received_at, late, source)
+    VALUES ($id, $eventId, $number, $tagId, $phoneName, $tappedAt, $receivedAt, $late, 'tap')
     ON CONFLICT(id) DO NOTHING
     RETURNING *
   `)
@@ -99,6 +104,7 @@ export function openLedger(db, config) {
       if (typeof id !== 'string' || id === '') throw new BadCommand('A tap needs an id')
       if (!Number.isFinite(tappedAt)) throw new BadCommand('A tap needs tappedAt in ms')
       const event = eventById()
+      const receivedAt = now()
       const row = insertKid.get({
         $id: id,
         $eventId: event.id,
@@ -106,13 +112,14 @@ export function openLedger(db, config) {
         $tagId: tagId ?? null,
         $phoneName: phoneName ?? null,
         $tappedAt: tappedAt,
-        $receivedAt: Date.now(),
+        $receivedAt: receivedAt,
+        $late: receivedAt - tappedAt > LATE_AFTER_MS ? 1 : 0,
       })
       return row ? [{ type: 'kid.added', kid: toKid(row) }] : []
     },
 
     remove({ kidId }) {
-      const row = softDeleteKid.get(Date.now(), kidId, eventById().id)
+      const row = softDeleteKid.get(now(), kidId, eventById().id)
       return row ? [{ type: 'kid.removed', kidId }] : []
     },
   }
@@ -160,6 +167,7 @@ function toKid(row) {
     tagId: row.tag_id,
     phoneName: row.phone_name,
     tappedAt: row.tapped_at,
+    late: row.late === 1,
     source: row.source,
   }
 }
