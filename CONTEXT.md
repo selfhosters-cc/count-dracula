@@ -32,6 +32,14 @@ _Avoid_: Share link (that's the Night summary's), watch link, viewer key, join k
 A short code shown on a TV that has no TV link yet. A Manager enters or scans it to give that TV their Household's TV link. It expires after a few minutes and does nothing without a Manager.
 _Avoid_: TV code, share code, join code
 
+**Rehearsal**:
+A practice Event, marked as one: sign-up creates it live so a Household can test its TV and phones. It works exactly like a real night, shows a "🎭 Rehearsal" chip on the TV and phones, can be reset to 0 while live, and never counts toward nearby figures.
+_Avoid_: Test night, demo, practice mode
+
+**Goes live at**:
+The time a not-yet-live Event becomes live by itself (a scheduled Go live). Sign-up sets it on "Halloween 2026" to Oct 31, 4:00 pm in the Household's time zone; a Manager can change it or Go live early.
+_Avoid_: Start time, scheduled start, auto-start
+
 **Night summary**:
 The shareable tap-through slides of one ended Event, viewable by a public share link for as long as the Household keeps sharing on.
 _Avoid_: Recap (that's the TV's end-of-night screen), wrapped, report
