@@ -4,7 +4,7 @@ import { fakeClock } from '../test/fake-clock.js'
 
 // Stands in for Web Audio: records every voice and every bus ramp the engine asks for.
 function fakeAudio(clock) {
-  const lengths = { bloop: 0.25, note: 0.2, tick: 0.08, sting50: 1.6, fanfare: 3, golden: 4, ding: 0.7 }
+  const lengths = { bloop: 0.25, note: 0.2, tick: 0.08, sting50: 1.6, fanfare: 3, golden: 4, ding: 0.7, close: 2.5 }
   const audio = {
     state: 'suspended',
     voices: [],
@@ -267,5 +267,35 @@ describe('soundboard', () => {
     sound.cue('board:1')
 
     expect(audio.voices.map((v) => v.slot)).toEqual(['golden'])
+  })
+})
+
+describe('ending the night', () => {
+  const ambienceRamps = (audio) => audio.ramps.filter((r) => r.bus === 'ambience').map(({ level, seconds }) => [level, seconds])
+
+  test('plays the closing sting, then fades the ambience out over ~5 s to the keep-alive; Resume brings it back', async () => {
+    const { sound, audio, clock } = await setup()
+
+    sound.ended(true)
+    expect(audio.voices.map((v) => v.slot)).toEqual(['close'])
+    await clock.advance(3_000)
+    expect(ambienceRamps(audio).at(-1)).toEqual([0, 5])
+    expect(audio.ambienceOn).toBe(true) // still running: the keep-alive
+
+    sound.cue('bloop') // a straggler still pops…
+    await clock.advance(3_000)
+    expect(ambienceRamps(audio).at(-1)[0]).toBe(0) // …without waking the ambience
+
+    sound.ended(false)
+    expect(ambienceRamps(audio).at(-1)[0]).toBe(1)
+  })
+
+  test('a TV reloaded on an ended night goes quiet without replaying the sting', async () => {
+    const { sound, audio } = await setup()
+
+    sound.ended(true, { quietly: true })
+
+    expect(audio.voices).toEqual([])
+    expect(ambienceRamps(audio).at(-1)[0]).toBe(0)
   })
 })

@@ -44,8 +44,10 @@ export function createSound({ audio, clock, random = Math.random }) {
   let goldenUntil = 0 // nothing else plays during the golden fanfare (spec §10)
   let boardTimer = null
   let mutes = {}
+  let nightEnded = false
 
-  const ambienceLevel = () => (mutes.ambience ? 0 : 1) // muted, the loop keeps running silently: the keep-alive
+  // Muted or after End, the loop keeps running silently: the keep-alive.
+  const ambienceLevel = () => (mutes.ambience || nightEnded ? 0 : 1)
 
   // Called for every celebration cue: duck now (once), and come back after the last one ends.
   function duckUntil(until) {
@@ -84,6 +86,19 @@ export function createSound({ audio, clock, random = Math.random }) {
     async unlock() {
       await audio.resume()
       audio.ambience(true)
+    },
+
+    // 🌙 End the night: one closing sting, then the ambience fades out over ~5 s to the keep-alive.
+    // Resume brings it back. A TV reloaded on an ended night goes quiet without the sting.
+    ended(on, { quietly = false } = {}) {
+      if (on === nightEnded) return
+      nightEnded = on
+      if (on) {
+        if (!quietly && audio.state === 'running') play('close', { gain: 1, detune: 0 })
+        audio.ramp('ambience', 0, quietly ? 0.5 : 5)
+      } else {
+        audio.ramp('ambience', ambienceLevel(), 2)
+      }
     },
 
     // The ☰ menu's controls (ticket 26): master volume plus the Ambience / Kid bloops / Everything mutes.

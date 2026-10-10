@@ -52,6 +52,13 @@ export function startServer({ configPath, port, heartbeatMs }) {
       hub.publish(deltas)
       return Response.json({ deltas, joinKey: ledger.joinKey() })
     }),
+    // ☰ "🌙 End the night" / "Resume the night": any phone with the join key.
+    'POST /api/end': write(async () => {
+      hub.publish(ledger.apply({ type: 'end' }))
+    }),
+    'POST /api/resume': write(async () => {
+      hub.publish(ledger.apply({ type: 'resume' }))
+    }),
     // ☰ "Release remaining tickets": any phone with the join key (the phone shows it from 7:45pm event time).
     'POST /api/release': write(async () => {
       hub.publish(ledger.apply({ type: 'release' }))

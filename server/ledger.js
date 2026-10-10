@@ -50,7 +50,8 @@ const SCHEMA = `
     event_id INTEGER NOT NULL REFERENCES events(id),
     number INTEGER NOT NULL,
     state TEXT NOT NULL,
-    kid_id TEXT
+    kid_id TEXT,
+    expired_from TEXT
   );
   CREATE TABLE IF NOT EXISTS backfill_batches (
     id INTEGER PRIMARY KEY,
@@ -355,6 +356,28 @@ export function openLedger(db, config) {
       return [{ type: 'soundboard', slot, label: entry.label }]
     },
 
+    // "🌙 End the night" (spec §2 Ended): the event stays live, so stragglers still count; only the next
+    // Go live freezes it. Tickets nobody won expire, remembering what they were for Resume.
+    end() {
+      const event = eventById()
+      if (event.ended) return []
+      db.query('UPDATE events SET ended = 1 WHERE id = ?').run(event.id)
+      db.query(`
+        UPDATE golden_tickets SET expired_from = state, state = 'expired'
+        WHERE event_id = ? AND kid_id IS NULL AND state IN ('hidden', 'rolled', 'released')
+      `).run(event.id)
+      return [{ type: 'event.ended', ended: true, golden: goldenSummary(event) }]
+    },
+
+    // "Resume the night": expired tickets come back exactly as they were.
+    resume() {
+      const event = eventById()
+      if (!event.ended) return []
+      db.query('UPDATE events SET ended = 0 WHERE id = ?').run(event.id)
+      db.query("UPDATE golden_tickets SET state = expired_from, expired_from = NULL WHERE event_id = ? AND state = 'expired'").run(event.id)
+      return [{ type: 'event.ended', ended: false, golden: goldenSummary(event) }]
+    },
+
     // ---- The ☰ menu's TV controls (spec §5): any phone with the join key.
     mix({ volume, mutes = {} }) {
       if (!Number.isFinite(volume) || volume < 0 || volume > 1) throw new BadCommand('Volume runs from 0 to 1')
@@ -580,6 +603,7 @@ export function openLedger(db, config) {
           name: event.name,
           live: event.live === 1,
           countsOnly: event.counts_only === 1,
+          ended: event.ended === 1,
           clockShiftMs: event.clock_shift_ms,
         },
         tags: db.query('SELECT * FROM tags WHERE event_id = ? ORDER BY sort_order').all(event.id).map(toTag),

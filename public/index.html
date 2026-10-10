@@ -154,6 +154,14 @@
           <h4>Golden tickets</h4>
           <button class="wide" id="release">🎫 Release remaining tickets</button>
         </div>
+        <h4>The night</h4>
+        <button class="wide" id="end-night">🌙 End the night</button>
+        <div id="end-choices" hidden>
+          <p id="end-question" style="font-weight:700;margin:10px 0 4px"></p>
+          <button class="wide" id="end-release">🎫 Release &amp; keep going</button>
+          <button class="wide" id="end-anyway">🌙 End anyway</button>
+          <button class="wide" id="end-cancel">Cancel</button>
+        </div>
         <h4>Helpers</h4>
         <button class="wide" id="helper-show">📱 Add a helper</button>
         <div id="helper-qr" hidden></div>
@@ -437,7 +445,9 @@
           )
         }
         $('unjoined').hidden = joined
-        for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release, #board button')) c.disabled = !joined
+        const ended = !!live.state?.event.ended
+        $('end-night').textContent = ended ? '☀️ Resume the night' : '🌙 End the night'
+        for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release, #board button, #end-night')) c.disabled = !joined
       }
       $('menu-open').addEventListener('click', () => {
         renderMenu()
@@ -457,7 +467,7 @@
         b.setAttribute('aria-pressed', String(!m.mutes[b.dataset.mute])) // feels instant; the delta confirms
       })
       live.on(({ delta }) => {
-        if (!delta || delta.type === 'mix.changed' || 'golden' in delta) renderMenu()
+        if (!delta || delta.type === 'mix.changed' || delta.type === 'event.ended' || 'golden' in delta) renderMenu()
       })
       $('board').addEventListener('click', async (e) => {
         const b = e.target.closest('[data-slot]')
@@ -466,6 +476,25 @@
         if (!res?.ok) return toast("Couldn't reach the TV")
         toast((await res.json()).played ? `🔊 ${b.textContent.trim()}` : 'Cooling down: one sound every 3 s')
       })
+      // 🌙 End the night / Resume. With tickets left, the spec's three choices instead of a plain yes/no.
+      const nightCall = async (path, done) => {
+        $('end-choices').hidden = true
+        const res = await post(path, {}).catch(() => null)
+        toast(res?.ok ? done : "Couldn't reach the server")
+      }
+      $('end-night').addEventListener('click', () => {
+        if (live.state?.event.ended) return nightCall('/api/resume', '☀️ The night is back on')
+        const left = live.state?.golden?.left ?? 0
+        if (left > 0) {
+          $('end-question').textContent = `🎫 ${left} golden ticket${left === 1 ? '' : 's'} never found. Release ${left === 1 ? 'it' : 'them'} to the next ${left === 1 ? 'kid' : `${left} kids`} instead?`
+          $('end-choices').hidden = false
+          return
+        }
+        if (confirm('End the night? Straggler taps still count, and any phone can resume it.')) nightCall('/api/end', '🌙 Night ended')
+      })
+      $('end-release').addEventListener('click', () => nightCall('/api/release', '🎫 Released: the next kids win'))
+      $('end-anyway').addEventListener('click', () => nightCall('/api/end', '🌙 Night ended: the tickets expired'))
+      $('end-cancel').addEventListener('click', () => ($('end-choices').hidden = true))
       $('release').addEventListener('click', async () => {
         const left = live.state?.golden?.left ?? 0
         if (!confirm(`Release the ${left} golden ticket${left === 1 ? '' : 's'} left? The next ${left} kid${left === 1 ? '' : 's'} at the door will win.`)) return

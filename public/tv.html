@@ -34,6 +34,7 @@
       border: 2px solid #ffcf3a; color: #ffcf3a; font-weight: 700; font-size: clamp(12px, 1.8vw, 30px); white-space: nowrap; }
     .golden-pill[hidden] { display: none; }
     .golden-pill b { font-family: var(--f-display); font-weight: 400; }
+    #board.ended .golden-pill, #board.ended .clock { display: none; }
     .muted { font-size: clamp(14px, 2vw, 34px); opacity: .8; }
     .muted[hidden] { display: none; }
     .clock { font-family: var(--f-display); font-size: clamp(14px, 2.2vw, 36px); color: var(--ink-dim); }
@@ -110,7 +111,7 @@
 <body>
   <section id="board" aria-label="Scoreboard">
     <div class="top">
-      <div class="title">Count Dracula</div>
+      <div class="title" id="title">Count Dracula</div>
       <div style="display: flex; gap: 1.5vw; align-items: center">
         <span class="golden-pill" id="golden-pill" hidden>🎫 <b id="golden-left"></b> golden tickets left</span>
         <span class="muted" id="muted" hidden title="Sound muted from a phone">🔇</span>

@@ -293,6 +293,16 @@ function renderLeaderboard(state) {
   })
 }
 
+// ---- 🌙 the ended night: "THAT'S A WRAP" in the top bar (the recap replaces the rest in ticket 36)
+let wasEnded = false
+function renderEnded(state, cause) {
+  const ended = !!state.event.ended
+  $('board').classList.toggle('ended', ended)
+  $('title').textContent = ended ? `🎃 That's a wrap — ${state.event.name}` : 'Count Dracula'
+  if (ended !== wasEnded) sound.ended(ended, { quietly: cause === 'snapshot' })
+  wasEnded = ended
+}
+
 // The only golden thing the TV knows before a win: how many are left (spec §9).
 function renderGoldenPill(state) {
   const left = state.golden?.left ?? 0
@@ -337,7 +347,12 @@ live.on(({ state, cause, delta }) => {
     renderPatch(state)
     applyMix(state)
     loadBoardFiles(state)
+    renderEnded(state, cause)
     return
+  }
+  if (delta.type === 'event.ended') {
+    renderGoldenPill(state) // End expires the tickets left; Resume brings them back
+    return renderEnded(state, cause)
   }
   if (delta.type === 'soundboard') return playBoard(delta)
   if (delta.type === 'mix.changed') return applyMix(state)

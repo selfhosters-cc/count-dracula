@@ -15,6 +15,7 @@ const GENERATORS = {
   fanfare: { seconds: 3, draw: fanfare },
   golden: { seconds: 4, draw: goldenFanfare },
   ding: { seconds: 0.7, draw: dingDing },
+  close: { seconds: 2.5, draw: closingSting },
   // Soundboard fallbacks until the real (mostly homemade) recordings land: rough cartoon versions.
   board1: { seconds: 2.2, draw: (ctx) => cackle(ctx) },
   board2: { seconds: 2.6, draw: (ctx) => howl(ctx) },
@@ -277,6 +278,20 @@ function thunder(ctx, seconds) {
   rumble.connect(new BiquadFilterNode(ctx, { type: 'lowpass', frequency: 260 })).connect(envelope(ctx, 0.9, 0.04, 2.6))
   rumble.start(0)
   for (const f of [110, 164.8, 220, 261.6]) tone(ctx, { from: f, at: 0.3, length: 2.5, level: 0.07 })
+}
+
+// 🌙 The closing sting: a sad-trombone "wah-wah-WOOO", then an owl.
+function closingSting(ctx) {
+  const brass = { type: 'sawtooth', filter: { type: 'lowpass', frequency: 1100 } }
+  tone(ctx, { ...brass, from: 311, to: 294, at: 0, length: 0.32, level: 0.22 })
+  tone(ctx, { ...brass, from: 294, to: 277, at: 0.38, length: 0.32, level: 0.22 })
+  const last = tone(ctx, { ...brass, from: 277, to: 207, at: 0.76, length: 1.1, level: 0.24 })
+  const wobble = new OscillatorNode(ctx, { frequency: 6 })
+  wobble.connect(new GainNode(ctx, { gain: 8 })).connect(last.frequency)
+  wobble.start(0.9)
+  wobble.stop(1.9)
+  tone(ctx, { from: 392, to: 370, at: 2.0, length: 0.22, level: 0.12 })
+  tone(ctx, { from: 349, to: 330, at: 2.25, length: 0.22, level: 0.12 })
 }
 
 // Wind, crickets and one owl, looping every `seconds` (all modulation divides the loop evenly).

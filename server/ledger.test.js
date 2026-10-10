@@ -161,6 +161,7 @@ describe('snapshot', () => {
         name: 'Rehearsal',
         live: true,
         countsOnly: false,
+        ended: false,
         clockShiftMs: 0,
       },
       tags: [],
@@ -1026,5 +1027,61 @@ describe('golden winners for the pumpkin patch', () => {
 
     expect(deltas.map((d) => d.kid.golden)).toEqual([false, false, true, false])
     expect(ledger.snapshot().kids.map((k) => k.golden)).toEqual([false, false, true, false])
+  })
+})
+
+describe('End and Resume the night', () => {
+  function night() {
+    let clockMs = 1_000_000_000
+    const ledger = openLedger(new Database(':memory:'), {
+      ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] },
+      random: () => 0, // tickets at #3, #10, #17
+      now: () => clockMs,
+      switches: { milestones: false },
+    })
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Night' })
+    ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: ledger.snapshot().ghost.eventId, goldenCount: 3 })
+    ledger.apply({ type: 'goLive', eventId: event.id })
+    let i = 0
+    const live = () => ledger.apply(tap(`k${++i}`, { tappedAt: clockMs }))
+    const late = () => ledger.apply(tap(`k${++i}`, { tappedAt: clockMs - 60_000 }))
+    return { ledger, live, late, eventId: event.id }
+  }
+
+  test('ending keeps the event live, so a straggler still counts and celebrates', () => {
+    const { ledger, live } = night()
+    live()
+
+    const [ended] = ledger.apply({ type: 'end' })
+    const [straggler] = live()
+
+    expect(ended).toMatchObject({ type: 'event.ended', ended: true })
+    expect(ledger.snapshot().event).toMatchObject({ live: true, ended: true })
+    expect(straggler.kid.number).toBe(2)
+  })
+
+  test('"End anyway" expires the tickets left; Resume brings them back exactly as they were', () => {
+    const { ledger, live, late, eventId } = night()
+    for (let n = 1; n <= 3; n++) live() // #3 won
+    for (let n = 4; n <= 10; n++) late() // #10 rolls forward, waiting for the next live kid
+    const before = ledger.tickets(eventId)
+
+    const [ended] = ledger.apply({ type: 'end' })
+    expect(ended.golden).toEqual({ left: 0, nextIsGolden: false })
+    expect(ledger.tickets(eventId).map((t) => t.state)).toEqual(['won', 'expired', 'expired'])
+    expect(live()[0].moments).toEqual([]) // an expired ticket is nobody's
+
+    const [resumed] = ledger.apply({ type: 'resume' })
+    expect(resumed).toMatchObject({ type: 'event.ended', ended: false, golden: { left: 2, nextIsGolden: true } })
+    expect(ledger.tickets(eventId)).toEqual(before)
+    expect(ledger.snapshot().event.ended).toBe(false)
+  })
+
+  test('ending twice or resuming a night that never ended changes nothing', () => {
+    const { ledger } = night()
+
+    expect(ledger.apply({ type: 'resume' })).toEqual([])
+    ledger.apply({ type: 'end' })
+    expect(ledger.apply({ type: 'end' })).toEqual([])
   })
 })

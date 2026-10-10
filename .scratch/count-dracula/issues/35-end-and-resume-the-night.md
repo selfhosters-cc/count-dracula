@@ -20,8 +20,8 @@ Any helper can close the night, and undo that. See [spec §2 Ended](../spec.md#2
 
 ## Acceptance criteria
 
-- [ ] End → Resume → End works from any joined phone and survives a TV reload
-- [ ] A straggler tap after End still counts and pops
-- [ ] With tickets left, each of the three choices does what it says; Resume restores expired tickets
-- [ ] The closing sting plays and the ambience fades over ~5 s; Resume brings it back
-- [ ] The ended TV shows the "THAT'S A WRAP" top bar
+- [x] End → Resume → End works from any joined phone and survives a TV reload
+- [x] A straggler tap after End still counts and pops
+- [x] With tickets left, each of the three choices does what it says; Resume restores expired tickets
+- [x] The closing sting plays and the ambience fades over ~5 s; Resume brings it back
+- [x] The ended TV shows the "THAT'S A WRAP" top bar
