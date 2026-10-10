@@ -1,6 +1,7 @@
 // The server config file (spec §3): read once at startup, no UI.
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { ghostSeedFromCsv } from './export.js'
 
 export function loadConfig(configPath) {
   const raw = JSON.parse(readFileSync(configPath, 'utf8'))
@@ -14,6 +15,12 @@ export function loadConfig(configPath) {
     dbPath: fromConfigDir(raw.dbPath ?? 'count-dracula.sqlite'),
     switches: raw.switches ?? {},
     soundboard: (raw.soundboard ?? []).map((slot) => ({ label: slot.label, file: slot.file })),
-    ghostSeed: raw.ghostSeed ? JSON.parse(readFileSync(fromConfigDir(raw.ghostSeed), 'utf8')) : null,
+    ghostSeed: raw.ghostSeed ? readGhostSeed(fromConfigDir(raw.ghostSeed)) : null,
   }
+}
+
+// The 2025 counts file (JSON), or any past night's CSV export: its half-hour summary is the seed.
+function readGhostSeed(path) {
+  const text = readFileSync(path, 'utf8')
+  return path.endsWith('.csv') ? ghostSeedFromCsv(text) : JSON.parse(text)
 }

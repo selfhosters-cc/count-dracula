@@ -322,3 +322,40 @@ describe('☰ menu', () => {
     expect(snap.settings.lanUrl.endsWith(`:${new URL(app.url).port}`)).toBe(true)
   })
 })
+
+describe('export', () => {
+  const exportCsv = (app, eventId, pin = '4321') => fetch(`${app.url}/api/export?event=${eventId}`, { headers: { 'X-Admin-Pin': pin } })
+
+  test('downloads the event as a CSV with the PIN; its non-deleted rows equal the TV count', async () => {
+    const app = start()
+    for (const id of ['a', 'b', 'c']) await postTap(app, aTap(id))
+    app.ledger.apply({ type: 'remove', kidId: 'b' })
+    const live = app.ledger.snapshot()
+
+    expect((await exportCsv(app, live.event.id, 'nope')).status).toBe(403)
+    const res = await exportCsv(app, live.event.id)
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toStartWith('text/csv')
+    expect(res.headers.get('Content-Disposition')).toBe('attachment; filename="rehearsal.csv"')
+    const kidRows = (await res.text()).split('\n\n')[0].split('\n').slice(2)
+    expect(kidRows).toHaveLength(3)
+    expect(kidRows.filter((r) => r.split(',')[5] === '')).toHaveLength(live.kids.length)
+  })
+
+  test("round trip: an export seeds next year's counts-only ghost with the same total", async () => {
+    const app = start()
+    for (const id of ['a', 'b', 'c', 'd']) await postTap(app, aTap(id))
+    app.ledger.apply({ type: 'remove', kidId: 'c' })
+    app.ledger.apply({ type: 'settings', eventId: app.ledger.snapshot().event.id, name: 'Halloween 2026' })
+    const csv = await (await exportCsv(app, app.ledger.snapshot().event.id)).text()
+    const dir = mkdtempSync(join(tmpdir(), 'count-dracula-seed-'))
+    writeFileSync(join(dir, 'halloween-2026.csv'), csv)
+
+    const nextYear = start({ ghostSeed: join(dir, 'halloween-2026.csv') })
+
+    const ghost = (await (await fetch(`${nextYear.url}/api/snapshot`)).json()).ghost
+    expect(ghost.total).toBe(3)
+    expect(ghost.label).toBe('2026')
+  })
+})

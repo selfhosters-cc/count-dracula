@@ -15,7 +15,7 @@ Blocked by: 22
 
 ## Acceptance criteria
 
-- [ ] The export opens in a spreadsheet app with readable timestamps
-- [ ] Non-deleted rows equal the TV count for the same event
-- [ ] Deleted and backfilled kids are included and marked
-- [ ] The half-hour summary loads as a ghost seed (round-trip test: export, seed, ghost total matches)
+- [x] The export opens in a spreadsheet app with readable timestamps
+- [x] Non-deleted rows equal the TV count for the same event
+- [x] Deleted and backfilled kids are included and marked
+- [x] The half-hour summary loads as a ghost seed (round-trip test: export, seed, ghost total matches)

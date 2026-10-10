@@ -5,6 +5,7 @@ import { resolve, sep } from 'node:path'
 import { loadConfig } from './config.js'
 import { BadCommand, openLedger } from './ledger.js'
 import { createHub } from './hub.js'
+import { toCsv } from './export.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
@@ -31,6 +32,16 @@ export function startServer({ configPath, port, heartbeatMs }) {
     // Setup (spec §6): the join key and the admin PIN.
     'GET /api/events': (req) =>
       isAdmin(req) ? Response.json(ledger.events()) : new Response('Wrong PIN', { status: 403 }),
+    // ⬇ Export event (spec §6): a CSV download, PIN only.
+    'GET /api/export': (req) => {
+      if (!isAdmin(req)) return new Response('Wrong PIN', { status: 403 })
+      const night = ledger.exportEvent(Number(new URL(req.url).searchParams.get('event')))
+      if (!night) return notFound()
+      const filename = night.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'event'
+      return new Response(toCsv(night), {
+        headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${filename}.csv"` },
+      })
+    },
     'GET /api/batches': (req) =>
       isAdmin(req) ? Response.json(ledger.batches()) : new Response('Wrong PIN', { status: 403 }),
     'POST /api/admin': write(async (req) => {

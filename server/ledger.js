@@ -502,6 +502,22 @@ export function openLedger(db, config) {
       return eventById().join_key
     },
 
+    // Everything the CSV export needs (ticket 24): every kid, removed ones included.
+    exportEvent(eventId) {
+      const event = eventById(eventId)
+      if (!event) return null
+      const kids = db
+        .query(`
+          SELECT k.number, k.tapped_at AS tappedAt, k.received_at AS receivedAt, t.name AS tag, k.source,
+            k.deleted_at AS deletedAt, k.phone_name AS phoneName, k.late
+          FROM kids k LEFT JOIN tags t ON t.id = k.tag_id
+          WHERE k.event_id = ? ORDER BY k.received_at, k.rowid
+        `)
+        .all(event.id)
+        .map((k) => ({ ...k, late: k.late === 1 }))
+      return { name: event.name, clockShiftMs: event.clock_shift_ms, kids }
+    },
+
     // The live event's backfill batches, for Setup's list ("+38 kids, 6:30–7:00 · Remove").
     batches() {
       const event = eventById()

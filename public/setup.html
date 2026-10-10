@@ -59,6 +59,7 @@
       <h2>Live now: <span id="live-name"></span></h2>
       <p class="muted"><span id="live-kids"></span> kids · join key <code id="join-key"></code></p>
       <div class="row">
+        <button id="export-live">⬇ Export event</button>
         <button id="add-ticket">🎫 Add a golden ticket</button>
         <button id="change-key" class="danger">Change join key</button>
       </div>
@@ -231,6 +232,7 @@
           ? past.map((e) =>
               h('div', { className: 'item' },
                 h('span', { className: 'grow', textContent: `${e.name} · ${e.countsOnly ? 'counts only' : `${e.kids} kids`}` }),
+                ...(e.countsOnly ? [] : [h('button', { textContent: '⬇ Export', onclick: () => exportEvent(e) })]),
                 h('button', { className: 'danger', textContent: 'Delete', onclick: () => deleteEvent(e) })),
             )
           : [h('p', { className: 'muted', textContent: 'None yet.' })]),
@@ -342,6 +344,18 @@
         render()
       }
     })
+
+    // ⬇ Export event: the server makes the CSV; the PIN rides in a header, so fetch it and save it here.
+    async function exportEvent(event) {
+      const res = await fetch(`/api/export?event=${event.id}`, { headers: { 'X-Admin-Pin': pin } })
+      if (!res.ok) return say(`Export failed: ${await res.text()}`, true)
+      const name = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'event.csv'
+      const link = h('a', { href: URL.createObjectURL(await res.blob()), download: name })
+      link.click()
+      URL.revokeObjectURL(link.href)
+      say(`Exported ${name}`)
+    }
+    $('export-live').addEventListener('click', () => exportEvent(events.find((e) => e.live)))
 
     function goLive(event, live) {
       if (!confirm(`Go live with "${event.name}"?\n\n"${live.name}" will be frozen as a past event. Phones and the TV switch over by themselves.`)) return
