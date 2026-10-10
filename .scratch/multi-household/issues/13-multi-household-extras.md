@@ -1,7 +1,7 @@
 # Multi-household extras shortlist
 
 Type: grilling (HITL)
-Status: open
+Status: claimed
 Blocked by: 08
 
 ## Question
