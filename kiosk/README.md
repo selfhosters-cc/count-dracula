@@ -3,7 +3,7 @@
 The laptop only displays `/tv` (display-only: a crash there loses nothing). It needs to stay awake, show
 the whole picture on the TV, and play sound through the TV. Spec §14.
 
-**TV address:** https://count-dracula.example.com/tv (the laptop has Tailscale; that also
+**TV address:** `https://<tailnet host>/tv`, e.g. https://count-dracula.example.com/tv (the laptop has Tailscale; that also
 lets the page hold a screen Wake Lock). Fallback: http://192.168.5.31:3131/tv
 
 ## The simple way: settings only
@@ -28,7 +28,9 @@ launcher, a page reload needs that click again (the button appears whenever soun
 ## The launcher (optional)
 
 Adds Chrome's autoplay flag, so a reload comes back with sound and no click, plus kiosk mode and a
-dedicated profile (your everyday Chrome is untouched). The server hands it out, so nothing needs copying.
+dedicated profile (your everyday Chrome is untouched). The server hands it out, so nothing needs copying,
+and fills in its own address: use whichever address the laptop reaches it on (the tailnet name or
+`http://192.168.5.31:3131`) in place of `https://count-dracula.example.com` below.
 
 **CachyOS**: one command in a terminal on the laptop:
 

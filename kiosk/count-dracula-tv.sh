@@ -4,7 +4,7 @@
 # after a reload (the autoplay flag) and keeps the laptop from idling or sleeping while it runs.
 set -euo pipefail
 
-URL=${1:-https://count-dracula.example.com/tv}   # LAN fallback: http://192.168.5.31:3131/tv
+URL=${1:-__ORIGIN__/tv}   # the server fills in the address this was downloaded from
 PROFILE="$HOME/.local/share/count-dracula-tv"                 # its own profile: your normal Chrome is untouched
 
 browser=$(command -v google-chrome-stable || command -v google-chrome || command -v chromium || true)

@@ -3,3 +3,4 @@
 *.sqlite-wal
 config/config.json
 .playwright-mcp/
+deploy/local.env

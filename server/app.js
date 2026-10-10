@@ -122,7 +122,7 @@ export function startServer({ configPath, port, heartbeatMs }) {
       const { pathname } = new URL(req.url)
       const route = routes[`${req.method} ${pathname}`]
       if (route) return route(req, server)
-      if (req.method === 'GET') return serveStatic(pathname)
+      if (req.method === 'GET') return serveStatic(pathname, req)
       return notFound()
     },
   })
@@ -139,7 +139,7 @@ export function startServer({ configPath, port, heartbeatMs }) {
   }
 }
 
-async function serveStatic(pathname) {
+async function serveStatic(pathname, req) {
   const [dir, rest] = pathname.startsWith('/shared/')
     ? [SHARED_DIR, pathname.slice('/shared'.length)]
     : pathname.startsWith('/kiosk/')
@@ -153,7 +153,16 @@ async function serveStatic(pathname) {
   }
   if (!path.startsWith(dir + sep) || path.endsWith('.test.js')) return notFound()
   const file = Bun.file(path)
-  return (await file.exists()) ? new Response(file) : notFound()
+  if (!(await file.exists())) return notFound()
+  // The launchers say __ORIGIN__ wherever they need the server's address: filled in with the address
+  // they were downloaded from (https via Caddy on the tailnet, or the LAN address).
+  if (dir === KIOSK_DIR) return new Response((await file.text()).replaceAll('__ORIGIN__', originOf(req)), { headers: { 'Content-Type': file.type } })
+  return new Response(file)
+}
+
+function originOf(req) {
+  const proto = req.headers.get('X-Forwarded-Proto') ?? new URL(req.url).protocol.slice(0, -1)
+  return `${proto}://${req.headers.get('Host') ?? new URL(req.url).host}`
 }
 
 // This machine's first LAN IPv4 address: what a helper's phone on the home Wi-Fi can reach.

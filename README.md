@@ -106,8 +106,9 @@ golden tickets, leaderboard, new-costume alert, soundboard, pumpkin patch, recap
 
 ### Deploying
 
-The server runs in a Proxmox LXC under systemd, reached on the tailnet at
-`https://count-dracula.example.com` and on the LAN at `http://192.168.5.31:3131`.
+The server runs in a Proxmox LXC under systemd, reached on the LAN at `http://192.168.5.31:3131` and on the
+tailnet through Caddy over HTTPS. The tailnet hostname stays out of the repo: put
+`TAILNET_HOST=count-dracula.example.com` (your own name) in `deploy/local.env`, which git ignores.
 
 ```bash
 deploy/create-lxc.sh       # once: creates the LXC

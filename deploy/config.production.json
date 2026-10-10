@@ -4,7 +4,7 @@
   "dbPath": "/var/lib/count-dracula/count-dracula.sqlite",
   "lanUrl": "http://__IP__:3131",
   "autoJoinHosts": [
-    "count-dracula.example.com"
+    "__HOST__"
   ],
   "ghostSeed": "/opt/count-dracula/config/2025-counts.json",
   "switches": {

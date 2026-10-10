@@ -8,12 +8,23 @@ SSH keys of its own.
 |---|---|
 | LXC | **118** `count-dracula`, Debian 12, 1 core / 512 MB / 4 GB on `zstorage2`, starts on boot |
 | LAN | **http://192.168.5.31:3131** (static; the helper QR code bakes it in) |
-| Tailnet | **https://count-dracula.example.com** via Caddy (LXC 117) |
+| Tailnet | **https://`$TAILNET_HOST`** via Caddy (LXC 117); set in `deploy/local.env` |
 | App | `/opt/count-dracula` (previous build kept in `/opt/count-dracula.prev`) |
 | Config | `/etc/count-dracula/config.json` (admin PIN, switches, soundboard; never overwritten by a deploy) |
 | Data | `/var/lib/count-dracula/count-dracula.sqlite` (WAL) |
 | Logs | `ssh proxmox pct exec 118 -- journalctl -u count-dracula -f` |
 | Time zone | America/Toronto (LXC and service): ghosts and the CSV summary bucket by local time |
+
+## Once: the tailnet hostname
+
+The hostname stays out of the repo. Put it in `deploy/local.env` (git-ignored):
+
+```bash
+TAILNET_HOST=count-dracula.example.com   # your own *.int name
+```
+
+`deploy.sh` prints it, and the first deploy writes it into the config's `autoJoinHosts`. Without it, the
+deploy still works, but phones only join with the QR code.
 
 ## Once: create the LXC
 

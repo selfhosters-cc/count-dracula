@@ -5,11 +5,16 @@
 # on the very first deploy it writes that config from deploy/config.production.json with a random PIN.
 set -euo pipefail
 
+cd "$(dirname "$0")/.."
+# Private settings stay out of the repo: deploy/local.env (git-ignored) can set TAILNET_HOST, e.g.
+#   TAILNET_HOST=count-dracula.example.com
+if [[ -f deploy/local.env ]]; then source deploy/local.env; fi
+TAILNET_HOST=${TAILNET_HOST:-}
+
 PVE=${PVE:-proxmox}
 VMID=${VMID:-118}
 IP=${IP:-192.168.5.31}
 APP=/opt/count-dracula
-cd "$(dirname "$0")/.."
 
 pve() { ssh -o BatchMode=yes "$PVE" "$@"; }
 in_lxc() { pve "pct exec $VMID -- env -u SSH_CLIENT -u SSH2_CLIENT -u SSH_CONNECTION bash -euc $(printf '%q' "$1")"; } # (no SSH_* or Debian bash reads bash.bashrc)
@@ -57,7 +62,7 @@ install_out=$(in_lxc "
   rm -rf $APP.prev && if [ -d $APP ]; then mv $APP $APP.prev; fi && mv $APP.new $APP
   # The config: written once, never overwritten (it holds the admin PIN).
   if [ ! -f /etc/count-dracula/config.json ]; then
-    sed -e 's/__PIN__/$pin/' -e 's/__IP__/$IP/' /tmp/config.production.json > /etc/count-dracula/config.json
+    sed -e 's/__PIN__/$pin/' -e 's/__IP__/$IP/' -e 's/\"__HOST__\"/${TAILNET_HOST:+\"$TAILNET_HOST\"}/' /tmp/config.production.json > /etc/count-dracula/config.json
     chmod 640 /etc/count-dracula/config.json && chgrp countdracula /etc/count-dracula/config.json
     echo NEW_PIN
   fi
@@ -79,7 +84,7 @@ if ! health; then
 fi
 key=$(in_lxc "/usr/local/bin/bun -e \"const s = JSON.parse(require('fs').readFileSync('/etc/count-dracula/config.json')); const { Database } = require('bun:sqlite'); console.log(new Database(s.dbPath, { readonly: true }).query('SELECT join_key FROM events WHERE live = 1').get().join_key)\"")
 cat <<EOF
-==> Deployed.
-    Tailnet:  https://count-dracula.example.com   (TV: /tv, Setup: /setup; phones join automatically)
+==> Deployed.${TAILNET_HOST:+
+    Tailnet:  https://$TAILNET_HOST   (TV: /tv, Setup: /setup; phones join automatically)}
     LAN:      http://$IP:3131/?key=$key
 EOF

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Installs the Count Dracula TV launcher on a CachyOS (or any Linux) laptop:
-#   curl -fsSL https://count-dracula.example.com/kiosk/install-cachyos.sh | bash
+#   curl -fsSL __ORIGIN__/kiosk/install-cachyos.sh | bash
 #   … | bash -s -- --autostart     also start it at login
 # Adds "Count Dracula TV" to the app menu. Undo: rm ~/.local/bin/count-dracula-tv ~/.local/share/applications/count-dracula-tv.desktop ~/.config/autostart/count-dracula-tv.desktop
 set -euo pipefail
 
-BASE=${BASE:-https://count-dracula.example.com}
+BASE=${BASE:-__ORIGIN__} # the server fills in the address this was downloaded from
 mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications"
 curl -fsSL "$BASE/kiosk/count-dracula-tv.sh" -o "$HOME/.local/bin/count-dracula-tv"
 chmod +x "$HOME/.local/bin/count-dracula-tv"
