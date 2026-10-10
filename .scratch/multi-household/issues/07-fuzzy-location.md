@@ -1,7 +1,7 @@
 # Fuzzy location
 
 Type: grilling (HITL)
-Status: open
+Status: claimed
 Blocked by: 02
 
 ## Question
