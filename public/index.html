@@ -155,7 +155,12 @@
 
     // The join key arrives as ?key=… once (QR code or tailnet hand-off) and is remembered.
     const params = new URLSearchParams(location.search)
-    if (params.get('key')) localStorage.setItem('cd.joinKey', params.get('key'))
+    if (params.get('key')) {
+      localStorage.setItem('cd.joinKey', params.get('key'))
+      // Take it out of the address bar, so a reload after "Change key" can't put the old one back.
+      params.delete('key')
+      history.replaceState(null, '', location.pathname + (params.size ? `?${params}` : ''))
+    }
     const joinKey = localStorage.getItem('cd.joinKey') ?? ''
 
     let problem = ''
@@ -244,6 +249,11 @@
         $('problem').textContent = problem
         const wanted = view.tags.map(tileFor)
         const grid = $('grid')
+        for (const [id, tile] of tiles) {
+          if (wanted.includes(tile)) continue
+          tile.remove() // a costume deleted in Setup, or a different event after Go live
+          tiles.delete(id)
+        }
         wanted.forEach((tile, i) => {
           if (grid.children[i] !== tile) grid.insertBefore(tile, grid.children[i])
         })

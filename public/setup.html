@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Count Dracula — Setup</title>
+  <style>
+    :root { --bg: #14101c; --panel: #221a2e; --panel2: #2d2340; --text: #f5efe6; --dim: #a99cbc;
+      --orange: #ff7a1a; --danger: #ff5a6e; --ok: #6c6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      padding: 16px; max-width: 720px; margin-inline: auto; }
+    h1 { margin: 0 0 12px; font-size: 24px; }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+    section { background: var(--panel); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+    label { display: block; color: var(--dim); font-size: 13px; margin: 10px 0 4px; }
+    input, select, button { font: inherit; color: inherit; }
+    input, select { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ffffff30; background: var(--bg); }
+    button { border: 0; border-radius: 10px; padding: 10px 14px; background: var(--panel2); font-weight: 700; cursor: pointer; }
+    button.primary { background: var(--orange); color: #1a0d00; }
+    button.danger { color: var(--danger); }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .row > * { flex: 1; min-width: 0; }
+    .row > button, .row > .fit { flex: 0 0 auto; }
+    .muted { color: var(--dim); font-size: 13px; }
+    .item { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #ffffff10; flex-wrap: wrap; }
+    .item:last-child { border-bottom: 0; }
+    .item .grow { flex: 1; min-width: 8em; }
+    .tag-row input.emoji { width: 3.2em; flex: 0 0 auto; text-align: center; }
+    .tag-row input.order { width: 4em; flex: 0 0 auto; }
+    .live { color: var(--ok); font-weight: 700; }
+    #status { position: sticky; top: 0; min-height: 1.4em; color: var(--ok); font-weight: 700; }
+    #status.err { color: var(--danger); }
+    code { background: var(--bg); padding: 2px 6px; border-radius: 6px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>🧛 Setup</h1>
+  <div id="status" role="status"></div>
+
+  <section id="gate">
+    <h2>Admin PIN</h2>
+    <form id="gate-form">
+      <label for="pin">PIN (from the server config file)</label>
+      <input id="pin" inputmode="numeric" autocomplete="off">
+      <label for="key">Join key (only if this phone hasn't joined yet)</label>
+      <input id="key" autocomplete="off">
+      <p><button class="primary" type="submit">Unlock</button></p>
+    </form>
+  </section>
+
+  <div id="admin" hidden>
+    <section>
+      <h2>Live now: <span id="live-name"></span></h2>
+      <p class="muted"><span id="live-kids"></span> kids · join key <code id="join-key"></code></p>
+      <div class="row">
+        <button id="change-key" class="danger">Change join key</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Edit <select id="editing" class="fit" style="width:auto"></select></h2>
+      <form id="settings-form">
+        <label for="s-name">Name</label>
+        <input id="s-name">
+        <label for="s-race">Race against</label>
+        <select id="s-race"></select>
+        <div class="row">
+          <div><label for="s-shift">Clock shift (hours)</label><input id="s-shift" type="number" step="0.25"></div>
+          <div><label for="s-expected">Expected kids</label><input id="s-expected" type="number" min="0"></div>
+          <div><label for="s-visit">Visit window (s)</label><input id="s-visit" type="number" min="1"></div>
+        </div>
+        <p><button class="primary" type="submit">Save settings</button></p>
+      </form>
+
+      <h2>Costumes</h2>
+      <div id="tags"></div>
+      <form id="new-tag" class="item tag-row">
+        <input class="emoji" id="t-emoji" placeholder="🎃" autocomplete="off">
+        <input class="grow" id="t-name" placeholder="New costume name" autocomplete="off">
+        <button type="submit">Add</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>Create an event</h2>
+      <form id="create-form">
+        <label for="c-name">Name</label>
+        <input id="c-name" placeholder="Halloween 2026" autocomplete="off">
+        <label for="c-copy">Copy costumes from</label>
+        <select id="c-copy"></select>
+        <p><button class="primary" type="submit">Create</button></p>
+      </form>
+      <div id="upcoming"></div>
+    </section>
+
+    <section>
+      <h2>Past events</h2>
+      <div id="past"></div>
+    </section>
+  </div>
+
+  <script type="module">
+    const $ = (id) => document.getElementById(id)
+    const HOUR = 3_600_000
+
+    let pin = localStorage.getItem('cd.adminPin') ?? ''
+    let joinKey = localStorage.getItem('cd.joinKey') ?? ''
+    let events = []
+    let editingId = null
+
+    function say(text, isError = false) {
+      $('status').textContent = text
+      $('status').classList.toggle('err', isError)
+      if (!isError) setTimeout(() => $('status').textContent === text && ($('status').textContent = ''), 2500)
+    }
+
+    async function load() {
+      const res = await fetch('/api/events', { headers: { 'X-Admin-Pin': pin } })
+      if (res.status === 403) return false
+      events = await res.json()
+      render()
+      return true
+    }
+
+    async function admin(command, done) {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Join-Key': joinKey, 'X-Admin-Pin': pin },
+        body: JSON.stringify(command),
+      })
+      if (!res.ok) {
+        say(res.status === 403 ? `${await res.text()}: check the join key and PIN` : await res.text(), true)
+        return null
+      }
+      const body = await res.json()
+      await load()
+      if (done) say(done)
+      return body
+    }
+
+    // ---- the PIN gate: a wrong PIN is rejected; a right one is remembered on this phone
+    $('gate-form').addEventListener('submit', async (e) => {
+      e.preventDefault()
+      pin = $('pin').value.trim()
+      if ($('key').value.trim()) {
+        joinKey = $('key').value.trim()
+        localStorage.setItem('cd.joinKey', joinKey)
+      }
+      if (await load()) {
+        localStorage.setItem('cd.adminPin', pin)
+        unlock()
+      } else say('Wrong PIN', true)
+    })
+
+    function unlock() {
+      $('gate').hidden = true
+      $('admin').hidden = false
+    }
+
+    // ---- rendering
+    function appendAll(node, children) {
+      node.append(...children)
+      return node
+    }
+    const h = (tag, props, ...children) => appendAll(Object.assign(document.createElement(tag), props), children)
+    const option = (value, text, selected) => h('option', { value, textContent: text, selected })
+
+    function render() {
+      const live = events.find((e) => e.live)
+      const upcoming = events.filter((e) => !e.live && !e.frozen && !e.countsOnly)
+      const past = events.filter((e) => e.frozen || e.countsOnly)
+      const editable = [live, ...upcoming]
+      if (!editable.some((e) => e.id === editingId)) editingId = live.id
+
+      $('live-name').textContent = live.name
+      $('live-kids').textContent = live.kids
+      $('join-key').textContent = joinKey || '(not set on this phone)'
+
+      $('editing').replaceChildren(...editable.map((e) => option(e.id, e.live ? `${e.name} (live)` : e.name, e.id === editingId)))
+      const editing = events.find((e) => e.id === editingId)
+      $('s-name').value = editing.name
+      $('s-race').replaceChildren(
+        option('', 'None', editing.raceAgainstId == null),
+        ...events.filter((e) => e.id !== editing.id).map((e) => option(e.id, e.name, e.id === editing.raceAgainstId)),
+      )
+      $('s-shift').value = editing.clockShiftMs / HOUR
+      $('s-expected').value = editing.expectedKids ?? ''
+      $('s-visit').value = editing.visitWindowMs / 1000
+
+      $('tags').replaceChildren(...editing.tags.map(tagRow))
+      $('c-copy').replaceChildren(option('', 'Nothing (start empty)', true), ...events.filter((e) => !e.countsOnly).map((e) => option(e.id, e.name)))
+
+      $('upcoming').replaceChildren(
+        ...upcoming.map((e) =>
+          h('div', { className: 'item' },
+            h('span', { className: 'grow', textContent: `${e.name} · ${e.tags.length} costumes` }),
+            h('button', { className: 'primary', textContent: 'Go live', onclick: () => goLive(e, live) })),
+        ),
+      )
+      $('past').replaceChildren(
+        ...(past.length
+          ? past.map((e) =>
+              h('div', { className: 'item' },
+                h('span', { className: 'grow', textContent: `${e.name} · ${e.countsOnly ? 'counts only' : `${e.kids} kids`}` }),
+                h('button', { className: 'danger', textContent: 'Delete', onclick: () => deleteEvent(e) })),
+            )
+          : [h('p', { className: 'muted', textContent: 'None yet.' })]),
+      )
+    }
+
+    function tagRow(tag) {
+      const emoji = h('input', { className: 'emoji', value: tag.emoji ?? '', ariaLabel: 'Emoji' })
+      const name = h('input', { className: 'grow', value: tag.name, ariaLabel: 'Name' })
+      const order = h('input', { className: 'order', type: 'number', min: 1, value: tag.order, ariaLabel: 'Order' })
+      return h('div', { className: 'item tag-row' }, emoji, name, order,
+        h('button', {
+          textContent: 'Save',
+          onclick: () => admin({ type: 'updateTag', tagId: tag.id, name: name.value, emoji: emoji.value || null, order: Number(order.value) }, `Saved ${name.value}`),
+        }),
+        h('button', {
+          className: 'danger',
+          textContent: '✕',
+          ariaLabel: `Delete ${tag.name}`,
+          onclick: () => {
+            if (confirm(`Delete "${tag.name}"? Any kids wearing it become untagged.`)) admin({ type: 'deleteTag', tagId: tag.id }, `Deleted ${tag.name}`)
+          },
+        }))
+    }
+
+    // ---- actions
+    $('editing').addEventListener('change', (e) => {
+      editingId = Number(e.target.value)
+      render()
+    })
+
+    $('settings-form').addEventListener('submit', (e) => {
+      e.preventDefault()
+      const race = $('s-race').value
+      admin({
+        type: 'settings',
+        eventId: editingId,
+        name: $('s-name').value,
+        raceAgainstId: race === '' ? null : Number(race),
+        clockShiftMs: Math.round(Number($('s-shift').value || 0) * HOUR),
+        expectedKids: $('s-expected').value === '' ? null : Number($('s-expected').value),
+        visitWindowMs: Math.round(Number($('s-visit').value || 15) * 1000),
+      }, 'Settings saved')
+    })
+
+    $('new-tag').addEventListener('submit', async (e) => {
+      e.preventDefault()
+      if (await admin({ type: 'createTag', eventId: editingId, name: $('t-name').value, emoji: $('t-emoji').value || null }, `Added ${$('t-name').value}`)) {
+        $('t-name').value = ''
+        $('t-emoji').value = ''
+      }
+    })
+
+    $('create-form').addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const copy = $('c-copy').value
+      const done = await admin({ type: 'createEvent', name: $('c-name').value, copyTagsFrom: copy === '' ? null : Number(copy) }, `Created ${$('c-name').value}`)
+      if (done) {
+        $('c-name').value = ''
+        editingId = done.deltas[0].event.id
+        render()
+      }
+    })
+
+    function goLive(event, live) {
+      if (!confirm(`Go live with "${event.name}"?\n\n"${live.name}" will be frozen as a past event. Phones and the TV switch over by themselves.`)) return
+      admin({ type: 'goLive', eventId: event.id }, `${event.name} is live`)
+    }
+
+    function deleteEvent(event) {
+      const typed = prompt(`Delete "${event.name}" for good? Type its name to confirm.`)
+      if (typed == null) return
+      if (typed !== event.name) return say("That didn't match, so nothing was deleted", true)
+      admin({ type: 'deleteEvent', eventId: event.id, confirm: typed }, `Deleted ${event.name}`)
+    }
+
+    $('change-key').addEventListener('click', async () => {
+      if (!confirm('Change the join key? Every phone using the old key stops counting until it rejoins.')) return
+      const done = await admin({ type: 'changeKey' }, 'Join key changed')
+      if (done) {
+        joinKey = done.joinKey
+        localStorage.setItem('cd.joinKey', joinKey)
+        render()
+      }
+    })
+
+    if (pin && (await load())) unlock()
+  </script>
+</body>
+</html>

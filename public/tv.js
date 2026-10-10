@@ -75,7 +75,7 @@ function paceText(state) {
   const p = pace(state.kids.length, ghost(g.buckets)(now), g.total)
   if (p.kind === 'record') return '🏆 New record!'
   if (p.kind === 'level') return "👻 Neck and neck with last year's ghost"
-  return `👻 ${p.by} ${p.kind} of last year's ghost`
+  return p.kind === 'ahead' ? `👻 ${p.by} ahead of last year's ghost` : `👻 ${p.by} behind last year's ghost`
 }
 
 function renderRace(state, animate = true) {

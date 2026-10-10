@@ -2,6 +2,7 @@
 // The TV's "never celebrate a snapshot" rule is one check: cause === 'delta'.
 
 const RETRY_MS = 2_000
+const RESYNC = new Set(['event.switched', 'event.updated'])
 
 export function connectLive(url = '/api/stream') {
   const listeners = new Set()
@@ -37,6 +38,7 @@ export function connectLive(url = '/api/stream') {
       const delta = JSON.parse(e.data)
       if (!live.state || delta.seq <= live.state.seq) return
       if (delta.seq !== live.state.seq + 1) return reopen() // missed one: the new snapshot resyncs us
+      if (RESYNC.has(delta.type)) return reopen() // Go live or new settings: take a fresh snapshot
       live.state = applyDelta(live.state, delta)
       emit('delta', delta)
     })
@@ -72,6 +74,10 @@ function applyDelta(state, delta) {
     }
     case 'tag.added':
       return { ...state, seq: delta.seq, tags: [...state.tags, delta.tag] }
+    case 'tag.updated':
+      return { ...state, seq: delta.seq, tags: state.tags.map((t) => (t.id === delta.tag.id ? delta.tag : t)) }
+    case 'tag.removed':
+      return { ...state, seq: delta.seq, tags: state.tags.filter((t) => t.id !== delta.tagId) }
     default:
       return { ...state, seq: delta.seq }
   }

@@ -7,7 +7,8 @@ import { createHub } from './hub.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
-const PAGES = { '/': '/index.html', '/tv': '/tv.html' }
+const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html' }
+const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag'])
 
 export function startServer({ configPath, port, heartbeatMs }) {
   const config = loadConfig(configPath)
@@ -25,6 +26,17 @@ export function startServer({ configPath, port, heartbeatMs }) {
       const { kidId } = await req.json()
       hub.publish(ledger.apply({ type: 'remove', kidId }))
     }),
+    // Setup (spec §6): the join key and the admin PIN.
+    'GET /api/events': (req) =>
+      isAdmin(req) ? Response.json(ledger.events()) : new Response('Wrong PIN', { status: 403 }),
+    'POST /api/admin': write(async (req) => {
+      if (!isAdmin(req)) return new Response('Wrong PIN', { status: 403 })
+      const command = await req.json()
+      if (!ADMIN_COMMANDS.has(command?.type)) throw new BadCommand(`Not a Setup command: ${command?.type}`)
+      const deltas = ledger.apply(command)
+      hub.publish(deltas)
+      return Response.json({ deltas, joinKey: ledger.joinKey() })
+    }),
     'POST /api/catch-up': write(async (req) => {
       const { tag, n, kid } = await req.json()
       hub.publish(ledger.apply({ type: 'catchUp', tag, n, kid }))
@@ -38,7 +50,8 @@ export function startServer({ configPath, port, heartbeatMs }) {
         return new Response('Wrong join key', { status: 403 })
       }
       try {
-        await handler(req)
+        const res = await handler(req)
+        if (res) return res
       } catch (err) {
         if (err instanceof BadCommand || err instanceof SyntaxError) {
           return new Response(err.message, { status: 400 })
@@ -47,6 +60,10 @@ export function startServer({ configPath, port, heartbeatMs }) {
       }
       return new Response('OK')
     }
+  }
+
+  function isAdmin(req) {
+    return config.adminPin !== '' && req.headers.get('X-Admin-Pin') === config.adminPin
   }
 
   const server = Bun.serve({

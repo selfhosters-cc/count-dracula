@@ -345,3 +345,189 @@ describe('ghost from a past event with taps', () => {
     })
   })
 })
+
+describe('events and Go live', () => {
+  const liveEvents = (ledger) => ledger.events().filter((e) => e.live)
+
+  test("creating an event doesn't make it live", () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+
+    const [created] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
+
+    expect(created).toMatchObject({ type: 'event.created', event: { name: 'Halloween 2026', live: false, frozen: false } })
+    expect(ledger.snapshot().event.name).toBe('Rehearsal')
+    expect(liveEvents(ledger).map((e) => e.name)).toEqual(['Rehearsal'])
+  })
+
+  test('Go live switches the live event, freezes the old one and keeps the join key', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const key = ledger.joinKey()
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
+
+    const deltas = ledger.apply({ type: 'goLive', eventId: event.id })
+
+    expect(deltas).toMatchObject([{ type: 'event.switched', eventId: event.id }])
+    expect(ledger.snapshot().event).toMatchObject({ name: 'Halloween 2026', live: true })
+    expect(liveEvents(ledger).map((e) => e.name)).toEqual(['Halloween 2026'])
+    expect(ledger.events().find((e) => e.name === 'Rehearsal')).toMatchObject({ live: false, frozen: true })
+    expect(ledger.joinKey()).toBe(key)
+  })
+
+  test('taps after Go live count in the new event, numbered from 1', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    ledger.apply(tap('rehearsal-kid'))
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
+    ledger.apply({ type: 'goLive', eventId: event.id })
+
+    const [delta] = ledger.apply(tap('first-real-kid'))
+
+    expect(delta.kid.number).toBe(1)
+    expect(ledger.snapshot().kids.map((k) => k.id)).toEqual(['first-real-kid'])
+  })
+
+  test.each([
+    ['the counts-only 2025 event', (ledger) => ledger.snapshot().ghost.eventId],
+    ['a frozen past event', (ledger) => {
+      const rehearsal = ledger.snapshot().event.id
+      const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Next' })
+      ledger.apply({ type: 'goLive', eventId: event.id })
+      return rehearsal
+    }],
+  ])("can't go live with %s", (_, pick) => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const eventId = pick(ledger)
+    const before = ledger.snapshot().event.id
+
+    expect(() => ledger.apply({ type: 'goLive', eventId })).toThrow(BadCommand)
+    expect(ledger.snapshot().event.id).toBe(before)
+    expect(liveEvents(ledger)).toHaveLength(1)
+  })
+
+  test('"Copy costumes from" copies names, emoji, order, sounds and the Visit window, with zero counts', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const rehearsal = ledger.snapshot().event.id
+    ledger.apply(catchUp('door', 0, { tag: { name: 'Witch', emoji: '🧙' } }))
+    ledger.apply(catchUp('door-2', 0, { tag: { name: 'Bluey', emoji: '🐶' } }))
+    ledger.apply({ type: 'settings', eventId: rehearsal, visitWindowMs: 20_000 })
+
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026', copyTagsFrom: rehearsal })
+    ledger.apply({ type: 'goLive', eventId: event.id })
+
+    const snap = ledger.snapshot()
+    expect(snap.tags.map((t) => [t.name, t.emoji, t.order])).toEqual([['Witch', '🧙', 1], ['Bluey', '🐶', 2]])
+    expect(snap.kids).toEqual([])
+    expect(ledger.events().find((e) => e.id === event.id).visitWindowMs).toBe(20_000)
+  })
+})
+
+describe('event settings', () => {
+  test('Race against and Clock shift change what the live snapshot carries, and tell clients to resync', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const live = ledger.snapshot().event.id
+
+    const deltas = ledger.apply({ type: 'settings', eventId: live, raceAgainstId: null, clockShiftMs: 3 * 3_600_000 })
+
+    expect(deltas).toMatchObject([{ type: 'event.updated', eventId: live }])
+    expect(ledger.snapshot().ghost).toBeNull()
+    expect(ledger.snapshot().event.clockShiftMs).toBe(3 * 3_600_000)
+  })
+
+  test("an event can't race against itself", () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const live = ledger.snapshot().event.id
+
+    expect(() => ledger.apply({ type: 'settings', eventId: live, raceAgainstId: live })).toThrow(BadCommand)
+  })
+
+  test("an upcoming event's settings change quietly: no delta for the live clients", () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
+
+    expect(ledger.apply({ type: 'settings', eventId: event.id, expectedKids: 350 })).toEqual([])
+    expect(ledger.events().find((e) => e.id === event.id).expectedKids).toBe(350)
+  })
+
+  test('past events are read-only: settings and costume changes are rejected', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const rehearsal = ledger.snapshot().event.id
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
+    ledger.apply({ type: 'goLive', eventId: event.id })
+
+    expect(() => ledger.apply({ type: 'settings', eventId: rehearsal, name: 'Renamed' })).toThrow(BadCommand)
+    expect(() => ledger.apply({ type: 'createTag', eventId: rehearsal, name: 'Ghost', emoji: '👻' })).toThrow(BadCommand)
+    expect(ledger.events().find((e) => e.id === rehearsal).name).toBe('Rehearsal')
+  })
+})
+
+describe('join key and deleting events', () => {
+  test('Change key replaces the live event\'s key', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const old = ledger.joinKey()
+
+    ledger.apply({ type: 'changeKey' })
+
+    expect(ledger.joinKey()).not.toBe(old)
+    expect(ledger.joinKey()).toMatch(/^[A-Za-z0-9]{8,}$/)
+  })
+
+  test("the live event can't be deleted", () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const live = ledger.snapshot().event
+
+    expect(() => ledger.apply({ type: 'deleteEvent', eventId: live.id, confirm: live.name })).toThrow(BadCommand)
+  })
+
+  test('a past event is deleted with its kids and costumes, only with its name typed to confirm', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const rehearsal = ledger.snapshot().event.id
+    ledger.apply(tap('a'))
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
+    ledger.apply({ type: 'goLive', eventId: event.id })
+    ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: rehearsal })
+
+    expect(() => ledger.apply({ type: 'deleteEvent', eventId: rehearsal, confirm: 'rehearsal?' })).toThrow(BadCommand)
+    const deltas = ledger.apply({ type: 'deleteEvent', eventId: rehearsal, confirm: 'Rehearsal' })
+
+    expect(ledger.events().map((e) => e.name)).toEqual(['Halloween 2026', 'Halloween 2025 (counts)'])
+    expect(ledger.snapshot().ghost).toBeNull() // it was being raced against: now None
+    expect(deltas).toMatchObject([{ type: 'event.updated', eventId: event.id }])
+  })
+})
+
+describe('costume presets', () => {
+  test('creating, renaming and re-emojiing a costume on the live event updates clients', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const live = ledger.snapshot().event.id
+
+    const [added] = ledger.apply({ type: 'createTag', eventId: live, name: 'Wednesday', emoji: '🖤' })
+    const [updated] = ledger.apply({ type: 'updateTag', tagId: added.tag.id, name: 'Wednesday Addams', emoji: '🕷️' })
+
+    expect(added).toMatchObject({ type: 'tag.added', tag: { name: 'Wednesday', emoji: '🖤', order: 1 } })
+    expect(updated).toMatchObject({ type: 'tag.updated', tag: { id: added.tag.id, name: 'Wednesday Addams', emoji: '🕷️' } })
+    expect(ledger.snapshot().tags).toEqual([updated.tag])
+  })
+
+  test('deleting a costume makes its kids untagged', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const [{ tag }] = ledger.apply(catchUp('door', 0))
+    ledger.apply(tap('a', { tagId: tag.id }))
+    ledger.apply(tap('b'))
+
+    const deltas = ledger.apply({ type: 'deleteTag', tagId: tag.id })
+
+    expect(deltas).toMatchObject([
+      { type: 'kid.retagged', kidIds: ['door', 'a'], tagId: null },
+      { type: 'tag.removed', tagId: tag.id },
+    ])
+    expect(ledger.snapshot().tags).toEqual([])
+    expect(ledger.snapshot().kids.map((k) => k.tagId)).toEqual([null, null, null])
+  })
+
+  test("an upcoming event's costumes change without telling the live clients", () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
+
+    expect(ledger.apply({ type: 'createTag', eventId: event.id, name: 'Witch', emoji: '🧙' })).toEqual([])
+    expect(ledger.snapshot().tags).toEqual([])
+  })
+})

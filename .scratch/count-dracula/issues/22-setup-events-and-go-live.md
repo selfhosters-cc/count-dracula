@@ -24,11 +24,11 @@ The admin's `/setup` page, behind the admin PIN from the config file (remembered
 
 ## Acceptance criteria
 
-- [ ] A wrong PIN is rejected, and once entered the PIN is remembered on that phone
-- [ ] Create + Copy costumes from produces the same tags with zero counts
-- [ ] Go live freezes the old event (writes to it are rejected), and phones and the TV follow the new event without re-scanning or reloading
-- [ ] Change key stops old-key phones from writing until they rejoin
-- [ ] Renaming a costume updates phones and the TV live; deleting one untags its kids after a confirmation
-- [ ] Changing Race against or Clock shift is reflected on the TV live
-- [ ] Deleting a past event needs the typed confirmation, and the live event can't be deleted
-- [ ] Tests cover the one-live-event invariant and freezing
+- [x] A wrong PIN is rejected, and once entered the PIN is remembered on that phone
+- [x] Create + Copy costumes from produces the same tags with zero counts
+- [x] Go live freezes the old event (writes to it are rejected), and phones and the TV follow the new event without re-scanning or reloading
+- [x] Change key stops old-key phones from writing until they rejoin
+- [x] Renaming a costume updates phones and the TV live; deleting one untags its kids after a confirmation
+- [x] Changing Race against or Clock shift is reflected on the TV live
+- [x] Deleting a past event needs the typed confirmation, and the live event can't be deleted
+- [x] Tests cover the one-live-event invariant and freezing

@@ -227,3 +227,61 @@ describe('pages', () => {
     }
   })
 })
+
+describe('admin (Setup)', () => {
+  function admin(app, command, { pin = '4321', key = app.ledger.joinKey() } = {}) {
+    return fetch(`${app.url}/api/admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Join-Key': key, 'X-Admin-Pin': pin },
+      body: JSON.stringify(command),
+    })
+  }
+
+  test('needs the admin PIN from the config file as well as the join key', async () => {
+    const app = start()
+    const create = { type: 'createEvent', name: 'Halloween 2026' }
+
+    expect((await admin(app, create, { pin: '0000' })).status).toBe(403)
+    expect((await admin(app, create, { key: 'old-key' })).status).toBe(403)
+    expect((await admin(app, { type: 'tap', id: 'x', tappedAt: 1 })).status).toBe(400) // not an admin command
+    expect((await admin(app, create)).status).toBe(200)
+    expect(app.ledger.events().map((e) => e.name)).toContain('Halloween 2026')
+  })
+
+  test('lists events for Setup only with the PIN', async () => {
+    const app = start()
+
+    expect((await fetch(`${app.url}/api/events`, { headers: { 'X-Admin-Pin': 'nope' } })).status).toBe(403)
+    const res = await fetch(`${app.url}/api/events`, { headers: { 'X-Admin-Pin': '4321' } })
+    expect(res.status).toBe(200)
+    const events = await res.json()
+    expect(events.map((e) => e.name)).toEqual(['Rehearsal', 'Halloween 2025 (counts)'])
+    expect(JSON.stringify(events)).not.toContain(app.ledger.joinKey())
+  })
+
+  test('Change key hands back the new key, and the old one stops writing', async () => {
+    const app = start()
+    const old = app.ledger.joinKey()
+
+    const res = await admin(app, { type: 'changeKey' })
+
+    const { joinKey } = await res.json()
+    expect(joinKey).toBe(app.ledger.joinKey())
+    expect(joinKey).not.toBe(old)
+    expect((await postTap(app, aTap('a'), { key: old })).status).toBe(403)
+    expect((await postTap(app, aTap('b'), { key: joinKey })).status).toBe(200)
+  })
+
+  test('Go live tells every stream to switch', async () => {
+    const app = start()
+    const stream = await openStream(app)
+    await stream.next()
+    const created = await (await admin(app, { type: 'createEvent', name: 'Halloween 2026' })).json()
+
+    await admin(app, { type: 'goLive', eventId: created.deltas[0].event.id })
+
+    expect((await stream.next()).data).toMatchObject({ type: 'event.created' }) // every seq is published, so no gaps
+    expect((await stream.next()).data).toMatchObject({ type: 'event.switched' })
+    stream.close()
+  })
+})

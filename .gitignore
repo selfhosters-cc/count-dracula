@@ -2,3 +2,4 @@
 *.sqlite-shm
 *.sqlite-wal
 config/config.json
+.playwright-mcp/
