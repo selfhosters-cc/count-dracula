@@ -16,6 +16,30 @@ NAMESERVER=${NAMESERVER:-1.1.1.1}
 
 pve() { ssh -o BatchMode=yes "$PVE" "$@"; }
 
+# Spec §11: the existing scheduled Proxmox backup jobs must include the new LXC. Ours list guests
+# explicitly, so add this one to every job that backs up more than one guest.
+add_to_backups() {
+  echo "==> Adding LXC $VMID to the scheduled backup jobs"
+  pve "pvesh get /cluster/backup --output-format json" | python3 -c '
+import json, sys
+vmid = sys.argv[1]
+for job in json.load(sys.stdin):
+    ids = [i for i in (job.get("vmid") or "").split(",") if i]
+    if job.get("all") or len(ids) < 2 or vmid in ids:
+        continue
+    print(job["id"], ",".join(ids + [vmid]))
+' "$VMID" | while read -r job ids; do
+    # -n: ssh must not read the loop's stdin, or it swallows the remaining jobs.
+    ssh -n -o BatchMode=yes "$PVE" "pvesh set /cluster/backup/$job --vmid $ids" && echo "    $job now backs up: $ids"
+  done
+}
+
+# deploy/create-lxc.sh --backups-only: just make sure every backup job includes the LXC.
+if [[ ${1:-} == --backups-only ]]; then
+  add_to_backups
+  exit 0
+fi
+
 if pve "pct status $VMID" >/dev/null 2>&1; then
   # Resumable: an earlier run that stopped part-way left our own LXC behind; finish setting it up.
   if pve "pct config $VMID" | grep -qx 'hostname: count-dracula'; then
@@ -69,20 +93,6 @@ pve "pct exec $VMID -- bash -euc '
   mkdir -p /etc/count-dracula /opt
 '"
 
-# Spec §11: the existing scheduled Proxmox backup jobs must include the new LXC. Ours list guests
-# explicitly, so add this one to every job that backs up more than one guest.
-echo "==> Adding LXC $VMID to the scheduled backup jobs"
-pve "pvesh get /cluster/backup --output-format json" | python3 -c '
-import json, sys
-vmid = sys.argv[1]
-for job in json.load(sys.stdin):
-    ids = [i for i in (job.get("vmid") or "").split(",") if i]
-    if job.get("all") or len(ids) < 2 or vmid in ids:
-        continue
-    print(job["id"], ",".join(ids + [vmid]))
-' "$VMID" | while read -r job ids; do
-  # -n: ssh must not read the loop's stdin, or it swallows the remaining jobs.
-  ssh -n -o BatchMode=yes "$PVE" "pvesh set /cluster/backup/$job --vmid $ids" && echo "    $job now backs up: $ids"
-done
+add_to_backups
 
 echo "==> LXC $VMID is ready at $IP. Next: deploy/deploy.sh"
