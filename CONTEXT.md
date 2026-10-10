@@ -75,3 +75,15 @@ _Avoid_: Complaint, flag, ticket
 **Pause sign-ups**:
 The Operator's switch on `/operator` that stops new Households being created while every existing Household keeps working. The emergency move for a sign-up flood, usable without a redeploy.
 _Avoid_: Lockdown, maintenance mode, closing the site
+
+**House rules**:
+The three rules every Household agrees to by signing in, on the same page as the privacy notice: decent names and costume text, one real Household per home, Managers are adults running their own door. They are what a Report, Rename or Suspend points to.
+_Avoid_: Terms, terms of service, policy, code of conduct
+
+**Idle Household**:
+A Household no Manager has signed in to for 2 years. It's deleted with everything it owns, without warning, since nothing is ever emailed.
+_Avoid_: Inactive, dormant, stale (Stale is an Operator-dashboard status on the night)
+
+**Abandoned sign-up**:
+A Household that never counted a kid outside its starter Rehearsal and that no Manager has signed in to for 60 days. It's deleted like an Idle Household, just sooner.
+_Avoid_: Unused account, trial, bot account
