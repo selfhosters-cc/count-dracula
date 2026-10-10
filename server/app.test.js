@@ -209,6 +209,7 @@ describe('pages', () => {
     ['/', 'text/html'],
     ['/tv', 'text/html'],
     ['/live.js', 'text/javascript'],
+    ['/shared/night-maths.js', 'text/javascript'],
   ])('serves %s', async (path, type) => {
     const app = start()
 
@@ -221,7 +222,7 @@ describe('pages', () => {
   test('serves nothing outside public/, and no test files', async () => {
     const app = start()
 
-    for (const path of ['/..%2fserver%2fapp.js', '/%2e%2e/server/app.js', '/nope.html', '/outbox.test.js']) {
+    for (const path of ['/..%2fserver%2fapp.js', '/%2e%2e/server/app.js', '/nope.html', '/outbox.test.js', '/shared/night-maths.test.js', '/shared/../server/app.js']) {
       expect((await fetch(`${app.url}${path}`)).status).toBe(404)
     }
   })

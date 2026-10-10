@@ -99,23 +99,61 @@ export function openLedger(db, config) {
   )
   const liveCount = db.query('SELECT COUNT(*) AS n FROM kids WHERE event_id = ? AND deleted_at IS NULL')
 
+  const insertTag = db.query(`
+    INSERT INTO tags (event_id, name, emoji, sort_order)
+    VALUES ($eventId, $name, $emoji, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tags WHERE event_id = $eventId))
+    RETURNING *
+  `)
+
+  const mostRecentUntagged = db.query(`
+    SELECT id FROM kids WHERE event_id = ? AND tag_id IS NULL AND deleted_at IS NULL
+    ORDER BY tapped_at DESC, rowid DESC LIMIT ?
+  `)
+  const setTag = db.query('UPDATE kids SET tag_id = ? WHERE id = ?')
+  const kidExists = db.query('SELECT 1 FROM kids WHERE id = ?')
+  const tagInEvent = db.query('SELECT 1 FROM tags WHERE id = ? AND event_id = ?')
+
+  // Numbers the kid by the live count at arrival and flags it late (spec §2). Returns null for a repeat id.
+  function addKid(event, { id, tagId, tappedAt, phoneName }) {
+    if (typeof id !== 'string' || id === '') throw new BadCommand('A tap needs an id')
+    if (!Number.isFinite(tappedAt)) throw new BadCommand('A tap needs tappedAt in ms')
+    const receivedAt = now()
+    const row = insertKid.get({
+      $id: id,
+      $eventId: event.id,
+      $number: liveCount.get(event.id).n + 1,
+      $tagId: tagId != null && tagInEvent.get(tagId, event.id) ? tagId : null, // a tag deleted while the tap queued
+      $phoneName: phoneName ?? null,
+      $tappedAt: tappedAt,
+      $receivedAt: receivedAt,
+      $late: receivedAt - tappedAt > LATE_AFTER_MS ? 1 : 0,
+    })
+    return row && toKid(row)
+  }
+
   const commands = {
-    tap({ id, tagId, tappedAt, phoneName }) {
-      if (typeof id !== 'string' || id === '') throw new BadCommand('A tap needs an id')
-      if (!Number.isFinite(tappedAt)) throw new BadCommand('A tap needs tappedAt in ms')
+    tap(command) {
+      const kid = addKid(eventById(), command)
+      return kid ? [{ type: 'kid.added', kid }] : []
+    },
+
+    // "+ New" costume: creates the tag and counts the kid at the door with it (spec §2 Catch-up).
+    // N is capped by the untagged kids there are; timestamps are untouched.
+    catchUp({ tag, n = 0, kid }) {
+      const name = typeof tag?.name === 'string' ? tag.name.trim() : ''
+      if (!name) throw new BadCommand('A costume needs a name')
+      if (!Number.isInteger(n) || n < 0) throw new BadCommand('Catch-up needs a whole number of kids')
+      if (kidExists.get(kid?.id)) return [] // a retry: the door kid already landed, so all of it did
       const event = eventById()
-      const receivedAt = now()
-      const row = insertKid.get({
-        $id: id,
-        $eventId: event.id,
-        $number: liveCount.get(event.id).n + 1,
-        $tagId: tagId ?? null,
-        $phoneName: phoneName ?? null,
-        $tappedAt: tappedAt,
-        $receivedAt: receivedAt,
-        $late: receivedAt - tappedAt > LATE_AFTER_MS ? 1 : 0,
-      })
-      return row ? [{ type: 'kid.added', kid: toKid(row) }] : []
+      const tagRow = insertTag.get({ $eventId: event.id, $name: name, $emoji: tag.emoji ?? null })
+      const kidIds = mostRecentUntagged.all(event.id, n).map((r) => r.id)
+      for (const id of kidIds) setTag.run(tagRow.id, id)
+      const added = addKid(event, { ...kid, tagId: tagRow.id })
+      return [
+        { type: 'tag.added', tag: toTag(tagRow) },
+        ...(kidIds.length ? [{ type: 'kid.retagged', kidIds, tagId: tagRow.id }] : []),
+        { type: 'kid.added', kid: added },
+      ]
     },
 
     remove({ kidId }) {
@@ -145,9 +183,7 @@ export function openLedger(db, config) {
           live: event.live === 1,
           countsOnly: event.counts_only === 1,
         },
-        tags: db
-          .query('SELECT id, name, emoji, sort_order AS "order" FROM tags WHERE event_id = ? ORDER BY sort_order')
-          .all(event.id),
+        tags: db.query('SELECT * FROM tags WHERE event_id = ? ORDER BY sort_order').all(event.id).map(toTag),
         kids: db
           .query('SELECT * FROM kids WHERE event_id = ? AND deleted_at IS NULL ORDER BY received_at, rowid')
           .all(event.id)
@@ -158,6 +194,10 @@ export function openLedger(db, config) {
       }
     },
   }
+}
+
+function toTag(row) {
+  return { id: row.id, name: row.name, emoji: row.emoji, order: row.sort_order }
 }
 
 function toKid(row) {

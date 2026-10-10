@@ -19,10 +19,10 @@ Top to bottom: a header with tonight's total and "N untagged", a 3-column **cost
 
 ## Acceptance criteria
 
-- [ ] The layout matches the Thumb pad prototype on a phone-sized screen, and the grid scrolls when there are many tags
-- [ ] Tag taps and "+1 Kid" taps both count, both offline and online
-- [ ] The optimistic flash corrects when two phones tap at the same moment
-- [ ] Catch-up with N=3 re-tags exactly the 3 most recent untagged kids, adds one tagged kid, and raises the total by 1
-- [ ] The stepper can't exceed the untagged count, and the preview lists the right numbers
-- [ ] A tag created on phone A appears on phone B without a reload
-- [ ] Tests cover the Catch-up update (cap, ordering, the +1)
+- [x] The layout matches the Thumb pad prototype on a phone-sized screen, and the grid scrolls when there are many tags
+- [x] Tag taps and "+1 Kid" taps both count, both offline and online
+- [x] The optimistic flash corrects when two phones tap at the same moment
+- [x] Catch-up with N=3 re-tags exactly the 3 most recent untagged kids, adds one tagged kid, and raises the total by 1
+- [x] The stepper can't exceed the untagged count, and the preview lists the right numbers
+- [x] A tag created on phone A appears on phone B without a reload
+- [x] Tests cover the Catch-up update (cap, ordering, the +1)

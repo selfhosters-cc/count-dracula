@@ -2,46 +2,133 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>Count Dracula</title>
   <style>
-    body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #eee;
-           display: flex; flex-direction: column; align-items: center; gap: 1.5rem; padding: 2rem 1rem; }
-    #count { font-size: 5rem; font-weight: 800; }
-    #add { font-size: 2rem; padding: 1.5rem 3rem; border: 0; border-radius: 1rem; background: #f60; color: #111; }
-    #pill { min-height: 1.5em; text-align: center; }
-    #pill .waiting { background: #c80; color: #111; padding: 0.3rem 0.8rem; border-radius: 999px; font-weight: 700; }
-    #pill .sent { color: #6c6; font-weight: 700; }
-    #pill .down { margin-top: 0.4rem; font-size: 0.9rem; }
-    #problem { color: #f66; min-height: 1.2em; }
-    #who { position: fixed; inset: 0; background: #111; display: none; flex-direction: column;
-           align-items: center; justify-content: center; gap: 1rem; }
-    #who button, #who input { font-size: 1.5rem; padding: 0.8rem 1.5rem; border-radius: 0.6rem; width: 14rem; }
-    #who button { border: 0; background: #333; color: #eee; }
+    :root {
+      --bg: #14101c; --panel: #221a2e; --panel2: #2d2340; --text: #f5efe6; --dim: #a99cbc;
+      --orange: #ff7a1a; --orange-dk: #c85500; --amber: #c80; --ok: #6c6; --danger: #ff5a6e;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    button { font: inherit; color: inherit; border: 0; cursor: pointer; touch-action: manipulation; }
+    button:active { transform: scale(.97); filter: brightness(1.2); }
+    button:disabled { opacity: .4; }
+    #app { position: relative; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; user-select: none; }
+
+    #pill { text-align: center; padding-top: 6px; }
+    #pill:empty { display: none; }
+    #pill .waiting { display: inline-block; background: var(--amber); color: #111; padding: 4px 12px; border-radius: 999px; font-weight: 800; }
+    #pill .sent { color: var(--ok); font-weight: 800; }
+    #pill .down { margin-top: 4px; font-size: 13px; }
+    #problem { color: var(--danger); text-align: center; font-size: 13px; }
+    #problem:empty { display: none; }
+
+    .head { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px 6px; }
+    .head b { font-size: 28px; font-variant-numeric: tabular-nums; }
+    .dim { font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+    .grid { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+      padding: 8px 12px; align-content: start; }
+    .tile { height: 92px; border-radius: 16px; background: var(--panel); border-bottom: 5px solid var(--c);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 0; }
+    .tile .e { font-size: 30px; line-height: 1.1; }
+    .tile .nm { font-size: 14px; font-weight: 700; max-width: 100%; padding: 0 4px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tile.new { border: 2px dashed #ffffff40; background: transparent; color: var(--dim); font-weight: 800; }
+
+    .util { display: flex; gap: 8px; padding: 6px 12px; }
+    .util button { flex: 1; height: 56px; border-radius: 14px; background: var(--panel2); font-weight: 800; font-size: 17px; }
+    .plus { height: 30dvh; max-height: 250px; margin: 6px 12px 14px; border-radius: 28px; background: var(--orange);
+      color: #1a0d00; font-size: 44px; font-weight: 900; box-shadow: 0 6px 0 var(--orange-dk); flex-shrink: 0; }
+
+    #flash { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+      font-size: 72px; font-weight: 900; opacity: 0; z-index: 30; text-shadow: 0 4px 20px #000; }
+    #flash.on { animation: flash .7s ease-out; }
+    @keyframes flash { 0% { opacity: 1; transform: scale(.7); } 60% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0; transform: scale(1.1); } }
+    #toast { position: absolute; left: 12px; right: 12px; bottom: 50%; z-index: 40; background: #000d;
+      border: 1px solid #ffffff30; border-radius: 14px; padding: 14px; text-align: center; font-weight: 700;
+      opacity: 0; transition: opacity .2s; pointer-events: none; }
+    #toast.on { opacity: 1; }
+
+    #sheet { position: absolute; inset: 0; z-index: 50; background: #000b; display: none; align-items: flex-end; }
+    #sheet.on { display: flex; }
+    .sheet { background: var(--panel); width: 100%; border-radius: 22px 22px 0 0; padding: 16px; max-height: 92%; overflow: auto; }
+    .sheet h3 { margin: 4px 0 12px; }
+    .sheet input { width: 100%; font-size: 20px; padding: 12px; border-radius: 12px; border: 1px solid #ffffff30;
+      background: var(--bg); color: var(--text); }
+    .emojis { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+    .emojis button { font-size: 26px; width: 46px; height: 46px; border-radius: 12px; background: #ffffff10; }
+    .emojis button.sel { outline: 3px solid var(--orange); }
+    .stepper { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+    .stepper button { width: 60px; height: 60px; border-radius: 16px; background: var(--panel2); font-size: 30px; font-weight: 800; }
+    .stepper .v { font-size: 40px; font-weight: 900; width: 60px; text-align: center; }
+    .hint { color: var(--dim); font-size: 13px; min-height: 2.6em; }
+    .offline { color: var(--amber); font-size: 14px; font-weight: 700; min-height: 1.2em; }
+    .actions { display: flex; gap: 10px; margin-top: 12px; }
+    .actions button { flex: 1; height: 58px; border-radius: 14px; background: var(--panel2); font-weight: 800; font-size: 18px; }
+    .actions .primary { background: var(--orange); color: #1a0d00; }
+
+    #who { position: absolute; inset: 0; z-index: 60; background: var(--bg); display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 1rem; padding: 16px; }
+    #who button, #who input { font-size: 1.5rem; padding: 0.8rem 1.5rem; border-radius: 0.6rem; width: 14rem; max-width: 100%; }
+    #who button { background: var(--panel2); }
+    #who input { border: 1px solid #ffffff30; background: var(--panel); color: var(--text); }
   </style>
 </head>
 <body>
-  <div id="pill"></div>
-  <div id="event"></div>
-  <div id="count">–</div>
-  <button id="add">+1 Kid</button>
-  <div id="problem"></div>
+  <div id="app">
+    <div id="pill"></div>
+    <div id="problem"></div>
+    <div class="head"><span><b id="total">–</b> kids tonight</span><span class="dim" id="untagged"></span></div>
+    <div class="grid" id="grid">
+      <button class="tile new" id="new">+ New</button>
+    </div>
+    <div class="util">
+      <button disabled title="Coming soon">↶ Undo</button>
+      <button disabled title="Coming soon">🕘 Recent ▴</button>
+    </div>
+    <button class="plus" id="add">+1 Kid</button>
 
-  <form id="who">
-    <h1>Who's tapping?</h1>
-    <button type="button" data-name="Dad">Dad</button>
-    <button type="button" data-name="Mom">Mom</button>
-    <button type="button" data-name="Grandma">Grandma</button>
-    <input id="custom" placeholder="Someone else…" autocomplete="off">
-    <button type="submit">OK</button>
-  </form>
+    <div id="flash"></div>
+    <div id="toast"></div>
+
+    <div id="sheet">
+      <form class="sheet" id="new-form">
+        <h3>New costume</h3>
+        <input id="new-name" placeholder="e.g. Bluey" autocomplete="off">
+        <div class="emojis" id="emojis"></div>
+        <div><b>How many already seen before this one?</b></div>
+        <div class="stepper">
+          <button type="button" data-step="-1">−</button><span class="v" id="new-n">0</span><button type="button" data-step="1">+</button>
+        </div>
+        <div class="hint" id="new-hint"></div>
+        <div class="offline" id="new-offline"></div>
+        <div class="actions">
+          <button type="button" id="new-cancel">Cancel</button>
+          <button type="submit" class="primary" id="new-create">Create</button>
+        </div>
+      </form>
+    </div>
+
+    <form id="who">
+      <h1>Who's tapping?</h1>
+      <button type="button" data-name="Dad">Dad</button>
+      <button type="button" data-name="Mom">Mom</button>
+      <button type="button" data-name="Grandma">Grandma</button>
+      <input id="custom" placeholder="Someone else…" autocomplete="off">
+      <button type="submit">OK</button>
+    </form>
+  </div>
 
   <script type="module">
     import { connectLive } from '/live.js'
-    import { createOutbox } from '/outbox.js'
+    import { createOutbox, uuid } from '/outbox.js'
     import { doorView } from '/door-view.js'
 
     const $ = (id) => document.getElementById(id)
+    const EMOJIS = ['🧙', '🧛', '🧟', '👻', '🎃', '🦸', '🕷️', '👑', '🦖', '🐶', '🐱', '🦄', '🤖', '🦇', '🧚', '🏴‍☠️', '🐉', '🤡', '❓']
 
     // The join key arrives as ?key=… once (QR code or tailnet hand-off) and is remembered.
     const params = new URLSearchParams(location.search)
@@ -50,13 +137,17 @@
 
     let problem = ''
 
-    async function send(entry) {
-      const res = await fetch('/api/taps', {
+    function post(path, body) {
+      return fetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Join-Key': joinKey },
-        body: JSON.stringify(entry),
+        body: JSON.stringify(body),
         signal: AbortSignal.timeout(8_000),
       })
+    }
+
+    async function send(entry) {
+      const res = await post('/api/taps', entry)
       problem = res.status === 403 ? 'Wrong join key: taps are kept until it is fixed' : ''
       if (res.status === 400) return // the server will never take it; don't block the queue behind it
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -68,33 +159,20 @@
       clearTimeout: (id) => clearTimeout(id),
     }
 
-    function start(phoneName) {
-      $('who').style.display = 'none'
-      const outbox = createOutbox({ send, storage: localStorage, clock, phoneName })
-      const live = connectLive()
+    function flash(text) {
+      const f = $('flash')
+      f.textContent = text
+      f.classList.remove('on')
+      void f.offsetWidth
+      f.classList.add('on')
+    }
 
-      function render() {
-        const view = doorView(live.state, outbox)
-        $('event').textContent = live.state?.event.name ?? ''
-        $('count').textContent = view.total ?? '–'
-        $('pill').innerHTML = pillHtml(outbox.status)
-        $('problem').textContent = problem
-      }
-
-      live.on((update) => {
-        outbox.sync(update)
-        render()
-      })
-      setInterval(render, 500) // acks and the 5 s / 2 min thresholds
-      $('add').addEventListener('click', () => {
-        outbox.tap(null)
-        render()
-      })
-      addEventListener('online', () => outbox.retryNow())
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') outbox.retryNow()
-      })
-      render()
+    let toastTimer
+    function toast(text) {
+      $('toast').textContent = text
+      $('toast').classList.add('on')
+      clearTimeout(toastTimer)
+      toastTimer = setTimeout(() => $('toast').classList.remove('on'), 1800)
     }
 
     function pillHtml(status) {
@@ -103,6 +181,167 @@
       const n = status.waiting ?? status.down
       const line = status.down ? `<div class="down">Server's down — keep tapping, don't reload.</div>` : ''
       return `<span class="waiting">⏳ ${n} waiting to send</span>${line}`
+    }
+
+    function start(phoneName) {
+      $('who').style.display = 'none'
+      const outbox = createOutbox({ send, storage: localStorage, clock, phoneName })
+      const live = connectLive()
+      let view = doorView(null, outbox)
+      // The optimistic "#N" just shown; corrected if the server numbers that kid differently.
+      let lastFlash = null
+
+      // ---- costume tiles, keyed by tag id and updated in place so a press is never swapped out mid-tap
+      const tiles = new Map()
+      function tileFor(tag) {
+        let tile = tiles.get(tag.id)
+        if (!tile) {
+          tile = document.createElement('button')
+          tile.className = 'tile'
+          tile.dataset.tag = tag.id
+          tile.append(...['e', 'nm', 'dim'].map((cls) => Object.assign(document.createElement('span'), { className: cls })))
+          tiles.set(tag.id, tile)
+        }
+        tile.style.setProperty('--c', tag.colour)
+        tile.children[0].textContent = tag.emoji ?? ''
+        tile.children[1].textContent = tag.name
+        tile.children[2].textContent = tag.count
+        return tile
+      }
+
+      function render() {
+        view = doorView(live.state, outbox)
+        $('total').textContent = view.total ?? '–'
+        $('untagged').textContent = view.untagged == null ? '' : `${view.untagged} untagged`
+        $('pill').innerHTML = pillHtml(outbox.status)
+        $('problem').textContent = problem
+        const wanted = view.tags.map(tileFor)
+        const grid = $('grid')
+        wanted.forEach((tile, i) => {
+          if (grid.children[i] !== tile) grid.insertBefore(tile, grid.children[i])
+        })
+        if (sheetOpen) renderSheet()
+      }
+
+      function tap(tagId) {
+        const entry = outbox.tap(tagId)
+        render()
+        const tag = view.tags.find((t) => t.id === tagId)
+        showFlash(entry.id, view.total, tag?.emoji)
+        navigator.vibrate?.(20)
+      }
+
+      function showFlash(kidId, number, emoji) {
+        lastFlash = { kidId, number, emoji }
+        flash(`#${number}${emoji ? ' ' + emoji : ''}`)
+      }
+
+      live.on((update) => {
+        outbox.sync(update)
+        const kid = update.delta?.type === 'kid.added' ? update.delta.kid : null
+        if (kid && lastFlash && kid.id === lastFlash.kidId && kid.number !== lastFlash.number) {
+          showFlash(kid.id, kid.number, lastFlash.emoji) // another phone got there first
+        }
+        render()
+      })
+
+      $('add').addEventListener('click', () => tap(null))
+      $('grid').addEventListener('click', (e) => {
+        const tile = e.target.closest('[data-tag]')
+        if (tile) tap(Number(tile.dataset.tag))
+      })
+      addEventListener('online', () => outbox.retryNow())
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') outbox.retryNow()
+      })
+      setInterval(render, 500) // acks and the 5 s / 2 min thresholds
+
+      // ---- "+ New" costume with Catch-up. Online only: one direct POST, safe to retry with the same kid id.
+      let sheetOpen = false
+      let draft = null
+
+      for (const emoji of EMOJIS) {
+        const b = Object.assign(document.createElement('button'), { type: 'button', textContent: emoji })
+        b.dataset.emoji = emoji
+        $('emojis').append(b)
+      }
+
+      function canCreate() {
+        return live.connected && outbox.pending.length === 0
+      }
+
+      function renderSheet() {
+        draft.n = Math.max(0, Math.min(draft.n, view.catchUp.max))
+        $('new-n').textContent = draft.n
+        for (const b of $('emojis').children) b.classList.toggle('sel', b.dataset.emoji === draft.emoji)
+        const next = (view.total ?? 0) + 1
+        const numbers = view.catchUp.preview(draft.n)
+        $('new-hint').textContent = draft.n === 0
+          ? `Counts this kid as #${next}. ${view.catchUp.max} untagged kids available to catch up.`
+          : `Counts this kid as #${next}, and re-tags ${numbers.map((n) => '#' + n).join(', ')} as ${draft.emoji} ${draft.name.trim() || '…'}.`
+        $('new-offline').textContent = canCreate() ? '' : 'Needs a connection — tap +1 Kid for now'
+        $('new-create').disabled = draft.sending || !canCreate()
+      }
+
+      $('new').addEventListener('click', () => {
+        draft = { name: '', emoji: EMOJIS[0], n: 0, kidId: uuid(), tappedAt: Date.now(), sending: false }
+        $('new-name').value = ''
+        sheetOpen = true
+        $('sheet').classList.add('on')
+        renderSheet()
+        setTimeout(() => $('new-name').focus(), 50)
+      })
+
+      function closeSheet() {
+        sheetOpen = false
+        $('sheet').classList.remove('on')
+      }
+
+      $('new-cancel').addEventListener('click', closeSheet)
+      $('sheet').addEventListener('click', (e) => {
+        if (e.target === $('sheet')) closeSheet()
+      })
+      $('new-name').addEventListener('input', (e) => {
+        draft.name = e.target.value
+        renderSheet()
+      })
+      $('new-form').addEventListener('click', (e) => {
+        const b = e.target.closest('button')
+        if (b?.dataset.emoji) draft.emoji = b.dataset.emoji
+        else if (b?.dataset.step) draft.n += Number(b.dataset.step)
+        else return
+        renderSheet()
+      })
+
+      $('new-form').addEventListener('submit', async (e) => {
+        e.preventDefault()
+        if (!canCreate() || draft.sending) return
+        const name = draft.name.trim() || 'Mystery'
+        const number = (view.total ?? 0) + 1
+        draft.sending = true
+        renderSheet()
+        try {
+          const res = await post('/api/catch-up', {
+            tag: { name, emoji: draft.emoji },
+            n: draft.n,
+            kid: { id: draft.kidId, tappedAt: draft.tappedAt, phoneName },
+          })
+          if (!res.ok) throw new Error(res.status === 403 ? 'Wrong join key' : `HTTP ${res.status}`)
+          closeSheet()
+          toast(`New: ${draft.emoji} ${name} ×${draft.n + 1}`)
+          // The deltas are published before the reply, so the real number may already be here.
+          const landed = live.state?.kids.find((k) => k.id === draft.kidId)
+          showFlash(draft.kidId, landed?.number ?? number, draft.emoji)
+          navigator.vibrate?.(20)
+        } catch (err) {
+          toast(`Couldn't create it (${err.message}). Try again.`)
+        } finally {
+          draft.sending = false
+          render()
+        }
+      })
+
+      render()
     }
 
     // First open: ask once, remember on the phone.

@@ -123,7 +123,7 @@ outbox.sync({ cause, state })                           // feed it every live-st
 outbox.retryNow()                                       // on `online` / `visibilitychange`
 outbox.status                                           // 'ok' | { waiting: n } | { down: n } | 'sent'
 
-doorView(liveState, outbox) → { total, untagged, perTag, recent, goldenBanner, … }
+doorView(liveState, outbox) → { total, untagged, tags, catchUp: { max, preview(n) }, recent, goldenBanner, … }
 ```
 
 **Outbox hides:** UUIDs from `crypto.getRandomValues`, the localStorage outbox, retries on a timer and on `online`/`visibilitychange`, dropping entries once acknowledged (they stay `unconfirmed` until the live state shows them, so the door count doesn't dip while the stream reconnects after a server restart), and the ~5 s and ~2 min thresholds.

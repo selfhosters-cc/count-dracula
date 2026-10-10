@@ -106,7 +106,7 @@ export function createOutbox({ send, storage, clock, phoneName }) {
 }
 
 // Plain HTTP on the LAN: no crypto.randomUUID, so build a v4 UUID from getRandomValues.
-function uuid() {
+export function uuid() {
   const b = crypto.getRandomValues(new Uint8Array(16))
   b[6] = (b[6] & 0x0f) | 0x40
   b[8] = (b[8] & 0x3f) | 0x80

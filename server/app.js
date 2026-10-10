@@ -6,6 +6,7 @@ import { BadCommand, openLedger } from './ledger.js'
 import { createHub } from './hub.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
+const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const PAGES = { '/': '/index.html', '/tv': '/tv.html' }
 
 export function startServer({ configPath, port, heartbeatMs }) {
@@ -19,6 +20,10 @@ export function startServer({ configPath, port, heartbeatMs }) {
     'POST /api/taps': write(async (req) => {
       const { id, tagId, tappedAt, phoneName } = await req.json()
       hub.publish(ledger.apply({ type: 'tap', id, tagId, tappedAt, phoneName }))
+    }),
+    'POST /api/catch-up': write(async (req) => {
+      const { tag, n, kid } = await req.json()
+      hub.publish(ledger.apply({ type: 'catchUp', tag, n, kid }))
     }),
   }
 
@@ -62,13 +67,16 @@ export function startServer({ configPath, port, heartbeatMs }) {
 }
 
 async function serveStatic(pathname) {
+  const [dir, rest] = pathname.startsWith('/shared/')
+    ? [SHARED_DIR, pathname.slice('/shared'.length)]
+    : [PUBLIC_DIR, PAGES[pathname] ?? pathname]
   let path
   try {
-    path = resolve(PUBLIC_DIR, '.' + decodeURIComponent(PAGES[pathname] ?? pathname))
+    path = resolve(dir, '.' + decodeURIComponent(rest))
   } catch {
     return notFound()
   }
-  if (!path.startsWith(PUBLIC_DIR + sep) || path.endsWith('.test.js')) return notFound()
+  if (!path.startsWith(dir + sep) || path.endsWith('.test.js')) return notFound()
   const file = Bun.file(path)
   return (await file.exists()) ? new Response(file) : notFound()
 }

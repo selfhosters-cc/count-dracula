@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { openLedger } from './ledger.js'
+import { BadCommand, openLedger } from './ledger.js'
 import ghostSeed from '../config/2025-counts.json'
 
 describe('first install', () => {
@@ -207,5 +207,111 @@ describe('late taps', () => {
     const [delta] = ledger.apply(tap('queued', { tappedAt: 1_000 }))
 
     expect(delta.kid).toMatchObject({ number: 2, late: true })
+  })
+})
+
+function catchUp(kidId, n, extra = {}) {
+  return {
+    type: 'catchUp',
+    tag: { name: 'Bluey', emoji: '🐶' },
+    n,
+    kid: { id: kidId, tappedAt: 50_000, phoneName: 'Mom' },
+    ...extra,
+  }
+}
+
+describe('catch-up (+ New costume)', () => {
+  test('with nobody to catch up, creates the costume and counts the kid at the door with it', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    ledger.apply(tap('a'))
+
+    const deltas = ledger.apply(catchUp('door', 0))
+
+    expect(deltas.map((d) => d.type)).toEqual(['tag.added', 'kid.added'])
+    const tag = deltas[0].tag
+    expect(tag).toEqual({ id: expect.any(Number), name: 'Bluey', emoji: '🐶', order: 1 })
+    expect(deltas[1].kid).toMatchObject({ id: 'door', number: 2, tagId: tag.id, phoneName: 'Mom', tappedAt: 50_000 })
+    expect(ledger.snapshot().tags).toEqual([tag])
+  })
+
+  test('re-tags the N most recent untagged kids by tap time and adds exactly one kid', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed, now: () => 10_000 })
+    ledger.apply(tap('a', { tappedAt: 1_000 }))
+    ledger.apply(tap('b', { tappedAt: 4_000 }))
+    ledger.apply(tap('c', { tappedAt: 2_000 })) // arrived after b, but tapped before it
+    ledger.apply(tap('d', { tappedAt: 3_000 }))
+
+    const deltas = ledger.apply(catchUp('door', 2))
+
+    expect(deltas.map((d) => d.type)).toEqual(['tag.added', 'kid.retagged', 'kid.added'])
+    const tagId = deltas[0].tag.id
+    expect(deltas[1]).toMatchObject({ kidIds: ['b', 'd'], tagId })
+    expect(ledger.snapshot().kids.map((k) => [k.id, k.number, k.tagId, k.tappedAt])).toEqual([
+      ['a', 1, null, 1_000],
+      ['b', 2, tagId, 4_000],
+      ['c', 3, null, 2_000],
+      ['d', 4, tagId, 3_000],
+      ['door', 5, tagId, 50_000],
+    ])
+  })
+
+  test('caps N at the untagged kids there are, skipping tagged and removed kids', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    ledger.apply(tap('a', { tappedAt: 1_000 }))
+    ledger.apply(catchUp('witch', 0, { tag: { name: 'Witch', emoji: '🧙' }, kid: { id: 'witch', tappedAt: 2_000 } }))
+    ledger.apply(tap('b', { tappedAt: 3_000 }))
+    ledger.apply({ type: 'remove', kidId: 'b' })
+    ledger.apply(tap('c', { tappedAt: 4_000 }))
+
+    const deltas = ledger.apply(catchUp('door', 10))
+
+    expect(deltas[1]).toMatchObject({ type: 'kid.retagged', kidIds: ['c', 'a'] })
+    expect(ledger.snapshot().kids).toHaveLength(4)
+  })
+
+  test('a retry with the same door kid id does nothing: no second costume, no re-tagging', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    ledger.apply(tap('a'))
+    ledger.apply(catchUp('door', 0))
+    ledger.apply(tap('b'))
+
+    expect(ledger.apply(catchUp('door', 1))).toEqual([])
+
+    const snap = ledger.snapshot()
+    expect(snap.tags).toHaveLength(1)
+    expect(snap.kids.find((k) => k.id === 'b').tagId).toBeNull()
+  })
+
+  test.each([
+    ['no name', { tag: { name: '  ', emoji: '🐶' } }],
+    ['a negative N', { n: -1 }],
+    ['a fractional N', { n: 1.5 }],
+    ['no door kid', { kid: undefined }],
+  ])('refuses %s, changing nothing', (_, override) => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    ledger.apply(tap('a'))
+
+    expect(() => ledger.apply({ ...catchUp('door', 1), ...override })).toThrow(BadCommand)
+    expect(ledger.snapshot().tags).toEqual([])
+    expect(ledger.snapshot().kids.map((k) => k.tagId)).toEqual([null])
+  })
+})
+
+describe('tag taps', () => {
+  test("add a kid with that costume", () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const [tagAdded] = ledger.apply(catchUp('door', 0))
+
+    const [delta] = ledger.apply(tap('a', { tagId: tagAdded.tag.id }))
+
+    expect(delta.kid).toMatchObject({ number: 2, tagId: tagAdded.tag.id })
+  })
+
+  test("naming a costume that isn't in the live event (deleted while queued) still counts the kid, untagged", () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+
+    const [delta] = ledger.apply(tap('a', { tagId: 999 }))
+
+    expect(delta.kid).toMatchObject({ number: 1, tagId: null })
   })
 })
