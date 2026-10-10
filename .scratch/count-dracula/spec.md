@@ -3,7 +3,7 @@
 A Halloween trick-or-treater tracker for one household. Helpers' phones at the door tap each kid in, and a laptop-driven TV facing the **porch** celebrates each one live, racing tonight's count against last year's.
 
 - **Assembled:** 2026-10-10 from the [map](map.md) and its resolved tickets. This document makes **no new decisions**. Each section links the ticket that holds the reasoning.
-- **Open:** one question is still on the map: [Kid numbers under undo and late taps](issues/14-kid-numbers-under-undo-and-late-taps.md) (see [§15](#15-open-questions)).
+- **Open questions:** none. The last one, [Kid numbers under undo and late taps](issues/14-kid-numbers-under-undo-and-late-taps.md), is folded in.
 - **Printable rehearsal checklist:** [rehearsal-checklist.md](rehearsal-checklist.md).
 
 ## Contents
@@ -22,11 +22,10 @@ A Halloween trick-or-treater tracker for one household. Helpers' phones at the d
 12. [Build order, cut line and feature switches](#12-build-order-cut-line-and-feature-switches)
 13. [Asset task](#13-asset-task)
 14. [Laptop kiosk setup](#14-laptop-kiosk-setup)
-15. [Open questions](#15-open-questions)
-16. [Rehearsal and the night: runbook](#16-rehearsal-and-the-night-runbook)
-17. [Builder's latitude](#17-builders-latitude)
-18. [Out of scope](#18-out-of-scope)
-19. [Sources](#19-sources)
+15. [Rehearsal and the night: runbook](#15-rehearsal-and-the-night-runbook)
+16. [Builder's latitude](#16-builders-latitude)
+17. [Out of scope](#17-out-of-scope)
+18. [Sources](#18-sources)
 
 ---
 
@@ -57,6 +56,7 @@ UI copy says **costume**. The domain term is **Tag**. They mean the same thing.
 | **Counts-only past event** | "Halloween 2025 (counts)": the five half-hour buckets in [data/2025-counts.md](data/2025-counts.md), seeded from a config/JSON file on first install. It has no kids and no entry UI. It exists only to be raced against. |
 | **Ended** | A live event can be **ended** ("🌙 End the night") and **resumed**. It stays live while ended, so straggler taps still count. Only the next Go live freezes it. |
 | **Kid** | One tap = one kid, with a phone-generated ID, a tap timestamp, the phone's name, at most one Tag, and a source (`tap` or `backfill`). Removals are soft deletes. |
+| **Kid number** | The live (non-deleted) count at the moment a kid **reaches the server**, stored once and **never rewritten**, so "YOU'RE KID #58!" always matches the giant count. After an undo or delete, the next kid reuses the freed number, and Recent may then show two kids with the same number. Late kids (backfill included) are numbered when they land; a backfill batch is numbered in tap-time order. An unsent tap that's undone never gets a number. |
 | **Visit** | Derived, never entered: kids whose taps fall within the event's **Visit window** (default 15 s) of each other. Used for the recap's "Biggest crew". Changing the window just regroups. |
 | **Tag** | A costume: name, emoji, order, optional signature sound. **Tags belong to an event.** Tapping a tag button *adds* a kid with that tag; "+1 Kid" adds an untagged kid. Rename any time. Deleting a tag that has kids makes those kids untagged (after a confirmation). |
 | **Catch-up** | Creating a tag live ("+ New") asks "How many already seen before this one?" (N, capped at the number of untagged kids). It re-tags the N most recent *untagged* kids **and adds the kid at the door with the new tag**. Total goes up by exactly 1. Timestamps are untouched. |
@@ -71,7 +71,7 @@ UI copy says **costume**. The domain term is **Tag**. They mean the same thing.
 | **Phone name** | Asked on a phone's first open ("Who's tapping?": Dad / Mom / Grandma / custom), stored on the phone, sent with every tap, shown in Recent. |
 | **Display** | A laptop on HDMI running Chrome in kiosk mode. The TV faces the **porch**, so its audience is the trick-or-treaters: huge, glanceable visuals and porch-audible sound. |
 
-Sources: map Notes, [Phone controller prototype](issues/05-phone-controller-prototype.md), [Event setup and phone menu](issues/09-event-setup-and-phone-menu.md), [Quiet stretches and end of night](issues/10-quiet-stretches-and-end-of-night.md), [Failure fallback](issues/11-failure-fallback.md).
+Sources: map Notes, [Kid numbers under undo and late taps](issues/14-kid-numbers-under-undo-and-late-taps.md), [Phone controller prototype](issues/05-phone-controller-prototype.md), [Event setup and phone menu](issues/09-event-setup-and-phone-menu.md), [Quiet stretches and end of night](issues/10-quiet-stretches-and-end-of-night.md), [Failure fallback](issues/11-failure-fallback.md).
 
 ---
 
@@ -126,8 +126,9 @@ The shape the decisions imply. Column names are the builder's.
 - **events:** name, live flag, frozen flag, ended flag, join key, Clock shift, Race-against event (or none), Expected kids, Visit window, golden-ticket count, counts-only flag.
 - **ghost_buckets:** event, slot, count (for the counts-only 2025 event).
 - **tags:** event, name, emoji, order, signature sound. TV colour comes from order (see [§7](#7-tv-screen)).
-- **kids:** id (phone-generated, primary key), event, tag (nullable), phone name, `tapped_at`, `received_at`, `deleted_at`, source (`tap`/`backfill`), backfill batch (nullable).
-- **golden tickets:** event, secret number, state (hidden / won / rolled forward / released / expired) and the winning kid. The recap needs the original number of a rolled-forward ticket.
+- **kids:** id (phone-generated, primary key), event, **number** (assigned on arrival), tag (nullable), phone name, `tapped_at`, `received_at`, `deleted_at`, source (`tap`/`backfill`), backfill batch (nullable).
+- **golden tickets:** event, secret number, state (hidden / won / rolled forward / released / expired) and the winning kid. The recap needs the original number of a rolled-forward ticket. **Won is final**, even if the winning kid is later removed.
+- **fired moments:** which milestones and Beat last year have already fired in the event, since each fires once.
 - **backfill batches:** event, rows entered, created at.
 - Catch-up is one `UPDATE … WHERE tag_id IS NULL ORDER BY tapped_at DESC LIMIT N` plus an insert.
 
@@ -167,16 +168,17 @@ The TV and phones use plain ES modules with **no build step**. These libraries a
 Top to bottom:
 
 1. **Header:** tonight's total and a small "N untagged" count.
-2. **Golden banner** (only when the next number is golden): "⭐ NEXT KID IS GOLDEN — get the prize ready", full width.
+2. **Golden banner** (only when the next number is golden): "⭐ NEXT KID IS GOLDEN — get the prize ready", full width. It shows only on a phone that is **connected and has an empty outbox**; otherwise the phone can't know the real count.
 3. **Costume grid:** 3 columns of tiles showing emoji, name, tonight's count and a coloured bar along the bottom (the tag's TV colour). **"+ New"** is the last tile. The grid scrolls if needed.
 4. **Utility row:** "↶ Undo" and "🕘 Recent ▴".
 5. **"+1 Kid":** a giant button filling the bottom ~30% of the screen.
 
 Behaviour:
 
-- **Every tap** flashes "#N 🧙" and vibrates (a stronger pattern for a golden kid).
+- **Every tap** flashes an optimistic "#N 🧙" and vibrates. The server assigns the real number, and the flash corrects to it if another phone's tap got there first.
+- **Golden confirmation:** the strong golden buzz and "🎫 GOLDEN — hand over the prize!" come only when **the server confirms this phone's tap won**. The server is the referee: whichever tap reaches it first takes the golden number.
 - **Undo** removes this phone's most recent kid. It can be repeated, with a toast each time.
-- **Recent** is a slide-up panel showing the last 10 kids from all phones, newest first. Each row shows the number, costume, phone name, time and a ✕ to delete. Deleting another phone's kid says so in the toast. Queued (unsent) kids show a faint ⏳.
+- **Recent** is a slide-up panel showing the last 10 kids from all phones, **newest-arrived first**. Each row shows the stored number, costume, phone name, *tap* time and a ✕ to delete. A late kid shows at the top with its earlier tap time. Deleting another phone's kid says so in the toast. Queued (unsent) kids show a faint ⏳.
 - **"+ New" costume** opens a panel with:
   - a name field
   - an emoji choice
@@ -233,7 +235,7 @@ A ☰ sheet over the counting screen, **open to any phone with the join key**. N
   - Setup lists each batch ("+38 kids, 6:30–7:00 · Remove") so it can be removed as a whole.
   - This is also the rehearsal's bulk add. There is no separate dev route.
 
-**Export CSV:** one row per kid (timestamp, tag, source, deleted) plus a half-hour count summary. It uses the same shape that next year's ghost seed reads.
+**Export CSV:** one row per kid (number, tap timestamp, `received_at`, tag, source, deleted) plus a half-hour count summary. It uses the same shape that next year's ghost seed reads.
 
 ---
 
@@ -303,12 +305,14 @@ These are the baseline timings; tune them at the rehearsal.
 
 **Priority queue:** golden ticket > beat last year > every 100th > every 50th > pop. Milestones never merge into a pop. Consecutive takeovers queue without stomping on each other.
 
+**Once per event:** each milestone (#50, #100, #150 …) and Beat last year fires **at most once**, the first time it's crossed live. If an undo drops the count and the next kid re-crosses it, that kid gets an ordinary pop. The hero readout can still flip back and forth while the count dips. ([Kid numbers under undo and late taps](issues/14-kid-numbers-under-undo-and-late-taps.md))
+
 ### Late taps ([Failure fallback](issues/11-failure-fallback.md))
 
 Any tap more than 10 s late (an outbox backlog, a straggler on bad Wi-Fi, or a backfill) follows these rules. There's no separate outage mode.
 
 - **No celebration:** the count quietly ticks up, or does one roll-up for a backlog.
-- **#100 / #200 / #300** crossed by late taps are **skipped**.
+- **Milestones** crossed by late taps are **skipped** for good.
 - **Beat last year** crossed by late taps fires on the **next live tap** as "WE BEAT LAST YEAR! 🏆", without a kid number.
 - **A golden number** that lands on a late tap **rolls forward to the next live kid** (the same mechanism as Release remaining).
 
@@ -316,19 +320,20 @@ Any tap more than 10 s late (an outbox backlog, a straggler on bad Wi-Fi, or a b
 
 ## 9. Golden tickets
 
-Must #4. ([Fun-features shortlist](issues/04-fun-features-shortlist.md), [Event setup and phone menu](issues/09-event-setup-and-phone-menu.md), [Quiet stretches and end of night](issues/10-quiet-stretches-and-end-of-night.md), [Failure fallback](issues/11-failure-fallback.md))
+Must #4. ([Kid numbers under undo and late taps](issues/14-kid-numbers-under-undo-and-late-taps.md), [Fun-features shortlist](issues/04-fun-features-shortlist.md), [Event setup and phone menu](issues/09-event-setup-and-phone-menu.md), [Quiet stretches and end of night](issues/10-quiet-stretches-and-end-of-night.md), [Failure fallback](issues/11-failure-fallback.md))
 
 - **Count:** per event, default 5.
 - **Draw:** blind and stratified, **at Go live**, over **10–80%** of the Race-against event's total (about #35–#277 against 346), or of **Expected kids** when there's no ghost. The range is split into N equal bands, with one random number per band.
 - **Nobody sees the numbers, the family included.** The TV shows only "🎫 N golden tickets left". Phones show only "⭐ NEXT KID IS GOLDEN".
-- **Win:** the phone gives a stronger vibration, the TV shows the gold takeover, and the kid gets a gold pumpkin.
+- **Who wins:** the first tap to **reach the server** with the golden number. The winning phone gets the strong buzz and "hand over the prize" flash on the server's confirmation, and the TV shows the gold takeover. The kid gets a gold pumpkin.
+- **A win is final.** Undoing or deleting the winner doesn't bring the ticket back. The pill stays down, the next kid to reach that number is ordinary, and the recap still lists it. The gold pumpkin goes with the deleted kid.
+- **No hidden ticket ever sits below the count.** Every golden number the count passes is either won live or rolled forward by a late tap, so removing kids or a backfill batch never brings a ticket back into play.
 - **"Add a ticket"** (Setup, after Go live) draws one number between (tonight's count + 5) and the top of the range.
 - **"Release remaining"** (☰ menu, from 7:45pm event time) makes the next K kids winners, where K is the number of tickets left.
 - **Roll forward:** a number that lands on a late tap goes to the next live kid. The recap shows the original number as "rolled forward".
 - **End the night:** offers Release & keep going, End anyway (the tickets **expire** and the pill goes away), or Cancel. Resume brings expired tickets back as they were.
 - **Recap:** reveals every number. Unclaimed ones are greyed.
 - **The rehearsal draws for real.**
-- **Open:** what happens when a golden winner is undone, and how numbers behave under late taps. See [§15](#15-open-questions).
 
 ---
 
@@ -484,15 +489,7 @@ chrome --user-data-dir=<dedicated dir> --no-first-run --noerrdialogs \
 
 ---
 
-## 15. Open questions
-
-| Ticket | Why it matters |
-|---|---|
-| [Kid numbers under undo and late taps](issues/14-kid-numbers-under-undo-and-late-taps.md) | "Kid #N" drives the pop, milestones, golden tickets and the phone's "NEXT KID IS GOLDEN" banner, but the tickets never fixed how a number is assigned when kids are undone or taps arrive late, or what happens to a golden win that is then undone. Fold the answer into §2, §8 and §9. |
-
----
-
-## 16. Rehearsal and the night: runbook
+## 15. Rehearsal and the night: runbook
 
 **Dress rehearsal (Oct 24):** the full plan is the printable **[rehearsal-checklist.md](rehearsal-checklist.md)**, covering:
 
@@ -526,7 +523,7 @@ Results go on the printed copy. Blockers become fix tasks for the week, not trac
 
 ---
 
-## 17. Builder's latitude
+## 16. Builder's latitude
 
 These were never decided and don't need a decision. Pick something sensible and tune it at the rehearsal.
 
@@ -541,7 +538,7 @@ These were never decided and don't need a decision. Pick something sensible and 
 
 ---
 
-## 18. Out of scope
+## 17. Out of scope
 
 From the map:
 
@@ -556,7 +553,7 @@ From the map:
 
 ---
 
-## 19. Sources
+## 18. Sources
 
 - **Map:** [map.md](map.md)
 - **Tickets:**
@@ -572,6 +569,8 @@ From the map:
   - [Quiet stretches and end of night](issues/10-quiet-stretches-and-end-of-night.md)
   - [Failure fallback](issues/11-failure-fallback.md)
   - [Dress rehearsal plan](issues/12-dress-rehearsal-plan.md)
+  - [Assemble the v1 spec](issues/13-assemble-the-v1-spec.md)
+  - [Kid numbers under undo and late taps](issues/14-kid-numbers-under-undo-and-late-taps.md)
 - **Data:** [data/2025-counts.md](data/2025-counts.md)
 - **Branches:**
   - `research/live-update-stack` (`828a29b`)

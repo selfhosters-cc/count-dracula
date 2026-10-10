@@ -19,6 +19,7 @@ A build-ready v1 spec for **Count Dracula**, a Halloween trick-or-treater tracke
 |---|---|
 | **Event** | One night ("Rehearsal", "Halloween 2026", …). Exactly one is **live**; phones and TV follow the live event. Past events are kept. |
 | **Kid** | One tap = one kid, with a timestamp and at most one Tag. |
+| **Kid number** | The live count at the moment a kid reaches the server, stored once and never rewritten, so the pop always matches the count. Freed numbers are reused after an undo (decided in [Kid numbers under undo and late taps](issues/14-kid-numbers-under-undo-and-late-taps.md)). |
 | **Visit** | Derived, not entered: kids whose taps fall within a short window (~15s, to be tuned) of each other. |
 | **Tag** | A costume button, created beforehand or live from a phone via "+ New". Tapping a tag button *adds* a kid with that tag (one tap per kid); "+1 Kid" adds an untagged kid. |
 | **Catch-up** | Creating a new tag asks "how many already seen before this one?", re-tags the N most recent *untagged* kids (capped at how many exist), **and adds the kid at the door with the new tag** — total +1 (revised in [Phone controller prototype](issues/05-phone-controller-prototype.md)). Timestamps untouched. |
@@ -43,6 +44,7 @@ A build-ready v1 spec for **Count Dracula**, a Halloween trick-or-treater tracke
 - [Failure fallback](issues/11-failure-fallback.md) — phones count offline with a ⏳ pill ("don't reload"); TV freezes calmly with a 🦇 chip, then one quiet roll-up; late taps skip #100s, delay Beat last year, roll golden tickets forward; paper tally sheet + "Add missed kids" backfill (also the rehearsal's bulk add); CSV export + existing Proxmox backup job.
 - [Dress rehearsal plan](issues/12-dress-rehearsal-plan.md) — Oct 24 in two parts (3pm app script with Clock shift +3h; 6:30pm dusk sidewalk, volume and idle checks); staged golden test; 7 blockers re-run Wed Oct 28; feature freeze Oct 24 with config switches for Must 3–9; paper plus Nov 1 backfill as the last resort; printed checklist.
 - [Assemble the v1 spec](issues/13-assemble-the-v1-spec.md) — [spec.md](spec.md) (19 sections, plus a Builder's latitude list) and the printable [rehearsal-checklist.md](rehearsal-checklist.md); one gap sent back as [Kid numbers under undo and late taps](issues/14-kid-numbers-under-undo-and-late-taps.md).
+- [Kid numbers under undo and late taps](issues/14-kid-numbers-under-undo-and-late-taps.md) — number = count at arrival, never rewritten; golden wins are final; milestones fire once per event; the server referees golden races (banner only on connected phones with empty outboxes); Recent/recap/CSV use the stored number.
 
 ## Not yet specified
 
