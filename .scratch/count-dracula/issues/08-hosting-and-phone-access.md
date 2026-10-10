@@ -14,7 +14,7 @@ Also decide **plain HTTP vs HTTPS**. Plain LAN HTTP loses `crypto.randomUUID`, s
 
 - **Server:** a new Proxmox LXC (Debian, debian-12 template) running one Bun process under systemd, with the SQLite file inside the LXC. The laptop is display-only, so a display-side crash loses nothing.
 - **Two ways in, one server, identical app behaviour:**
-  - **Tailnet devices:** `https://halloween.example.com`, proxied by Caddy (LXC 117) and added with `/opt/docker-compose/caddy-int/host.sh add halloween <LXC-IP>:<port>`. `*.int` names resolve to Caddy's Tailscale IP, so this route needs Tailscale on the device.
+  - **Tailnet devices:** `https://count-dracula.example.com`, proxied by Caddy (LXC 117) and added with `/opt/docker-compose/caddy-int/host.sh add count-dracula <LXC-IP>:<port>`. `*.int` names resolve to Caddy's Tailscale IP, so this route needs Tailscale on the device.
   - **Helpers on home Wi-Fi without Tailscale:** plain `http://<LXC LAN IP>:<port>`. The live-update stack already works around what plain HTTP lacks (`getRandomValues` IDs, no service worker, no Background Sync).
   - The user chose this over tailnet-only (helpers' phones) and over a local-DNS override (no change to the network).
 - **TV laptop:** uses the HTTPS URL if Tailscale is installed (which also lets the browser's Wake Lock work), otherwise the LAN URL. The OS keep-awake from Laptop kiosk setup applies either way.

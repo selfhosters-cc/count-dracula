@@ -24,4 +24,4 @@ Output: a concrete checklist for the dress rehearsal and constraints for the Sou
 - **Sound constraints:** Web Audio, not `<audio>`. Preload short one-shots and run them through a master gain plus compressor. Cap overlapping sounds at 3–4 and turn a burst of kids into one flourish. Some TVs cut off the start of a sound after silence, so use a quiet ambience bed or lead-ins that can afford to lose their start (forum-sourced, test at rehearsal).
 - The findings include an 11-step dress-rehearsal checklist.
 
-Full findings: branch `research/laptop-kiosk-setup` (commit `612ffa7`), file `.scratch/halloween-tracker/research/laptop-kiosk-setup.md`.
+Full findings: branch `research/laptop-kiosk-setup` (commit `78ac026`), file `.scratch/count-dracula/research/laptop-kiosk-setup.md`.

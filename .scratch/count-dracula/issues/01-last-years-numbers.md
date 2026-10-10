@@ -13,7 +13,7 @@ Checklist for the human:
 - [ ] First and last bucket (when you started and stopped answering the door)
 - [ ] Anything unusual about last year that might skew the comparison (weather, ran out of candy, closed early)
 
-Record the result as a small data file linked from the answer (e.g. `.scratch/halloween-tracker/data/2025-counts.md`).
+Record the result as a small data file linked from the answer (e.g. `.scratch/count-dracula/data/2025-counts.md`).
 
 ## Answer
 
