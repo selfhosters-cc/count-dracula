@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { eventNow, ghost, minuteOfDay, pace, releaseOpen, tagColour, toBuckets } from './night-maths.js'
+import { atEventTime, eventNow, ghost, minuteOfDay, pace, releaseOpen, slots, tagColour, toBuckets } from './night-maths.js'
 import seed2025 from '../config/2025-counts.json'
 
 describe('tagColour', () => {
@@ -119,5 +119,29 @@ describe('releaseOpen', () => {
   test('goes by event time: a +3h rehearsal at 4:45pm real time is past the gate', () => {
     expect(releaseOpen(eventNow(local(16, 45), 3 * 3_600_000))).toBe(true)
     expect(releaseOpen(eventNow(local(16, 45), 0))).toBe(false)
+  })
+})
+
+describe('slots', () => {
+  test('gives the tally sheet and Add missed kids their 15-minute rows, 5:30 to 9:00', () => {
+    const rows = slots('17:30', '21:00', 15)
+
+    expect(rows).toHaveLength(14)
+    expect(rows[0]).toEqual({ start: '17:30', end: '17:45' })
+    expect(rows[4]).toEqual({ start: '18:30', end: '18:45' })
+    expect(rows.at(-1)).toEqual({ start: '20:45', end: '21:00' })
+  })
+})
+
+describe('atEventTime', () => {
+  const HOUR = 3_600_000
+  const local = (hh, mm) => new Date(2026, 9, 24, hh, mm).getTime()
+
+  test("turns a row's event time into a real timestamp on tonight's date", () => {
+    expect(atEventTime('18:30', local(19, 2), 0)).toBe(local(18, 30))
+  })
+
+  test('undoes the clock shift: with +3h at 3:10pm real, a 6:30pm row is 3:30pm real', () => {
+    expect(atEventTime('18:30', local(15, 10), 3 * HOUR)).toBe(local(15, 30))
   })
 })

@@ -197,7 +197,7 @@ live.on(({ state, cause, delta }) => {
   if (delta.type === 'kid.added') {
     showCount(total, delta.kid.late ? 'roll' : 'bump')
     director.push(delta.moments ?? [], delta.kid)
-  } else if (delta.type === 'kid.removed') {
+  } else if (delta.type === 'kid.removed' || delta.type === 'kids.removed') {
     showCount(total, 'dip')
   } else if (delta.type === 'moment') {
     director.push(delta.moments)

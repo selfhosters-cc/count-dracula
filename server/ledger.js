@@ -51,6 +51,13 @@ const SCHEMA = `
     state TEXT NOT NULL,
     kid_id TEXT
   );
+  CREATE TABLE IF NOT EXISTS backfill_batches (
+    id INTEGER PRIMARY KEY,
+    event_id INTEGER NOT NULL REFERENCES events(id),
+    rows TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    removed_at INTEGER
+  );
   CREATE TABLE IF NOT EXISTS kv (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -160,8 +167,8 @@ export function openLedger(db, config) {
   let seq = 0
 
   const insertKid = db.query(`
-    INSERT INTO kids (id, event_id, number, tag_id, phone_name, tapped_at, received_at, late, source)
-    VALUES ($id, $eventId, $number, $tagId, $phoneName, $tappedAt, $receivedAt, $late, 'tap')
+    INSERT INTO kids (id, event_id, number, tag_id, phone_name, tapped_at, received_at, late, source, backfill_batch_id)
+    VALUES ($id, $eventId, $number, $tagId, $phoneName, $tappedAt, $receivedAt, $late, $source, $batchId)
     ON CONFLICT(id) DO NOTHING
     RETURNING *
   `)
@@ -185,7 +192,7 @@ export function openLedger(db, config) {
   const tagInEvent = db.query('SELECT 1 FROM tags WHERE id = ? AND event_id = ?')
 
   // Numbers the kid by the live count at arrival and flags it late (spec §2). Returns null for a repeat id.
-  function addKid(event, { id, tagId, tappedAt, phoneName }) {
+  function addKid(event, { id, tagId, tappedAt, phoneName, batchId = null }) {
     if (typeof id !== 'string' || id === '') throw new BadCommand('A tap needs an id')
     if (!Number.isFinite(tappedAt)) throw new BadCommand('A tap needs tappedAt in ms')
     const receivedAt = now()
@@ -197,7 +204,9 @@ export function openLedger(db, config) {
       $phoneName: phoneName ?? null,
       $tappedAt: tappedAt,
       $receivedAt: receivedAt,
-      $late: receivedAt - tappedAt > LATE_AFTER_MS ? 1 : 0,
+      $late: batchId != null || receivedAt - tappedAt > LATE_AFTER_MS ? 1 : 0, // backfilled kids are always late
+      $source: batchId == null ? 'tap' : 'backfill',
+      $batchId: batchId,
     })
     return row && toKid(row)
   }
@@ -284,6 +293,42 @@ export function openLedger(db, config) {
       const event = eventById()
       const row = softDeleteKid.get(now(), kidId, event.id)
       return row ? [{ type: 'kid.removed', kidId, golden: goldenSummary(event) }] : []
+    },
+
+    // "Add missed kids" (spec §6): each row's count spread evenly across its slot (up to now), as
+    // untagged backfill kids in one batch, numbered in tap-time order. Late taps: they never celebrate.
+    backfill({ rows }) {
+      if (!Array.isArray(rows) || !rows.length) throw new BadCommand('Nothing to add')
+      const at = now()
+      const times = rows.flatMap(({ startMs, endMs, count }) => {
+        if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) throw new BadCommand('A row needs its slot')
+        if (!Number.isInteger(count) || count < 1 || count > 1000) throw new BadCommand('A row needs a count from 1 to 1000')
+        if (startMs > at) throw new BadCommand("That row hasn't started yet")
+        const end = Math.min(endMs, at)
+        return Array.from({ length: count }, (_, i) => startMs + ((i + 0.5) * (end - startMs)) / count)
+      })
+      const event = eventById()
+      const batch = db
+        .query('INSERT INTO backfill_batches (event_id, rows, created_at) VALUES (?, ?, ?) RETURNING id')
+        .get(event.id, JSON.stringify(rows.map(({ startMs, endMs, count }) => ({ startMs, endMs, count }))), at)
+      return times
+        .sort((a, b) => a - b)
+        .flatMap((tappedAt, i) => {
+          const kid = addKid(event, { id: crypto.randomUUID(), tappedAt: Math.round(tappedAt), phoneName: 'Add missed kids', batchId: batch.id })
+          return referee(event, kid)
+        })
+    },
+
+    // A batch comes off as a whole (soft delete): the TV dips quietly.
+    removeBatch({ batchId }) {
+      const event = eventById()
+      const kidIds = db
+        .query('UPDATE kids SET deleted_at = ? WHERE backfill_batch_id = ? AND event_id = ? AND deleted_at IS NULL RETURNING id')
+        .all(now(), batchId, event.id)
+        .map((r) => r.id)
+      // Kept, marked removed: a deleted row's id could be reused by the next batch.
+      db.query('UPDATE backfill_batches SET removed_at = ? WHERE id = ? AND event_id = ?').run(now(), batchId, event.id)
+      return kidIds.length ? [{ type: 'kids.removed', kidIds, golden: goldenSummary(event) }] : []
     },
 
     // ---- The ☰ menu's TV controls (spec §5): any phone with the join key.
@@ -420,7 +465,7 @@ export function openLedger(db, config) {
       const racedByLive = live.race_against_id === event.id
       db.query('UPDATE events SET race_against_id = NULL WHERE race_against_id = ?').run(event.id)
       // All of it: SQLite can reuse a deleted event's id, so nothing may be left pointing at it.
-      for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
+      for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
       db.query('DELETE FROM events WHERE id = ?').run(event.id)
       return racedByLive ? [{ type: 'event.updated', eventId: live.id }] : []
     },
@@ -455,6 +500,19 @@ export function openLedger(db, config) {
 
     joinKey() {
       return eventById().join_key
+    },
+
+    // The live event's backfill batches, for Setup's list ("+38 kids, 6:30–7:00 · Remove").
+    batches() {
+      const event = eventById()
+      return db
+        .query(`
+          SELECT b.id, b.rows, b.created_at AS createdAt,
+            (SELECT COUNT(*) FROM kids k WHERE k.backfill_batch_id = b.id AND k.deleted_at IS NULL) AS kids
+          FROM backfill_batches b WHERE b.event_id = ? AND b.removed_at IS NULL ORDER BY b.id
+        `)
+        .all(event.id)
+        .map((b) => ({ ...b, rows: JSON.parse(b.rows) }))
     },
 
     // The secret numbers: for the tests and, after the night, the recap. Never sent to a client live.

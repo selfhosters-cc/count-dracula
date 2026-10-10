@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tally sheet</title>
+  <style>
+    /* One printed page, taped inside the door (spec §6 Night tools). Ink only, no colour needed. */
+    @page { size: letter portrait; margin: 14mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #111; background: #fff; }
+    h1 { font-size: 22pt; margin: 0 0 4pt; }
+    .note { font-size: 13pt; font-weight: 700; margin: 0 0 10pt; }
+    .started { font-size: 12pt; margin: 0 0 12pt; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1.5px solid #111; padding: 0 8pt; height: 15mm; font-size: 14pt; }
+    th { height: auto; padding: 6pt 8pt; text-align: left; font-size: 11pt; }
+    td.time { width: 30mm; white-space: nowrap; font-weight: 700; }
+    td.total { width: 22mm; }
+    .print { margin-top: 12pt; font-size: 12pt; padding: 8pt 14pt; }
+    @media print { body { padding: 0; } .print { display: none; } }
+  </style>
+</head>
+<body>
+  <h1 id="title">Trick-or-treat tally</h1>
+  <p class="note">Phone blank or dead? Tally here. Write the time you started.</p>
+  <p class="started">Started at: ____________</p>
+  <table>
+    <thead><tr><th>Time</th><th>Tally marks</th><th>Total</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <button class="print" onclick="print()">🖨 Print</button>
+  <script type="module">
+    import { slots } from '/shared/night-maths.js'
+
+    const label = (hhmm) => {
+      const [h, m] = hhmm.split(':').map(Number)
+      return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')}`
+    }
+    document.getElementById('rows').replaceChildren(
+      ...slots('17:30', '21:00', 15).map(({ start, end }) => {
+        const tr = document.createElement('tr')
+        tr.innerHTML = `<td class="time">${label(start)}–${label(end)}</td><td></td><td class="total"></td>`
+        return tr
+      }),
+    )
+    // The event name, read without a key; the sheet works without it too.
+    fetch('/api/snapshot')
+      .then((r) => r.json())
+      .then((s) => (document.getElementById('title').textContent = `${s.event.name}: tally`))
+      .catch(() => {})
+  </script>
+</body>
+</html>

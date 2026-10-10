@@ -77,3 +77,18 @@ export function pace(count, ghostNow, ghostTotal) {
 export function releaseOpen(eventNowMs) {
   return minuteOfDay(eventNowMs) >= 19 * 60 + 45
 }
+
+// The rows for the tally sheet and "Add missed kids" (spec §6): [{ start, end }] in event time.
+export function slots(from, to, minutes) {
+  const rows = []
+  for (let m = minutesOf(from); m + minutes <= minutesOf(to); m += minutes) rows.push({ start: hhmm(m), end: hhmm(m + minutes) })
+  return rows
+}
+
+// Real time (ms) of an event-time "HH:MM" on the event's current date: what a backfill row means.
+export function atEventTime(hhmmText, realNowMs, shiftMs = 0) {
+  const day = new Date(eventNow(realNowMs, shiftMs))
+  const [h, m] = hhmmText.split(':').map(Number)
+  day.setHours(h, m, 0, 0)
+  return day.getTime() - shiftMs
+}

@@ -83,6 +83,10 @@ function applyDelta(state, delta) {
       return { ...state, seq: delta.seq, kids: [...state.kids, delta.kid] }
     case 'kid.removed':
       return { ...state, seq: delta.seq, kids: state.kids.filter((k) => k.id !== delta.kidId) }
+    case 'kids.removed': {
+      const ids = new Set(delta.kidIds)
+      return { ...state, seq: delta.seq, kids: state.kids.filter((k) => !ids.has(k.id)) }
+    }
     case 'kid.retagged': {
       const ids = new Set(delta.kidIds)
       const kids = state.kids.map((k) => (ids.has(k.id) ? { ...k, tagId: delta.tagId } : k))

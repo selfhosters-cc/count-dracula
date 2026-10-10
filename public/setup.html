@@ -33,6 +33,10 @@
     #status.err { color: var(--danger); }
     code { background: var(--bg); padding: 2px 6px; border-radius: 6px; }
     [hidden] { display: none !important; }
+    .backfill { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 12px; }
+    .backfill label { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; color: var(--text); font-size: 14px; }
+    .backfill input { width: 5em; padding: 6px; }
+    .backfill input:disabled { opacity: .35; }
   </style>
 </head>
 <body>
@@ -87,6 +91,18 @@
     </section>
 
     <section>
+      <h2>Night tools</h2>
+      <p><a href="/tally" target="_blank" style="color: var(--orange); font-weight: 700">🖨 Print tally sheet</a></p>
+      <h2>➕ Add missed kids</h2>
+      <p class="muted">Type a count per 15-minute row (event time). They're added as untagged kids, spread across each row, and never celebrate.</p>
+      <form id="backfill-form">
+        <div id="backfill-rows" class="backfill"></div>
+        <p><button class="primary" type="submit">Add these kids</button></p>
+      </form>
+      <div id="batches"></div>
+    </section>
+
+    <section>
       <h2>Create an event</h2>
       <form id="create-form">
         <label for="c-name">Name</label>
@@ -105,8 +121,11 @@
   </div>
 
   <script type="module">
+    import { atEventTime, eventNow, slots } from '/shared/night-maths.js'
+
     const $ = (id) => document.getElementById(id)
     const HOUR = 3_600_000
+    let batches = []
 
     let pin = localStorage.getItem('cd.adminPin') ?? ''
     let joinKey = localStorage.getItem('cd.joinKey') ?? ''
@@ -120,9 +139,11 @@
     }
 
     async function load() {
-      const res = await fetch('/api/events', { headers: { 'X-Admin-Pin': pin } })
+      const headers = { 'X-Admin-Pin': pin }
+      const res = await fetch('/api/events', { headers })
       if (res.status === 403) return false
       events = await res.json()
+      batches = await (await fetch('/api/batches', { headers })).json()
       render()
       return true
     }
@@ -196,6 +217,8 @@
       $('tags').replaceChildren(...editing.tags.map(tagRow))
       $('c-copy').replaceChildren(option('', 'Nothing (start empty)', true), ...events.filter((e) => !e.countsOnly).map((e) => option(e.id, e.name)))
 
+      renderBackfill(live)
+
       $('upcoming').replaceChildren(
         ...upcoming.map((e) =>
           h('div', { className: 'item' },
@@ -213,6 +236,53 @@
           : [h('p', { className: 'muted', textContent: 'None yet.' })]),
       )
     }
+
+    // ---- Add missed kids: rows in event time, none later than the event's "now" (spec §6).
+    const clockTime = (ms, shift) => new Date(ms + shift).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    function renderBackfill(live) {
+      const shift = live.clockShiftMs
+      const nowMinute = (() => {
+        const d = new Date(eventNow(Date.now(), shift))
+        return d.getHours() * 60 + d.getMinutes()
+      })()
+      const typed = new Map([...document.querySelectorAll('#backfill-rows input')].map((i) => [i.dataset.start, i.value]))
+      $('backfill-rows').replaceChildren(
+        ...slots('17:30', '21:00', 15).map(({ start, end }) => {
+          const [hh, mm] = start.split(':').map(Number)
+          const input = h('input', { type: 'number', min: 0, max: 1000, value: typed.get(start) ?? '', disabled: hh * 60 + mm > nowMinute })
+          input.dataset.start = start
+          input.dataset.end = end
+          return h('label', {}, h('span', { textContent: `${clockTime(atEventTime(start, Date.now(), shift), shift)}` }), input)
+        }),
+      )
+      $('batches').replaceChildren(
+        ...batches.map((b) => {
+          const from = Math.min(...b.rows.map((r) => r.startMs))
+          const to = Math.max(...b.rows.map((r) => r.endMs))
+          return h('div', { className: 'item' },
+            h('span', { className: 'grow', textContent: `+${b.kids} kids, ${clockTime(from, shift)}–${clockTime(to, shift)}` }),
+            h('button', { className: 'danger', textContent: 'Remove', onclick: () => {
+              if (confirm(`Remove these ${b.kids} added kids?`)) admin({ type: 'removeBatch', batchId: b.id }, `Removed ${b.kids} kids`)
+            } }))
+        }),
+      )
+    }
+
+    $('backfill-form').addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const live = events.find((ev) => ev.live)
+      const rows = [...document.querySelectorAll('#backfill-rows input')]
+        .filter((i) => !i.disabled && Number(i.value) > 0)
+        .map((i) => ({
+          startMs: atEventTime(i.dataset.start, Date.now(), live.clockShiftMs),
+          endMs: atEventTime(i.dataset.end, Date.now(), live.clockShiftMs),
+          count: Number(i.value),
+        }))
+      if (!rows.length) return say('Type a count in at least one row', true)
+      const total = rows.reduce((n, r) => n + r.count, 0)
+      document.querySelectorAll('#backfill-rows input').forEach((i) => (i.value = ''))
+      await admin({ type: 'backfill', rows }, `Added ${total} kids`)
+    })
 
     function tagRow(tag) {
       const emoji = h('input', { className: 'emoji', value: tag.emoji ?? '', ariaLabel: 'Emoji' })

@@ -22,5 +22,5 @@ The paths that keep golden tickets in play when the night doesn't go to plan. Se
 - [x] Removing the backfill batch afterwards doesn't bring any ticket back
 - [x] Add a ticket draws a number in the stated range and the pill goes up by one
 - [x] Release remaining is hidden before 7:45 event time, then makes the next K live kids win, one takeover each
-- [x] The rehearsal scenarios 9a–9c run on a test database without manual fixes *(run with late taps standing in for backfill, which arrives in ticket 23; re-run 9a–9c with real backfill there)*
+- [x] The rehearsal scenarios 9a–9c run on a test database without manual fixes *(first run with late taps standing in for backfill; 9b re-run with a real 196-kid backfill batch in ticket 23: #60, #89 and #135 rolled forward to live kids #201–#203)*
 - [x] Roll-forward and release are unit-tested on the server

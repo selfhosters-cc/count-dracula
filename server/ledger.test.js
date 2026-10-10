@@ -873,3 +873,78 @@ describe('golden tickets: roll forward, add and release', () => {
     expect(tickets().map((t) => t.state)).toEqual(['released', 'released', 'released'])
   })
 })
+
+describe('Add missed kids (backfill)', () => {
+  const MIN = 60_000
+  const NOW = 1_800_000_000_000
+  function setup() {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed, now: () => NOW, switches: { goldenTickets: false } })
+    return ledger
+  }
+  const row = (startMs, count, minutes = 15) => ({ startMs, endMs: startMs + minutes * MIN, count })
+  const added = (deltas) => deltas.filter((d) => d.type === 'kid.added').map((d) => d.kid)
+
+  test('spreads a row evenly across its slot as untagged, late backfill kids in one batch', () => {
+    const ledger = setup()
+    const start = NOW - 60 * MIN
+
+    const kids = added(ledger.apply({ type: 'backfill', rows: [row(start, 10)] }))
+
+    expect(kids).toHaveLength(10)
+    expect(kids.map((k) => k.tappedAt)).toEqual(Array.from({ length: 10 }, (_, i) => start + (i + 0.5) * 90_000))
+    expect(kids.every((k) => k.source === 'backfill' && k.tagId === null && k.late)).toBe(true)
+    expect(new Set(ledger.batches().map((b) => b.id)).size).toBe(1)
+    expect(ledger.batches()[0]).toMatchObject({ kids: 10, rows: [{ startMs: start, endMs: start + 15 * MIN, count: 10 }] })
+  })
+
+  test('numbers the whole batch in tap-time order, whatever order the rows come in', () => {
+    const ledger = setup()
+    ledger.apply(tap('earlier', { tappedAt: NOW - 200 * MIN }))
+
+    const kids = added(ledger.apply({ type: 'backfill', rows: [row(NOW - 30 * MIN, 2), row(NOW - 90 * MIN, 3)] }))
+
+    expect(kids.map((k) => k.number)).toEqual([2, 3, 4, 5, 6])
+    expect(kids.map((k) => k.tappedAt)).toEqual([...kids.map((k) => k.tappedAt)].sort((a, b) => a - b))
+  })
+
+  test('never celebrates: no moments, even crossing a milestone', () => {
+    const ledger = setup()
+
+    const deltas = ledger.apply({ type: 'backfill', rows: [row(NOW - 60 * MIN, 60)] })
+
+    expect(deltas.filter((d) => d.type === 'kid.added').every((d) => d.moments.length === 0)).toBe(true)
+  })
+
+  test("refuses a row that hasn't started yet, and spreads a row in progress only up to now", () => {
+    const ledger = setup()
+
+    expect(() => ledger.apply({ type: 'backfill', rows: [row(NOW + MIN, 5)] })).toThrow(BadCommand)
+    const kids = added(ledger.apply({ type: 'backfill', rows: [row(NOW - 5 * MIN, 5)] }))
+    expect(kids.at(-1).tappedAt).toBeLessThan(NOW)
+    expect(kids[0].tappedAt).toBe(NOW - 5 * MIN + 30_000) // 5 kids across the 5 minutes so far
+  })
+
+  test('removing a batch drops exactly its kids, and adding again works', () => {
+    const ledger = setup()
+    ledger.apply(tap('live-kid', { tappedAt: NOW - 1_000 }))
+    ledger.apply({ type: 'backfill', rows: [row(NOW - 60 * MIN, 4)] })
+    const [batch] = ledger.batches()
+
+    const deltas = ledger.apply({ type: 'removeBatch', batchId: batch.id })
+
+    expect(deltas.map((d) => d.type)).toEqual(['kids.removed'])
+    expect(deltas[0].kidIds).toHaveLength(4)
+    expect(ledger.snapshot().kids.map((k) => k.id)).toEqual(['live-kid'])
+    expect(ledger.batches()).toEqual([])
+    expect(added(ledger.apply({ type: 'backfill', rows: [row(NOW - 60 * MIN, 2)] }))).toHaveLength(2)
+    expect(ledger.snapshot().kids).toHaveLength(3)
+  })
+
+  test('refuses an empty or nonsense batch', () => {
+    const ledger = setup()
+
+    expect(() => ledger.apply({ type: 'backfill', rows: [] })).toThrow(BadCommand)
+    expect(() => ledger.apply({ type: 'backfill', rows: [row(NOW - 60 * MIN, -2)] })).toThrow(BadCommand)
+    expect(() => ledger.apply({ type: 'backfill', rows: [row(NOW - 60 * MIN, 0)] })).toThrow(BadCommand)
+  })
+})

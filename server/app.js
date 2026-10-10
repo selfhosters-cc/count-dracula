@@ -8,8 +8,8 @@ import { createHub } from './hub.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
-const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html' }
-const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket'])
+const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html' }
+const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch'])
 
 export function startServer({ configPath, port, heartbeatMs }) {
   const config = loadConfig(configPath)
@@ -31,6 +31,8 @@ export function startServer({ configPath, port, heartbeatMs }) {
     // Setup (spec §6): the join key and the admin PIN.
     'GET /api/events': (req) =>
       isAdmin(req) ? Response.json(ledger.events()) : new Response('Wrong PIN', { status: 403 }),
+    'GET /api/batches': (req) =>
+      isAdmin(req) ? Response.json(ledger.batches()) : new Response('Wrong PIN', { status: 403 }),
     'POST /api/admin': write(async (req) => {
       if (!isAdmin(req)) return new Response('Wrong PIN', { status: 403 })
       const command = await req.json()

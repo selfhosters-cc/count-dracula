@@ -20,10 +20,10 @@ The paper fallback and the rehearsal's bulk add. See [spec §6 Night tools](../s
 
 ## Acceptance criteria
 
-- [ ] The tally sheet prints cleanly on one page with the right rows and header
-- [ ] Saving 10 in 6:30–6:45 creates 10 untagged backfill kids spread across that slot, in one batch
-- [ ] With Clock shift +3h, rows past the event's "now" can't be filled
-- [ ] The TV rises with one quiet roll-up and no pops or chips
-- [ ] Removing a batch drops exactly its kids, and re-adding works
-- [ ] The race chart places backfilled kids at their spread tap times
-- [ ] Tests cover the even spread, batch numbering order and batch removal
+- [x] The tally sheet prints cleanly on one page with the right rows and header
+- [x] Saving 10 in 6:30–6:45 creates 10 untagged backfill kids spread across that slot, in one batch
+- [x] With Clock shift +3h, rows past the event's "now" can't be filled
+- [x] The TV rises with one quiet roll-up and no pops or chips
+- [x] Removing a batch drops exactly its kids, and re-adding works
+- [x] The race chart places backfilled kids at their spread tap times
+- [x] Tests cover the even spread, batch numbering order and batch removal
