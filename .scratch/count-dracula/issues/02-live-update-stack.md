@@ -25,4 +25,4 @@ Recommended default: **one Bun process with `bun:sqlite` (WAL)** in an LXC behin
 - TV: plain ES modules, no build step. Chart.js for the race against the ghost line, Motion for the "kid #N" pop, canvas-confetti for bursts. All stored locally, no CDN.
 - Risks: Bun's 10 s idle timeout on the stream (turn it off and send a 15 s heartbeat); late taps making numbering look odd; HTTP vs HTTPS feature gaps (goes to Hosting and phone access); a burst of kids piling up animations (queue them); one process, one file, one laptop.
 
-Full findings: branch `research/live-update-stack` (commit `0a0e424`), file `.scratch/halloween-tracker/research/live-update-stack.md`.
+Full findings: branch `research/live-update-stack` (commit `0a0e424`), file `.scratch/count-dracula/research/live-update-stack.md`.
