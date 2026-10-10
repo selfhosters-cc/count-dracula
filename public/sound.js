@@ -22,7 +22,7 @@ const DUCK_RELEASE_S = 0.8
 
 // The big moments' sounds, by cue (spec §10): a cartoon organ for every 50th, a full fanfare plus a
 // spooky flourish for #100/#200/#300 and Beat last year.
-const STINGS = { 'sting:50': 'sting50', fanfare: 'fanfare' }
+const STINGS = { 'sting:50': 'sting50', fanfare: 'fanfare', ding: 'ding' } // ding: the new-costume "ding-ding"
 
 const TICK_GAIN = 0.4 // a late-tap roll-up: one soft tick
 const TICK_QUIET_MS = 2_000 // a backlog arrives as a run of late kids: one tick for the lot

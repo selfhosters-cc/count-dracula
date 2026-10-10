@@ -148,6 +148,16 @@ function paceText(state) {
   return p.kind === 'ahead' ? `👻 ${p.by} ahead of last year's ghost` : `👻 ${p.by} behind last year's ghost`
 }
 
+// ---- "NEW COSTUME SPOTTED!" (Must #6): an overlay, so it never waits behind or stomps on the pop
+let bannerTimer
+function showNewCostume({ name, emoji, count }) {
+  $('banner-text').textContent = `${emoji ?? ''} ${name} ×${count}`.trim()
+  animate($('banner'), { transform: 'translateY(0%)' }, { type: 'spring', bounce: 0.35, duration: 0.5 })
+  sound.cue('ding')
+  clearTimeout(bannerTimer)
+  bannerTimer = setTimeout(() => animate($('banner'), { transform: 'translateY(-110%)' }, { duration: 0.4 }), 4_000)
+}
+
 // ---- the costume leaderboard (Must #5): top 5 bars, keyed by costume so an overtake slides into place
 const lbRows = new Map()
 function renderLeaderboard(state) {
@@ -238,6 +248,8 @@ live.on(({ state, cause, delta }) => {
     showCount(total, 'dip')
   } else if (delta.type === 'moment') {
     director.push(delta.moments)
+  } else if (delta.type === 'tag.added' && delta.newCostume) {
+    showNewCostume(delta.newCostume)
   }
 })
 

@@ -281,8 +281,10 @@ export function openLedger(db, config) {
       const kidIds = mostRecentUntagged.all(event.id, n).map((r) => r.id)
       for (const id of kidIds) setTag.run(tagRow.id, id)
       const added = addKid(event, { ...kid, tagId: tagRow.id })
+      // A costume spotted live gets the TV's banner, "×(N+1)" including the kid at the door (Must #6).
+      const newCostume = switches.newTrendAlert ? { name, emoji: tag.emoji ?? null, count: kidIds.length + 1 } : undefined
       return [
-        { type: 'tag.added', tag: toTag(tagRow) },
+        { type: 'tag.added', tag: toTag(tagRow), ...(newCostume && { newCostume }) },
         ...(kidIds.length ? [{ type: 'kid.retagged', kidIds, tagId: tagRow.id }] : []),
         ...referee(event, added),
       ]

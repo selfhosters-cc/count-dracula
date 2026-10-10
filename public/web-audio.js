@@ -14,6 +14,7 @@ const GENERATORS = {
   sting50: { seconds: 1.6, draw: organSting },
   fanfare: { seconds: 3, draw: fanfare },
   golden: { seconds: 4, draw: goldenFanfare },
+  ding: { seconds: 0.7, draw: dingDing },
   ambience: { seconds: 8, draw: nightLoop },
 }
 
@@ -185,6 +186,18 @@ function goldenFanfare(ctx) {
   arpeggio.forEach((f, i) => bell(0.55 + i * 0.11, f * 1.5, 0.5, 0.18))
   for (const f of [523.3, 659.3, 784, 1046.5]) bell(1.15, f, 2.2, 0.12)
   for (let i = 0; i < 10; i++) bell(1.4 + i * 0.13, 2093 * (1 + (i % 3) * 0.25), 0.25, 0.06)
+}
+
+// The new-costume "ding-ding": two bright bell tones, a fourth apart.
+function dingDing(ctx) {
+  for (const [at, f] of [[0, 1318.5], [0.18, 1760]]) {
+    for (const [ratio, level] of [[1, 0.3], [2.76, 0.08]]) {
+      const osc = new OscillatorNode(ctx, { type: 'sine', frequency: f * ratio })
+      osc.connect(envelope(ctx, level, 0.004, 0.45, at))
+      osc.start(at)
+      osc.stop(at + 0.5)
+    }
+  }
 }
 
 // Wind, crickets and one owl, looping every `seconds` (all modulation divides the loop evenly).

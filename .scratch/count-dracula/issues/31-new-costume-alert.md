@@ -16,7 +16,7 @@ When a helper creates a costume live with "+ New", the TV shouts about it. It si
 
 ## Acceptance criteria
 
-- [ ] "+ New" with Catch-up 3 shows "×4" with the right emoji and name
-- [ ] The banner coexists with the pop for the kid at the door without stomping on it
-- [ ] Creating a costume preset in Setup doesn't trigger it
-- [ ] With the switch off, no banner or ding appears
+- [x] "+ New" with Catch-up 3 shows "×4" with the right emoji and name
+- [x] The banner coexists with the pop for the kid at the door without stomping on it
+- [x] Creating a costume preset in Setup doesn't trigger it
+- [x] With the switch off, no banner or ding appears

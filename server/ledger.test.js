@@ -948,3 +948,30 @@ describe('Add missed kids (backfill)', () => {
     expect(() => ledger.apply({ type: 'backfill', rows: [row(NOW - 60 * MIN, 0)] })).toThrow(BadCommand)
   })
 })
+
+describe('new costume alert', () => {
+  test('a costume created live with Catch-up N announces itself ×(N+1)', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    for (const id of ['a', 'b', 'c']) ledger.apply(tap(id))
+
+    const [added] = ledger.apply(catchUp('door', 3, { tag: { name: 'Wednesday', emoji: '🖤' } }))
+
+    expect(added).toMatchObject({ type: 'tag.added', newCostume: { name: 'Wednesday', emoji: '🖤', count: 4 } })
+  })
+
+  test("a costume preset created in Setup doesn't", () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+
+    const [added] = ledger.apply({ type: 'createTag', eventId: ledger.snapshot().event.id, name: 'Witch', emoji: '🧙' })
+
+    expect(added.newCostume).toBeUndefined()
+  })
+
+  test('with the new-trend switch off, there is no alert', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed, switches: { newTrendAlert: false } })
+
+    const [added] = ledger.apply(catchUp('door', 0))
+
+    expect(added.newCostume).toBeUndefined()
+  })
+})
