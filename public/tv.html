@@ -93,12 +93,6 @@
     #count { display: inline-block; transform-origin: left center; }
 
     /* Celebration layer */
-    #pop { position: fixed; left: 50%; top: 56%; translate: -50% -50%; opacity: 0; pointer-events: none; z-index: 30;
-      text-align: center; padding: .25em .7em; border-radius: 24px; background: var(--pumpkin); color: #1d0d00;
-      font-family: var(--f-display); font-size: clamp(30px, 7vw, 140px); line-height: 1; white-space: nowrap;
-      box-shadow: 0 10px 60px rgba(255, 122, 26, .55); }
-    #pop small { display: block; font-family: var(--f-body); font-weight: 700; font-size: .28em; letter-spacing: .14em;
-      text-transform: uppercase; margin-bottom: .2em; }
     /* Every 50th: a headstone rises out of the ground with the milestone carved on it */
     #tomb { position: fixed; left: 50%; bottom: 4vh; width: min(30vw, 46vh); translate: -50% 0; z-index: 30;
       pointer-events: none; transform: translateY(120%); filter: drop-shadow(0 18px 40px rgba(0, 0, 0, .6)); }
@@ -176,7 +170,6 @@
     <div class="patchbox"><canvas id="patch" aria-label="Pumpkin patch: one pumpkin per kid"></canvas></div>
   </section>
 
-  <div id="pop" aria-live="polite"></div>
   <div id="teaser" aria-live="polite"></div>
   <div id="banner" aria-live="polite"><span class="t1">New costume spotted!</span><span class="t2" id="banner-text"></span></div>
   <div id="tomb" aria-live="polite">

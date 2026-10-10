@@ -1,11 +1,11 @@
 // Celebration director (modules.md §6): decides what the TV shows and when. The server decides *which*
 // moments happened; this only orders, merges and times them. play(show) renders a show; play(null) clears.
 //
-// Shows: { kind: 'pop', from, to }            "YOU'RE KID #N!" / "WELCOME, KIDS #N–M!"
+// Shows: { kind: 'pop', from, to }            the hero count pops with confetti (a merged burst pops bigger)
 //        { kind: 'milestone', number }         every 50th: the big white chip
 //        { kind: 'takeover', moment, number }  full screen: 'golden' | 'beat-last-year' | 'milestone' (every 100th)
 
-const POP_MS = 1_500 // "YOU'RE KID #N!"
+const POP_MS = 1_500 // one kid's pop on the hero count
 const MERGE_EXTEND_MS = 1_100 // each merged kid keeps the pop up this much longer…
 const MERGE_CAP_MS = 3_000 // …but a merged pop never runs past this
 const MILESTONE_MS = 3_000

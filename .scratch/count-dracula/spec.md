@@ -294,7 +294,7 @@ These are the baseline timings; tune them at the rehearsal.
 
 | Moment | TV | Duration |
 |---|---|---|
-| **Kid pop** | An orange "YOU'RE KID #N!" chip at the centre, small confetti | ~1.5 s |
+| **Kid pop** | The hero count pops (a bounce and a gold flash) and throws confetti from the number; nothing covers the chart, which just extends its line (changed Oct 10: the centre chip got in the way) | ~1.5 s |
 | **Merged pop** | Kids arriving inside the pop's window merge into "WELCOME, KIDS #N–M!" | capped at ~3 s |
 | **Every 50th** | A headstone rises out of a grassy mound with the milestone carved on it ("R.I.P. · MILESTONE · #150"), emoji confetti, then sinks back. *(Replaced the white chip, Oct 10, at the user's request.)* | ~3 s |
 | **#100 / #200 / #300** | Full-screen takeover, Creepster headline ("100 trick-or-treaters!"), a giant headstone carved with the number, emoji confetti *(headstone added Oct 10 at the user's request)* | 5–6 s |

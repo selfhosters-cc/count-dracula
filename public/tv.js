@@ -61,27 +61,30 @@ function showCount(target, mode) {
 // ---- celebrations: the director decides, this renders (and cues the sound)
 let playing = null
 function play(show) {
-  const pop = $('pop')
   const merging = show?.kind === 'pop' && playing?.kind === 'pop' && playing.from === show.from
   const ending = playing
   playing = show
   if (!show) {
     if (ending?.kind === 'takeover') animate($('takeover'), { opacity: 0 }, { duration: 0.4 })
     if (ending?.kind === 'milestone' || ending?.moment === 'milestone') sinkTomb()
-    else animate(pop, { opacity: 0, scale: 0.9 }, { duration: 0.25 })
     return
   }
   if (show.kind === 'milestone') return playMilestone(show)
   if (show.kind === 'takeover') return playTakeover(show)
   const merged = show.from !== show.to
   sound.cue(merging ? 'scale' : 'bloop', { step: show.to - show.from })
-  pop.innerHTML = merged ? `<small>Welcome, kids</small>#${show.from}–${show.to}!` : `<small>You're kid</small>#${show.from}!`
-  animate(pop, { opacity: 1, scale: [0.3, 1] }, { type: 'spring', bounce: 0.5, duration: 0.45 })
+  // The hero number itself pops and throws confetti; nothing covers the chart (the user's change, Oct 10).
+  const count = $('count')
+  const peak = merged ? 1.4 : 1.3
+  animate(count, { scale: [1, peak, 0.95, 1.03, 1] }, { duration: 0.6, times: [0, 0.3, 0.6, 0.8, 1], ease: 'easeOut' })
+  animate(count, { color: ['#ffcf3a', getComputedStyle(count.parentElement).color] }, { duration: 0.8 })
+  const box = count.getBoundingClientRect()
   confetti({
-    particleCount: merged ? 60 : 30,
-    spread: merged ? 110 : 90,
-    startVelocity: merged ? 50 : 43,
-    origin: { y: 0.7 },
+    particleCount: merged ? 70 : 40,
+    spread: merged ? 120 : 90,
+    angle: 60, // up and out to the right, over the hero, away from the screen's edge
+    startVelocity: merged ? 45 : 38,
+    origin: { x: (box.left + box.width / 2) / innerWidth, y: (box.top + box.height / 2) / innerHeight },
     colors: ['#ff7a1a', '#ffcf3a', '#9085e9', '#199e70'],
   })
 }
@@ -406,10 +409,10 @@ function renderRush(state) {
   $('rush-rate').textContent = `${perMinute} kids/min`
 }
 
-function renderRace(state, animate = true) {
+function renderRace(state) {
   // A recap's chart is the finished race: "now" is the night's last tap, not today's clock.
   const until = inRecap(state) && state.kids.length ? Math.max(...state.kids.map((k) => k.tappedAt)) : Date.now()
-  race.update(state, until, animate)
+  race.update(state, until)
   $('pace').textContent = paceText(state)
   renderRush(state)
   $('legend').innerHTML = state.ghost
@@ -483,7 +486,7 @@ live?.on(({ state, cause, delta }) => {
   if (delta.type === 'kid.added') {
     teaser.activity() // any tap cancels the teaser and starts the 45 s over
     if (!delta.kid.late) born.set(delta.kid.id, performance.now()) // late kids appear quietly
-    showCount(total, delta.kid.late ? 'roll' : 'bump')
+    showCount(total, delta.kid.late ? 'roll' : 'set') // the director's pop does the bounce
     director.push(delta.moments ?? [], delta.kid)
   } else if (delta.type === 'kid.removed' || delta.type === 'kids.removed') {
     showCount(total, 'dip')
@@ -517,5 +520,5 @@ setInterval(() => {
 
 // The ghost marker and tonight's line creep along with the clock.
 setInterval(() => {
-  if (live?.state && live.connected && !over(live.state)) renderRace(live.state, false)
+  if (live?.state && live.connected && !over(live.state)) renderRace(live.state)
 }, 5_000)

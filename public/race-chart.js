@@ -52,15 +52,37 @@ const labels = {
 }
 
 export function createRaceChart(canvas) {
+  const ghostLine = {
+    label: 'Ghost',
+    data: [],
+    borderColor: GHOST,
+    borderWidth: 4,
+    borderDash: [14, 10],
+    borderCapStyle: 'round',
+    pointRadius: 0,
+    tension: 0,
+  }
+  const tonightLine = {
+    label: 'Tonight',
+    data: [],
+    borderColor: PUMPKIN,
+    borderWidth: 7,
+    borderJoinStyle: 'round',
+    borderCapStyle: 'round',
+    pointBackgroundColor: PUMPKIN,
+    pointBorderColor: SURFACE, // a 2px surface ring where the dot overlaps the ghost
+    pointBorderWidth: 3,
+    tension: 0,
+  }
   const chart = new Chart(canvas, {
     type: 'line',
-    data: { datasets: [] },
+    data: { datasets: [ghostLine, tonightLine] },
     plugins: [labels],
     options: {
       responsive: true,
       maintainAspectRatio: false,
       events: [], // kiosk: no pointer, no hover layer
-      animation: { duration: 600, easing: 'easeOutQuart' },
+      animation: false, // it updates in place as kids arrive; nothing re-animates
       layout: { padding: { top: 24, right: 150, bottom: 4, left: 8 } },
       parsing: false,
       plugins: { legend: { display: false }, tooltip: { enabled: false }, raceLabels: null },
@@ -94,8 +116,8 @@ export function createRaceChart(canvas) {
   })
 
   return {
-    // state: the live state; realNow: Date.now(). Pass animate=false for the once-a-few-seconds clock tick.
-    update(state, realNow, animate = true) {
+    // state: the live state; realNow: Date.now().
+    update(state, realNow) {
       const shift = state.event.clockShiftMs ?? 0
       const now = minuteOfDay(eventNow(realNow, shift))
       const kidMinutes = state.kids.map((k) => minuteOfDay(eventNow(k.tappedAt, shift))).sort((a, b) => a - b)
@@ -108,46 +130,25 @@ export function createRaceChart(canvas) {
       chart.options.scales.x.max = xMax
       chart.options.scales.y.max = Math.max(400, Math.ceil((top + 30) / 100) * 100)
 
-      const datasets = []
+      // The same two lines every time, just given new points: the chart updates in place, never redraws.
       if (g) {
         const at = ghostCurve(g.buckets)
         const corners = [xMin, ...g.buckets.flatMap((b) => [toMinute(b.start), toMinute(b.end)]), xMax]
-        datasets.push({
-          label: g.label,
-          data: [...new Set(corners)].sort((a, b) => a - b).map((x) => ({ x, y: at(x) })),
-          borderColor: GHOST,
-          borderWidth: 4,
-          borderDash: [14, 10],
-          borderCapStyle: 'round',
-          pointRadius: 0,
-          tension: 0,
-        })
+        ghostLine.label = g.label
+        ghostLine.data = [...new Set(corners)].sort((a, b) => a - b).map((x) => ({ x, y: at(x) }))
       }
-      if (count) {
-        const line = [{ x: kidMinutes[0], y: 0 }, ...kidMinutes.map((x, i) => ({ x, y: i + 1 }))]
-        if (now > kidMinutes[count - 1]) line.push({ x: now, y: count })
-        datasets.push({
-          label: 'Tonight',
-          data: line,
-          borderColor: PUMPKIN,
-          borderWidth: 7,
-          borderJoinStyle: 'round',
-          borderCapStyle: 'round',
-          pointRadius: line.map((_, i) => (i === line.length - 1 ? 11 : 0)), // the dot at "now"
-          pointBackgroundColor: PUMPKIN,
-          pointBorderColor: SURFACE, // a 2px surface ring where the dot overlaps the ghost
-          pointBorderWidth: 3,
-          stepped: false,
-          tension: 0,
-        })
-      }
-      chart.data.datasets = datasets
+      ghostLine.hidden = !g
+      const line = count ? [{ x: kidMinutes[0], y: 0 }, ...kidMinutes.map((x, i) => ({ x, y: i + 1 }))] : []
+      if (count && now > kidMinutes[count - 1]) line.push({ x: now, y: count })
+      tonightLine.data = line
+      tonightLine.pointRadius = line.map((_, i) => (i === line.length - 1 ? 11 : 0)) // the dot at "now"
+      tonightLine.hidden = !count
       chart.options.plugins.raceLabels = {
         ghostEnd: g && { text: `${g.label}: ${g.total}`, y: g.total },
         ghostNow: g && { x: Math.min(Math.max(now, xMin), xMax), y: ghostCurve(g.buckets)(now) },
         tonight: count ? { x: Math.max(now, kidMinutes[count - 1]), y: count } : null,
       }
-      chart.update(animate ? undefined : 'none')
+      chart.update('none')
     },
   }
 }
