@@ -21,7 +21,8 @@ if pve "pct status $VMID" >/dev/null 2>&1; then
   if pve "pct config $VMID" | grep -qx 'hostname: count-dracula'; then
     echo "==> LXC $VMID (count-dracula) already exists: finishing its setup"
     pve pct set "$VMID" --nameserver "$NAMESERVER" --searchdomain lan
-    pve "pct status $VMID" | grep -q running || pve pct start "$VMID"
+    # A restart, so the container's resolv.conf is rewritten with the new nameserver for sure.
+    if pve "pct status $VMID" | grep -q running; then pve pct reboot "$VMID"; else pve pct start "$VMID"; fi
   else
     echo "LXC $VMID already exists on $PVE and isn't count-dracula: pick another VMID (VMID=...)." >&2
     exit 1
