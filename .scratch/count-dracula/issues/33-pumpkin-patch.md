@@ -16,8 +16,8 @@ The bottom strip of the TV fills with one pumpkin per kid, behind the Must #8 fe
 
 ## Acceptance criteria
 
-- [ ] Each live tap adds a pumpkin in the right colour, with a pop-in
-- [ ] A golden winner's pumpkin is gold
-- [ ] Retags and deletions update the patch
-- [ ] 400 kids render without the frame rate dropping noticeably during a burst
-- [ ] With the switch off, the strip is hidden
+- [x] Each live tap adds a pumpkin in the right colour, with a pop-in
+- [x] A golden winner's pumpkin is gold
+- [x] Retags and deletions update the patch
+- [x] 400 kids render without the frame rate dropping noticeably during a burst
+- [x] With the switch off, the strip is hidden

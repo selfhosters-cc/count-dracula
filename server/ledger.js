@@ -40,6 +40,7 @@ const SCHEMA = `
     tapped_at INTEGER NOT NULL,
     received_at INTEGER NOT NULL,
     late INTEGER NOT NULL DEFAULT 0,
+    golden INTEGER NOT NULL DEFAULT 0,
     deleted_at INTEGER,
     source TEXT NOT NULL DEFAULT 'tap',
     backfill_batch_id INTEGER
@@ -263,6 +264,11 @@ export function openLedger(db, config) {
         fire('beat-last-year')
         moments.push('beat-last-year')
       }
+    }
+    if (moments.includes('golden')) {
+      // Public once won: the TV gives the winner a gold pumpkin (Must #8).
+      db.query('UPDATE kids SET golden = 1 WHERE id = ?').run(kid.id)
+      kid = { ...kid, golden: true }
     }
     return [{ type: 'kid.added', kid, moments, golden: goldenSummary(event) }, ...deferred]
   }
@@ -628,6 +634,7 @@ function toKid(row) {
     phoneName: row.phone_name,
     tappedAt: row.tapped_at,
     late: row.late === 1,
+    golden: row.golden === 1,
     source: row.source,
   }
 }

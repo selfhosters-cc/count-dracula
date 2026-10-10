@@ -5,7 +5,7 @@ import { createDirector } from '/director.js'
 import { animate } from '/vendor/motion/motion.js'
 import confettiLib, { create as createConfetti } from '/vendor/canvas-confetti/confetti.module.js'
 import { createRaceChart } from '/race-chart.js'
-import { eventNow, ghost, leaderboard, minuteOfDay, pace } from '/shared/night-maths.js'
+import { eventNow, ghost, leaderboard, minuteOfDay, pace, tagColour } from '/shared/night-maths.js'
 import { createSound } from '/sound.js'
 import { createWebAudio } from '/web-audio.js'
 
@@ -182,6 +182,82 @@ function loadBoardFiles(state) {
   for (const s of state.settings.soundboard ?? []) if (s.file) audio.useFile(`board${s.slot}`, `/${s.file}`)
 }
 
+// ---- the pumpkin patch (Must #8): one pumpkin per kid, in its costume's colour, gold for a winner.
+// Canvas, redrawn only when something changed or a pumpkin is still popping in.
+const POP_IN_MS = 500
+const born = new Map() // kid id → when its pumpkin started popping in (live kids only)
+let patchState = null
+let patchDirty = false
+
+function renderPatch(state) {
+  const on = state.settings.switches.pumpkinPatch
+  $('board').classList.toggle('no-patch', !on)
+  patchState = on ? state : null
+  patchDirty = true
+}
+
+function drawPumpkin(ctx, x, y, r, colour, gold) {
+  ctx.fillStyle = gold ? '#ffcf3a' : colour
+  for (const dx of [-0.45, 0.45, 0]) {
+    ctx.beginPath()
+    ctx.ellipse(x + dx * r, y, r * 0.62, r * 0.82, 0, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.strokeStyle = 'rgba(0,0,0,.28)'
+  ctx.lineWidth = Math.max(1, r * 0.08)
+  for (const dx of [-0.3, 0.3]) {
+    ctx.beginPath()
+    ctx.ellipse(x + dx * r, y, r * 0.32, r * 0.78, 0, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+  ctx.fillStyle = '#3f6b2a'
+  ctx.fillRect(x - r * 0.1, y - r * 1.05, r * 0.2, r * 0.32)
+  if (gold) {
+    ctx.fillStyle = '#fff'
+    ctx.beginPath()
+    ctx.arc(x + r * 0.5, y - r * 0.5, r * 0.14, 0, Math.PI * 2)
+    ctx.fill()
+  }
+}
+
+function drawPatch(now) {
+  requestAnimationFrame(drawPatch)
+  if (!patchState) return
+  const popping = [...born.values()].some((t) => now - t < POP_IN_MS)
+  if (!patchDirty && !popping) return
+  patchDirty = false
+  const canvas = $('patch')
+  const W = canvas.clientWidth
+  const H = canvas.clientHeight
+  if (!W || !H) return
+  const dpr = Math.min(2, devicePixelRatio || 1)
+  if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+    canvas.width = Math.round(W * dpr)
+    canvas.height = Math.round(H * dpr)
+  }
+  const ctx = canvas.getContext('2d')
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, W, H)
+  const { kids, tags } = patchState
+  const colours = new Map(tags.map((t) => [t.id, tagColour(t.order)]))
+  const cap = Math.max(kids.length, 160) // early pumpkins stay small; the strip fills up as the night goes
+  const cols = Math.ceil(Math.sqrt((cap * W) / H))
+  const rows = Math.ceil(cap / cols)
+  const cw = W / cols
+  const ch = H / rows
+  kids.forEach((k, i) => {
+    let r = Math.min(cw, ch) * 0.4
+    const t = born.get(k.id)
+    if (t != null) {
+      const age = (now - t) / POP_IN_MS
+      if (age < 1) r *= Math.max(0, 1 + Math.sin(age * Math.PI) * 0.6 - (1 - age) * 0.9)
+      else born.delete(k.id)
+    }
+    drawPumpkin(ctx, ((i % cols) + 0.5) * cw, (Math.floor(i / cols) + 0.55) * ch, Math.max(0, r), colours.get(k.tagId) ?? tagColour(null), k.golden)
+  })
+}
+requestAnimationFrame(drawPatch)
+
 // ---- the costume leaderboard (Must #5): top 5 bars, keyed by costume so an overtake slides into place
 const lbRows = new Map()
 function renderLeaderboard(state) {
@@ -258,6 +334,7 @@ live.on(({ state, cause, delta }) => {
     renderRace(state)
     renderGoldenPill(state)
     renderLeaderboard(state)
+    renderPatch(state)
     applyMix(state)
     loadBoardFiles(state)
     return
@@ -267,7 +344,9 @@ live.on(({ state, cause, delta }) => {
   renderRace(state)
   renderGoldenPill(state)
   renderLeaderboard(state)
+  renderPatch(state)
   if (delta.type === 'kid.added') {
+    if (!delta.kid.late) born.set(delta.kid.id, performance.now()) // late kids appear quietly
     showCount(total, delta.kid.late ? 'roll' : 'bump')
     director.push(delta.moments ?? [], delta.kid)
   } else if (delta.type === 'kid.removed' || delta.type === 'kids.removed') {

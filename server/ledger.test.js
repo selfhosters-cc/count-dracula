@@ -164,7 +164,7 @@ describe('snapshot', () => {
         clockShiftMs: 0,
       },
       tags: [],
-      kids: [{ id: 'kid-a', number: 1, tagId: null, phoneName: 'Mom', tappedAt: 5_000, late: false, source: 'tap' }],
+      kids: [{ id: 'kid-a', number: 1, tagId: null, phoneName: 'Mom', tappedAt: 5_000, late: false, golden: false, source: 'tap' }],
       ghost: {
         eventId: expect.any(Number),
         label: '2025',
@@ -1007,5 +1007,24 @@ describe('soundboard', () => {
     expect(() => setup().ledger.apply({ type: 'soundboard', slot: 7 })).toThrow(BadCommand)
     const off = setup({ switches: { soundboard: false } })
     expect(() => off.ledger.apply({ type: 'soundboard', slot: 1 })).toThrow(BadCommand)
+  })
+})
+
+describe('golden winners for the pumpkin patch', () => {
+  test('a winner is marked golden on its delta and in the snapshot; nobody else is', () => {
+    let clockMs = 1_000_000_000
+    const ledger = openLedger(new Database(':memory:'), {
+      ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] },
+      random: () => 0, // the single ticket lands on #3
+      now: () => clockMs,
+    })
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Night' })
+    ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: ledger.snapshot().ghost.eventId, goldenCount: 1 })
+    ledger.apply({ type: 'goLive', eventId: event.id })
+
+    const deltas = ['a', 'b', 'c', 'd'].map((id) => ledger.apply(tap(id, { tappedAt: clockMs }))[0])
+
+    expect(deltas.map((d) => d.kid.golden)).toEqual([false, false, true, false])
+    expect(ledger.snapshot().kids.map((k) => k.golden)).toEqual([false, false, true, false])
   })
 })

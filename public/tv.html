@@ -50,6 +50,10 @@
       font-size: clamp(11px, 1.25vw, 24px); }
     #board.no-leaderboard { grid-template-rows: auto 1fr 10vh; }
     #board.no-leaderboard .boardbox { display: none; }
+    #board.no-patch { grid-template-rows: auto 1fr 22vh; }
+    #board.no-patch.no-leaderboard { grid-template-rows: auto 1fr; }
+    #board.no-patch .patchbox { display: none; }
+    .patchbox canvas { width: 100%; height: 100%; display: block; }
     .rows { position: relative; flex: 1; margin-top: .5em; }
     .lb-row { position: absolute; left: 0; right: 0; height: 18%; display: grid; grid-template-columns: minmax(0, 14em) 1fr;
       align-items: center; gap: .8em; transition: top .6s cubic-bezier(.4, 1.4, .5, 1); }
@@ -126,7 +130,7 @@
       <div class="eyebrow">Costume leaderboard</div>
       <div class="rows" id="leaderboard"></div>
     </div>
-    <div class="patchbox" id="patch"></div>
+    <div class="patchbox"><canvas id="patch" aria-label="Pumpkin patch: one pumpkin per kid"></canvas></div>
   </section>
 
   <div id="pop" aria-live="polite"></div>
