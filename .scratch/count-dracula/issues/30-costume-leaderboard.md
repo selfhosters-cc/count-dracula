@@ -13,6 +13,8 @@ The full-width leaderboard row on the TV, behind the Must #5 feature switch (off
 - Bars **reorder with animation** when one overtakes another. Updates from retags, renames, deletes and undos are reflected.
 - Text stays small enough that 5 rows never collide (the first draft's 2vw labels did).
 
+**Modules:** [Night maths](../modules.md#3-night-maths-shared).
+
 ## Acceptance criteria
 
 - [ ] With 7+ tags only the top 5 show, in the right colours

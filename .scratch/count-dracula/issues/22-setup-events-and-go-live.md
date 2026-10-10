@@ -20,6 +20,8 @@ The admin's `/setup` page, behind the admin PIN from the config file (remembered
 - **Costume presets:** name, emoji, order, signature sound. Rename any time. Deleting a costume that has kids makes them untagged, after a confirmation.
 - **Race against** (a past event or None), **Clock shift** (default 0), **Expected kids**, and **Visit window** (default 15 s, changeable live). The golden-ticket count field arrives with golden tickets.
 
+**Modules:** [Ledger](../modules.md#1-ledger-server), [Night maths](../modules.md#3-night-maths-shared).
+
 ## Acceptance criteria
 
 - [ ] A wrong PIN is rejected, and once entered the PIN is remembered on that phone

@@ -16,6 +16,8 @@ Any helper can close the night, and undo that. See [spec §2 Ended](../spec.md#2
 - **Resume** brings expired tickets back as they were, and brings the ambience back.
 - **The TV:** one closing sting (for example a descending "wah-wah-WOOO" plus an owl), then the ambience **fades out over ~5 s** to the keep-alive. With Must #9 switched off, or until the recap ticket lands, End shows the Scoreboard with a "🎃 THAT'S A WRAP — <event name>" top bar.
 
+**Modules:** [Ledger](../modules.md#1-ledger-server), [Sound engine](../modules.md#7-sound-engine-tv).
+
 ## Acceptance criteria
 
 - [ ] End → Resume → End works from any joined phone and survives a TV reload

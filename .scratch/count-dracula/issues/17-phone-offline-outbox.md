@@ -14,6 +14,8 @@ Phones keep counting with no time limit when the Wi-Fi or server drops, and noth
 - **Late taps:** the server flags any kid whose `received_at − tapped_at > 10 s` as a **late tap** and includes the flag in the delta, so the TV can treat it quietly later. Late kids are numbered when they land.
 - The phone's local count stays right across the outbox and the SSE snapshot: it doesn't double-count its own queued kids once they arrive.
 
+**Modules:** [Ledger](../modules.md#1-ledger-server), [Live state](../modules.md#4-live-state-phone--tv), [Outbox and door view](../modules.md#5-outbox-and-door-view-phone).
+
 ## Acceptance criteria
 
 - [ ] The phone name is asked once, persists across reloads and shows on stored kids

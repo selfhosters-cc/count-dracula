@@ -12,6 +12,8 @@ The bottom strip of the TV fills with one pumpkin per kid, behind the Must #8 fe
 - New pumpkins pop in. Undone or deleted kids' pumpkins go away quietly; a deleted golden winner's gold pumpkin goes with it.
 - It must stay smooth at ~400 pumpkins. If time runs short, fall back to coloured dots that grow into pumpkins.
 
+**Modules:** [Night maths](../modules.md#3-night-maths-shared).
+
 ## Acceptance criteria
 
 - [ ] Each live tap adds a pumpkin in the right colour, with a pop-in

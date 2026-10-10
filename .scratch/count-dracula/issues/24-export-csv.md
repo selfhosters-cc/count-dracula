@@ -11,6 +11,8 @@ Blocked by: 22
 - One row per kid: number, tap timestamp, `received_at`, tag, source, deleted.
 - A half-hour count summary (non-deleted kids per half-hour bucket), in the **same shape that next year's ghost seed reads**, so a 2026 export can seed a 2027 counts-only event.
 
+**Modules:** [Ledger](../modules.md#1-ledger-server), [Night maths](../modules.md#3-night-maths-shared).
+
 ## Acceptance criteria
 
 - [ ] The export opens in a spreadsheet app with readable timestamps

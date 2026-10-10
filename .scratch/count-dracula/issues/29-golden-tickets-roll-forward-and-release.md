@@ -14,6 +14,8 @@ The paths that keep golden tickets in play when the night doesn't go to plan. Se
 - **"Release remaining tickets"** in the ☰ menu, shown from **7:45pm event time** (Clock shift applied), with a confirmation, makes the next K kids winners, where K is the number of tickets left.
 - Several winners in a row queue their takeovers without stomping on each other.
 
+**Modules:** [Ledger](../modules.md#1-ledger-server), [Night maths](../modules.md#3-night-maths-shared), [Celebration director](../modules.md#6-celebration-director-tv).
+
 ## Acceptance criteria
 
 - [ ] Backfilling past a golden number makes the next live tap win it, and the stored ticket remembers the original number

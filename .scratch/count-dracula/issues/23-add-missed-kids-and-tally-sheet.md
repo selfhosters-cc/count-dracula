@@ -16,6 +16,8 @@ The paper fallback and the rehearsal's bulk add. See [spec §6 Night tools](../s
 - Setup lists each batch ("+38 kids, 6:30–7:00 · Remove") and can **remove a batch as a whole** (soft delete, quiet dip on the TV).
 - There's no separate dev route: this is the rehearsal's bulk add.
 
+**Modules:** [Ledger](../modules.md#1-ledger-server), [Night maths](../modules.md#3-night-maths-shared).
+
 ## Acceptance criteria
 
 - [ ] The tally sheet prints cleanly on one page with the right rows and header

@@ -16,6 +16,8 @@ Secret kid numbers win a prize, behind the Must #4 feature switch (off → no dr
 - **A win is final.** Undoing or deleting the winner doesn't bring the ticket back, the pill stays down, and the next kid to reach that number is ordinary.
 - Late-tap roll-forward, Add a ticket and Release remaining are in the next ticket. Until then a golden number that lands on a late tap must not sit hidden below the count.
 
+**Modules:** [Ledger](../modules.md#1-ledger-server), [Outbox and door view](../modules.md#5-outbox-and-door-view-phone), [Celebration director](../modules.md#6-celebration-director-tv), [Sound engine](../modules.md#7-sound-engine-tv).
+
 ## Acceptance criteria
 
 - [ ] Go live stores N numbers, one per band, inside the 10–80% range (unit-tested, including the Expected-kids path)

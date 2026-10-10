@@ -13,6 +13,8 @@ Mis-taps can be fixed from any phone. See [spec §2 Undo/Recent](../spec.md#2-do
 - Numbers are never rewritten, so after an undo the next kid reuses the freed number, and Recent may show two kids with the same number.
 - New SSE delta: `kid.removed`. On the TV the count **quietly dips**: no chip, no sound.
 
+**Modules:** [Ledger](../modules.md#1-ledger-server), [Outbox and door view](../modules.md#5-outbox-and-door-view-phone).
+
 ## Acceptance criteria
 
 - [ ] Undo on phone A removes A's latest kid, not B's, and repeated undos walk back through A's kids

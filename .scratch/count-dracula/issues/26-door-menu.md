@@ -13,6 +13,8 @@ The ☰ sheet over the phone counting screen, **open to any phone with the join 
 - A link to **Setup**.
 - Where the ☰ button sits on the counting screen is the builder's choice.
 
+**Modules:** [Sound engine](../modules.md#7-sound-engine-tv).
+
 ## Acceptance criteria
 
 - [ ] Any joined phone can open ☰; a phone without the key can't change anything

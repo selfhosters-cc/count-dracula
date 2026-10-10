@@ -12,6 +12,8 @@ When a helper creates a costume live with "+ New", the TV shouts about it. It si
 - A two-tone "ding-ding" sting.
 - It fires only for tags created live from a phone, not for presets created in Setup.
 
+**Modules:** [Celebration director](../modules.md#6-celebration-director-tv), [Sound engine](../modules.md#7-sound-engine-tv).
+
 ## Acceptance criteria
 
 - [ ] "+ New" with Catch-up 3 shows "×4" with the right emoji and name

@@ -5,6 +5,7 @@ A Halloween trick-or-treater tracker for one household. Helpers' phones at the d
 - **Assembled:** 2026-10-10 from the [map](map.md) and its resolved tickets. This document makes **no new decisions**. Each section links the ticket that holds the reasoning.
 - **Open questions:** none. The last one, [Kid numbers under undo and late taps](issues/14-kid-numbers-under-undo-and-late-taps.md), is folded in.
 - **Printable rehearsal checklist:** [rehearsal-checklist.md](rehearsal-checklist.md).
+- **Modules and seams for the build:** [modules.md](modules.md).
 
 ## Contents
 

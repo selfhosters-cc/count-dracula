@@ -18,6 +18,8 @@ The porch TV becomes the real **Layout A "Scoreboard"** at 1080p, celebrating ea
 
 The TV's sound comes in the sound engine ticket; this one is visual only.
 
+**Modules:** [Celebration director](../modules.md#6-celebration-director-tv), [Live state](../modules.md#4-live-state-phone--tv).
+
 ## Acceptance criteria
 
 - [ ] At 1920×1080 the layout matches the prototype's Scoreboard frame

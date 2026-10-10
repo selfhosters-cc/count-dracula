@@ -19,6 +19,8 @@ Real sounds replace the generated fallbacks before the **Oct 24** freeze. See [s
 
 Needs the family for the homemade recordings and someone to judge the sounds by ear.
 
+**Modules:** [Sound engine](../modules.md#7-sound-engine-tv) (files are mapped by slot).
+
 ## Acceptance criteria
 
 - [ ] Every sound slot has a file, or a deliberate decision to keep its fallback

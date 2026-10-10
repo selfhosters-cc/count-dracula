@@ -15,6 +15,8 @@ The big moments on the TV, behind the Must #3 feature switch (off → plain pops
 - **Once per event:** a **fired moments** table records each milestone and Beat last year, which fire at most once, the first time they're crossed live. After an undo the re-crossing kid gets an ordinary pop. The hero readout can still flip back and forth.
 - **Late taps:** milestones crossed by late taps are **skipped for good**. Beat last year crossed by late taps fires on the **next live tap** as "WE BEAT LAST YEAR! 🏆", without a kid number.
 
+**Modules:** [Ledger](../modules.md#1-ledger-server), [Celebration director](../modules.md#6-celebration-director-tv), [Sound engine](../modules.md#7-sound-engine-tv).
+
 ## Acceptance criteria
 
 - [ ] Kid #50 shows the milestone chip, #100 a takeover, #347 (against 2025) the Beat-last-year takeover

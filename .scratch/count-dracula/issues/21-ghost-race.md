@@ -15,6 +15,8 @@ Tonight's count races last year's ghost on the TV. See [spec §2 Ghost line / Cl
 - **Pace line** under the hero count: "👻 4 ahead of last year's ghost" / "behind", becoming "🏆 New record!" once tonight passes the ghost's total.
 - Undo, delete and late taps update the chart quietly, in the same pass as the count.
 
+**Modules:** [Night maths](../modules.md#3-night-maths-shared).
+
 ## Acceptance criteria
 
 - [ ] The ghost line matches the 2025 buckets (for example 86 at 6:00, 193 at 7:00, flat at 346 after 8:00)

@@ -15,6 +15,8 @@ Top to bottom: a header with tonight's total and "N untagged", a 3-column **cost
 - **"+ New"** opens a panel with a name field, an emoji choice and a − / + stepper for "How many already seen before this one?", capped at the untagged count, with a preview of the kid numbers it will re-tag. **Create** applies **Catch-up** ([§2](../spec.md#2-domain-model)): it re-tags the N most recent untagged kids and adds the kid at the door with the new tag, so the total goes up by exactly 1 and timestamps are untouched.
 - New SSE deltas: `tag.added` and `kid.retagged`, so every phone's grid and counts stay in sync.
 
+**Modules:** [Ledger](../modules.md#1-ledger-server), [Outbox and door view](../modules.md#5-outbox-and-door-view-phone).
+
 ## Acceptance criteria
 
 - [ ] The layout matches the Thumb pad prototype on a phone-sized screen, and the grid scrolls when there are many tags

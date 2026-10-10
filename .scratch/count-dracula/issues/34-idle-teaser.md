@@ -15,6 +15,8 @@ Quiet stretches still give the porch something to read. See [spec §7 States](..
   - "Next milestone: kid #150!" (only when milestones are switched on)
 - It's **silent**. Any tap cancels it immediately. It doesn't run on the ended screen or while the TV is disconnected.
 
+**Modules:** [Night maths](../modules.md#3-night-maths-shared), [Live state](../modules.md#4-live-state-phone--tv), [Celebration director](../modules.md#6-celebration-director-tv).
+
 ## Acceptance criteria
 
 - [ ] 45 s hands-off shows the teaser, and it repeats every ~45 s with rotating lines

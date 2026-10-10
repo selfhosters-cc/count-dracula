@@ -20,6 +20,8 @@ When the night is ended, the TV shows one static recap in the Scoreboard frame, 
 - A straggler tap plays its pop, then the screen returns to the recap.
 - It renders from stored data, so **`/tv?event=<id>`** shows any past event's recap, and Setup's past-events list gets a **View recap** link.
 
+**Modules:** [Night maths](../modules.md#3-night-maths-shared), [Celebration director](../modules.md#6-celebration-director-tv).
+
 ## Acceptance criteria
 
 - [ ] Ending the night shows the recap with every card filled from real data

@@ -16,6 +16,8 @@ Taps are POSTs that carry the join key and a phone-generated `{id, tagId, tapped
 
 Each device opens one SSE stream: a full snapshot (live event, tags, kids, ghost buckets, settings, current `seq`), then `id: <seq>` deltas (`kid.added` here). Use `server.timeout(req, 0)` and send a `:` heartbeat every 15 s.
 
+**Modules:** [Ledger](../modules.md#1-ledger-server), [SSE hub](../modules.md#2-sse-hub-server), [Live state](../modules.md#4-live-state-phone--tv), [Night maths](../modules.md#3-night-maths-shared).
+
 ## Acceptance criteria
 
 - [ ] A fresh database ends up with "Rehearsal" live (exactly one live event) and the 2025 counts-only event holding 346 kids across five buckets

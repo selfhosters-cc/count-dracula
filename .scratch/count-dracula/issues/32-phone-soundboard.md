@@ -13,6 +13,8 @@ Six scare buttons in the ☰ menu that play on the TV, behind the Must #7 featur
 - Each button has a TV visual, such as "MWAHAHAHA!" / "AWOOOOOO!" text with bats or wolves flying across. It **doesn't interrupt the celebration queue**.
 - The soundboard **ducks the automatic sounds** and plays over everything **except the golden fanfare**, which nothing interrupts.
 
+**Modules:** [Ledger](../modules.md#1-ledger-server), [Celebration director](../modules.md#6-celebration-director-tv), [Sound engine](../modules.md#7-sound-engine-tv).
+
 ## Acceptance criteria
 
 - [ ] All 6 buttons show their configured labels and play on the TV within a moment of the press

@@ -15,7 +15,9 @@ The TV becomes porch-audible. See [spec §10](../spec.md#10-sound) and [§7 Stat
 - **Merged pop:** a rising scale, one note per merged kid, capped.
 - **Late-tap roll-up:** one soft tick. **Undo / delete:** silence.
 - **Ambience:** a quiet wind/cricket/owl loop all night that **ducks** under celebrations and keeps the TV's audio path awake.
-- A small sound API (play a sting, duck, mute groups) that later tickets use for stings, the soundboard and mutes.
+- A small sound API (`unlock`, `cue(name)`, `mix({volume, mutes})`) that later tickets use for stings, the soundboard and mutes. Ducking is **inside** the engine: each cue knows its category, so callers never duck by hand. See [modules §7](../modules.md#7-sound-engine-tv).
+
+**Modules:** [Sound engine](../modules.md#7-sound-engine-tv).
 
 ## Acceptance criteria
 
