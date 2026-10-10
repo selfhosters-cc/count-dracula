@@ -359,3 +359,20 @@ describe('export', () => {
     expect(ghost.label).toBe('2026')
   })
 })
+
+describe('past events for /tv?event=<id>', () => {
+  test("the snapshot of a past event, read without a key; an unknown event is 404", async () => {
+    const app = start()
+    await postTap(app, aTap('a'))
+    const rehearsal = app.ledger.snapshot().event.id
+    const [{ event }] = app.ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
+    app.ledger.apply({ type: 'goLive', eventId: event.id })
+
+    const past = await (await fetch(`${app.url}/api/snapshot?event=${rehearsal}`)).json()
+
+    expect(past.event).toMatchObject({ name: 'Rehearsal', frozen: true })
+    expect(past.kids).toHaveLength(1)
+    expect(past.recap).not.toBeNull()
+    expect((await fetch(`${app.url}/api/snapshot?event=99999`)).status).toBe(404)
+  })
+})

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { atEventTime, eventNow, ghost, leaderboard, minuteOfDay, pace, releaseOpen, slots, tagColour, toBuckets } from './night-maths.js'
+import { atEventTime, biggestCrew, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, releaseOpen, slots, tagColour, toBuckets, visits } from './night-maths.js'
 import seed2025 from '../config/2025-counts.json'
 
 describe('tagColour', () => {
@@ -161,5 +161,41 @@ describe('leaderboard', () => {
     const board = leaderboard(kids({ 3: 2, 2: 2 }), tags.slice(0, 4))
 
     expect(board.map((r) => [r.name, r.count])).toEqual([['Ghost', 2], ['Bluey', 2], ['Witch', 0], ['Spidey', 0]])
+  })
+})
+
+describe('recap stats', () => {
+  const HOUR = 3_600_000
+  const local = (hh, mm, ss = 0) => new Date(2026, 9, 31, hh, mm, ss).getTime()
+  const kidsAt = (...times) => times.map((tappedAt, i) => ({ id: `k${i}`, tappedAt, tagId: null }))
+
+  test('peak half-hour: the busiest aligned half-hour in event time, earliest on a tie', () => {
+    const kids = kidsAt(local(18, 5), local(18, 50), local(19, 1), local(19, 10), local(19, 29), local(19, 31), local(19, 45))
+
+    expect(peakHalfHour(kids)).toEqual({ start: '19:00', end: '19:30', count: 3 })
+    expect(peakHalfHour(kidsAt(local(18, 5), local(19, 5)))).toEqual({ start: '18:00', end: '18:30', count: 1 })
+    expect(peakHalfHour(kids.map((k) => ({ ...k, tappedAt: k.tappedAt - 3 * HOUR })), 3 * HOUR)).toEqual({ start: '19:00', end: '19:30', count: 3 })
+    expect(peakHalfHour([])).toBeNull()
+  })
+
+  test('visits: kids whose taps fall within the window of each other, chained', () => {
+    const kids = kidsAt(local(19, 0, 0), local(19, 0, 10), local(19, 0, 22), local(19, 1, 0), local(19, 1, 5))
+
+    expect(visits(kids, 15_000).map((v) => v.length)).toEqual([3, 2])
+    expect(visits(kids, 5_000).map((v) => v.length)).toEqual([1, 1, 1, 2])
+  })
+
+  test('biggest crew: the largest visit and when it started; changing the window regroups it', () => {
+    const kids = kidsAt(local(19, 0, 0), local(19, 0, 10), local(19, 0, 22), local(19, 12, 0), local(19, 12, 3), local(19, 12, 30), local(19, 12, 40))
+
+    expect(biggestCrew(kids, 15_000)).toEqual({ size: 3, at: local(19, 0, 0) })
+    expect(biggestCrew(kids, 30_000)).toEqual({ size: 4, at: local(19, 12, 0) })
+  })
+
+  test('costume of the night: the most-worn costume, or none', () => {
+    const tags = [{ id: 1, name: 'Witch', emoji: '🧙', order: 1 }, { id: 2, name: 'Ghost', emoji: '👻', order: 2 }]
+
+    expect(costumeOfTheNight([{ tagId: 2 }, { tagId: 2 }, { tagId: 1 }, { tagId: null }], tags)).toMatchObject({ name: 'Ghost', count: 2 })
+    expect(costumeOfTheNight([{ tagId: null }], tags)).toBeNull()
   })
 })

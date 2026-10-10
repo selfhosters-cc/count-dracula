@@ -93,7 +93,7 @@ function applyDelta(state, delta) {
       return { ...state, seq: delta.seq, kids }
     }
     case 'event.ended':
-      return { ...state, seq: delta.seq, event: { ...state.event, ended: delta.ended } }
+      return { ...state, seq: delta.seq, event: { ...state.event, ended: delta.ended }, recap: delta.recap }
     case 'mix.changed':
       return { ...state, seq: delta.seq, settings: { ...state.settings, mix: delta.mix } }
     case 'tag.added':

@@ -134,6 +134,20 @@ export function openLedger(db, config) {
     }
   }
 
+  // The recap's golden card (spec §7 Ended): every number revealed, but only once the night is over —
+  // ended, or a frozen past event. While the night is on, the numbers never leave the Ledger.
+  function recapOf(event) {
+    if (!(event.ended || event.frozen) || event.counts_only) return null
+    const tickets = db
+      .query(`
+        SELECT t.number, t.state, k.number AS kidNumber
+        FROM golden_tickets t LEFT JOIN kids k ON k.id = t.kid_id
+        WHERE t.event_id = ? ORDER BY t.number
+      `)
+      .all(event.id)
+    return { tickets }
+  }
+
   // All a client ever learns about the tickets: how many are left, and whether the next kid wins one.
   function goldenSummary(event) {
     if (!switches.goldenTickets) return null
@@ -366,7 +380,7 @@ export function openLedger(db, config) {
         UPDATE golden_tickets SET expired_from = state, state = 'expired'
         WHERE event_id = ? AND kid_id IS NULL AND state IN ('hidden', 'rolled', 'released')
       `).run(event.id)
-      return [{ type: 'event.ended', ended: true, golden: goldenSummary(event) }]
+      return [{ type: 'event.ended', ended: true, golden: goldenSummary(event), recap: recapOf(eventById(event.id)) }]
     },
 
     // "Resume the night": expired tickets come back exactly as they were.
@@ -375,7 +389,7 @@ export function openLedger(db, config) {
       if (!event.ended) return []
       db.query('UPDATE events SET ended = 0 WHERE id = ?').run(event.id)
       db.query("UPDATE golden_tickets SET state = expired_from, expired_from = NULL WHERE event_id = ? AND state = 'expired'").run(event.id)
-      return [{ type: 'event.ended', ended: false, golden: goldenSummary(event) }]
+      return [{ type: 'event.ended', ended: false, golden: goldenSummary(event), recap: null }]
     },
 
     // ---- The ☰ menu's TV controls (spec §5): any phone with the join key.
@@ -604,7 +618,9 @@ export function openLedger(db, config) {
           live: event.live === 1,
           countsOnly: event.counts_only === 1,
           ended: event.ended === 1,
+          frozen: event.frozen === 1,
           clockShiftMs: event.clock_shift_ms,
+          visitWindowMs: event.visit_window_ms,
         },
         tags: db.query('SELECT * FROM tags WHERE event_id = ? ORDER BY sort_order').all(event.id).map(toTag),
         kids: db
@@ -613,6 +629,7 @@ export function openLedger(db, config) {
           .map(toKid),
         ghost: ghostOf(event),
         golden: goldenSummary(event),
+        recap: recapOf(event),
         settings: { switches, mix: currentMix(), lanUrl: lanUrl(), soundboard: switches.soundboard ? soundboard : [] },
         seq,
       }

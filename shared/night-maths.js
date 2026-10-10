@@ -103,3 +103,41 @@ export function leaderboard(kids, tags, size = 5) {
     .slice(0, size)
     .map((t) => ({ id: t.id, name: t.name, emoji: t.emoji, colour: tagColour(t.order), count: counts.get(t.id) }))
 }
+
+// ---- the end-of-night recap (spec §7 Ended)
+
+// The busiest aligned half-hour in event time ("7:00–7:30 · 104 kids"); the earliest wins a tie.
+export function peakHalfHour(kids, shiftMs = 0) {
+  const counts = new Map()
+  for (const k of kids) {
+    const slot = Math.floor(minuteOfDay(eventNow(k.tappedAt, shiftMs)) / 30) * 30
+    counts.set(slot, (counts.get(slot) ?? 0) + 1)
+  }
+  if (!counts.size) return null
+  const [slot, count] = [...counts].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]
+  return { start: hhmm(slot), end: hhmm(slot + 30), count }
+}
+
+// Visits (spec §2): kids whose taps fall within the Visit window of each other, chained in tap order.
+export function visits(kids, windowMs) {
+  const sorted = [...kids].sort((a, b) => a.tappedAt - b.tappedAt)
+  const groups = []
+  for (const k of sorted) {
+    const last = groups.at(-1)
+    if (last && k.tappedAt - last.at(-1).tappedAt <= windowMs) last.push(k)
+    else groups.push([k])
+  }
+  return groups
+}
+
+// "Biggest crew: 9 kids at once · 7:12pm" — the largest visit and when it began.
+export function biggestCrew(kids, windowMs) {
+  const crew = visits(kids, windowMs).reduce((best, v) => (v.length > (best?.length ?? 0) ? v : best), null)
+  return crew ? { size: crew.length, at: crew[0].tappedAt } : null
+}
+
+// "Costume of the night 👑": the most-worn costume (ties by order), or none if nobody wore one.
+export function costumeOfTheNight(kids, tags) {
+  const top = leaderboard(kids, tags, 1)[0]
+  return top?.count ? top : null
+}

@@ -5,7 +5,7 @@ import { createDirector } from '/director.js'
 import { animate } from '/vendor/motion/motion.js'
 import confettiLib, { create as createConfetti } from '/vendor/canvas-confetti/confetti.module.js'
 import { createRaceChart } from '/race-chart.js'
-import { eventNow, ghost, leaderboard, minuteOfDay, pace, tagColour } from '/shared/night-maths.js'
+import { biggestCrew, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, tagColour } from '/shared/night-maths.js'
 import { createSound } from '/sound.js'
 import { createWebAudio } from '/web-audio.js'
 
@@ -100,7 +100,7 @@ const TAKEOVERS = {
   golden: ({ number }) => ['🎫 Golden ticket 🎫', `KID #${number} WINS!`, 'You found a golden ticket! 🍫'],
   milestone: ({ number }) => ['Milestone', `KID #${number}!`, `${number} trick-or-treaters tonight 🎃`],
   'beat-last-year': () => {
-    const g = live.state?.ghost
+    const g = live?.state?.ghost
     return ['New record', 'WE BEAT LAST YEAR! 🏆', g ? `${g.label}: ${g.total} kids. Tonight: ${live.state.kids.length} and counting!` : '']
   },
 }
@@ -140,6 +140,7 @@ const race = createRaceChart($('race'))
 
 function paceText(state) {
   const g = state.ghost
+  if (inRecap(state)) return verdict(state)
   if (!g) return '' // Race against None: no ghost, no pace line
   const now = minuteOfDay(eventNow(Date.now(), state.event.clockShiftMs ?? 0))
   const p = pace(state.kids.length, ghost(g.buckets)(now), g.total)
@@ -161,7 +162,7 @@ function showNewCostume({ name, emoji, count }) {
 // ---- the soundboard (Must #7): its own layer, so it never waits for or interrupts the queue
 const FLYERS = ['🦇', '🐺', '🎃', '👻', '🚪', '⚡']
 function playBoard({ slot, label }) {
-  const entry = live.state?.settings.soundboard.find((s) => s.slot === slot)
+  const entry = live?.state?.settings.soundboard.find((s) => s.slot === slot)
   sound.cue(`board:${slot}`) // the engine keeps it out of the golden fanfare
   const shout = Object.assign(document.createElement('div'), { className: 'shout', textContent: entry?.shout ?? `${label.toUpperCase()}!` })
   $('fx').append(shout)
@@ -293,14 +294,58 @@ function renderLeaderboard(state) {
   })
 }
 
-// ---- 🌙 the ended night: "THAT'S A WRAP" in the top bar (the recap replaces the rest in ticket 36)
+// ---- 🌙 the ended night: "THAT'S A WRAP" in the top bar, and with Must #9 on, the recap
 let wasEnded = false
+const over = (state) => !!(state.event.ended || state.event.frozen)
+const inRecap = (state) => over(state) && state.settings.switches.recap
 function renderEnded(state, cause) {
-  const ended = !!state.event.ended
+  const ended = over(state)
   $('board').classList.toggle('ended', ended)
+  $('board').classList.toggle('recap', inRecap(state))
   $('title').textContent = ended ? `🎃 That's a wrap — ${state.event.name}` : 'Count Dracula'
+  if (inRecap(state)) renderCards(state)
   if (ended !== wasEnded) sound.ended(ended, { quietly: cause === 'snapshot' })
   wasEnded = ended
+}
+
+// "🏆 New record! +23 on 2025" / "👻 2025 wins this year by 12"
+function verdict(state) {
+  const g = state.ghost
+  if (!g) return ''
+  const gap = state.kids.length - g.total
+  if (gap > 0) return `🏆 New record! +${gap} on ${g.label}`
+  if (gap < 0) return `👻 ${g.label} wins this year by ${-gap}`
+  return `🤝 Tied with ${g.label} at ${g.total}`
+}
+
+// The four recap cards, from stored data: peak half-hour, biggest crew, costume of the night, golden tickets.
+function renderCards(state) {
+  const shift = state.event.clockShiftMs ?? 0
+  const clock = (hhmm) => {
+    const [h, m] = hhmm.split(':').map(Number)
+    return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')}`
+  }
+  const at = (ms) => new Date(ms + shift).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(' ', '').toLowerCase()
+  const card = (k, v, s = '') => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`
+  const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+  const peak = peakHalfHour(state.kids, shift)
+  const crew = biggestCrew(state.kids, state.event.visitWindowMs ?? 15_000)
+  const top = costumeOfTheNight(state.kids, state.tags)
+  const tickets = (state.recap?.tickets ?? [])
+    .map((t) =>
+      t.kidNumber != null
+        ? `<span>#${t.kidNumber}${t.state === 'rolled' ? ` <small>rolled forward from #${t.number}</small>` : ''}</span>`
+        : `<span class="unclaimed">#${t.number}</span>`,
+    )
+    .join('')
+  $('cards').innerHTML = [
+    card('Peak half-hour', peak ? `${clock(peak.start)}–${clock(peak.end)}` : '—', peak ? `${peak.count} kids` : ''),
+    card('Biggest crew', crew ? `${crew.size} kids at once` : '—', crew ? at(crew.at) : ''),
+    card('Costume of the night 👑', top ? esc(`${top.emoji ?? ''} ${top.name}`.trim()) : '—', top ? `${top.count} kids` : ''),
+    state.settings.switches.goldenTickets
+      ? `<div class="card"><div class="k">🎫 Golden tickets</div><div class="tickets">${tickets || '<span class="unclaimed">none drawn</span>'}</div></div>`
+      : card('Kids tonight', state.kids.length),
+  ].join('')
 }
 
 // The only golden thing the TV knows before a win: how many are left (spec §9).
@@ -319,7 +364,9 @@ function applyMix(state) {
 }
 
 function renderRace(state, animate = true) {
-  race.update(state, Date.now(), animate)
+  // A recap's chart is the finished race: "now" is the night's last tap, not today's clock.
+  const until = inRecap(state) && state.kids.length ? Math.max(...state.kids.map((k) => k.tappedAt)) : Date.now()
+  race.update(state, until, animate)
   $('pace').textContent = paceText(state)
   $('legend').innerHTML = state.ghost
     ? `<span><i style="border-top: 6px solid var(--pumpkin)"></i>Tonight</span>` +
@@ -327,32 +374,43 @@ function renderRace(state, animate = true) {
     : ''
 }
 
-// ---- live state
-const live = connectLive()
+// ---- live state (or, with /tv?event=<id>, one past night's recap from stored data)
+const pastEventId = new URLSearchParams(location.search).get('event')
+const live = pastEventId ? null : connectLive()
 let wasDisconnected = false
 
-live.on(({ state, cause, delta }) => {
+function renderSnapshot(state, cause) {
+  // First load shows the count as is; a reconnect rolls up quietly to the new total.
+  showCount(state.kids.length, wasDisconnected && shown != null ? 'roll' : 'set')
+  wasDisconnected = false
+  renderRace(state)
+  renderGoldenPill(state)
+  renderLeaderboard(state)
+  renderPatch(state)
+  applyMix(state)
+  loadBoardFiles(state)
+  renderEnded(state, cause)
+}
+
+if (pastEventId) {
+  $('start').hidden = true // a recap to look at: no sound needed
+  fetch(`/api/snapshot?event=${encodeURIComponent(pastEventId)}`)
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then((state) => renderSnapshot(state, 'snapshot'))
+    .catch(() => ($('title').textContent = 'No such event'))
+}
+
+live?.on(({ state, cause, delta }) => {
   if (cause === 'disconnected') {
     wasDisconnected = true
     return // stay frozen: no error screen, spinner or red
   }
+  if (cause === 'snapshot') return renderSnapshot(state, cause)
   const total = state.kids.length
-  if (cause === 'snapshot') {
-    // First load shows the count as is; a reconnect rolls up quietly to the new total.
-    showCount(total, wasDisconnected && shown != null ? 'roll' : 'set')
-    wasDisconnected = false
-    renderRace(state)
-    renderGoldenPill(state)
-    renderLeaderboard(state)
-    renderPatch(state)
-    applyMix(state)
-    loadBoardFiles(state)
-    renderEnded(state, cause)
-    return
-  }
   if (delta.type === 'event.ended') {
     renderGoldenPill(state) // End expires the tickets left; Resume brings them back
-    return renderEnded(state, cause)
+    renderEnded(state, cause)
+    return renderRace(state) // the hero's pace line becomes the verdict (and back on Resume)
   }
   if (delta.type === 'soundboard') return playBoard(delta)
   if (delta.type === 'mix.changed') return applyMix(state)
@@ -360,6 +418,7 @@ live.on(({ state, cause, delta }) => {
   renderGoldenPill(state)
   renderLeaderboard(state)
   renderPatch(state)
+  if (inRecap(state)) renderCards(state) // a straggler: it pops, and the recap keeps up
   if (delta.type === 'kid.added') {
     if (!delta.kid.late) born.set(delta.kid.id, performance.now()) // late kids appear quietly
     showCount(total, delta.kid.late ? 'roll' : 'bump')
@@ -375,6 +434,7 @@ live.on(({ state, cause, delta }) => {
 
 // ---- the 🦇 chip and the clock
 setInterval(() => {
+  if (!live) return
   $('catching-up').classList.toggle('on', !live.connected && live.disconnectedFor >= CATCHING_UP_AFTER_MS)
   const shift = live.state?.event.clockShiftMs ?? 0 // the clock shows event time
   $('clock').textContent = new Date(eventNow(Date.now(), shift)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
@@ -382,5 +442,5 @@ setInterval(() => {
 
 // The ghost marker and tonight's line creep along with the clock.
 setInterval(() => {
-  if (live.state && live.connected) renderRace(live.state, false)
+  if (live?.state && live.connected && !over(live.state)) renderRace(live.state, false)
 }, 5_000)

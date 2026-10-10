@@ -65,6 +65,19 @@
     .lb-val { position: absolute; top: 50%; transform: translateY(-50%); font-family: var(--f-display); padding-left: .4em;
       transition: left .6s cubic-bezier(.4, 1.4, .5, 1); }
     .lb-empty { color: var(--ink-dim); margin-top: .5em; }
+    /* The recap: the leaderboard row becomes four stat cards (spec §7 Ended) */
+    .cards { display: none; grid-template-columns: repeat(4, 1fr); gap: 1.4vw; flex: 1; margin-top: .5em; }
+    #board.recap .cards { display: grid; }
+    #board.recap .rows, #board.recap .boardbox > .eyebrow { display: none; }
+    #board.recap.no-leaderboard { grid-template-rows: auto 1fr 22vh 10vh; }
+    #board.recap.no-leaderboard .boardbox { display: flex; }
+    .card { background: var(--night-2); border-radius: 14px; padding: 1.4vh 1.2vw; display: flex; flex-direction: column; gap: .6vh; min-width: 0; }
+    .card .k { color: var(--ink-dim); font-weight: 600; letter-spacing: .1em; text-transform: uppercase; font-size: clamp(10px, 1vw, 18px); }
+    .card .v { font-family: var(--f-display); font-size: clamp(16px, 2vw, 38px); line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
+    .card .s { color: var(--ink-dim); font-size: clamp(11px, 1.1vw, 20px); }
+    .card .tickets { display: flex; flex-wrap: wrap; gap: .3em .6em; font-family: var(--f-display); font-size: clamp(14px, 1.6vw, 30px); color: #ffcf3a; }
+    .card .tickets .unclaimed { color: var(--ink-dim); opacity: .55; }
+    .card .tickets small { font-family: var(--f-body); font-size: .5em; color: var(--ink-dim); }
     .patchbox { grid-column: 1 / -1; min-width: 0; border-top: 2px solid var(--grid); }
 
     #count { display: inline-block; transform-origin: left center; }
@@ -130,6 +143,7 @@
     <div class="boardbox">
       <div class="eyebrow">Costume leaderboard</div>
       <div class="rows" id="leaderboard"></div>
+      <div class="cards" id="cards"></div>
     </div>
     <div class="patchbox"><canvas id="patch" aria-label="Pumpkin patch: one pumpkin per kid"></canvas></div>
   </section>

@@ -24,10 +24,10 @@ When the night is ended, the TV shows one static recap in the Scoreboard frame, 
 
 ## Acceptance criteria
 
-- [ ] Ending the night shows the recap with every card filled from real data
-- [ ] Changing the Visit window regroups Biggest crew
-- [ ] The golden card shows won, unclaimed (greyed) and rolled-forward numbers correctly
-- [ ] A straggler pops, then the recap returns with the count updated
-- [ ] `/tv?event=<id>` renders a frozen past event's recap, and View recap links to it
-- [ ] Recap total = TV count = CSV non-deleted rows
-- [ ] Peak half-hour and Visit grouping are unit-tested
+- [x] Ending the night shows the recap with every card filled from real data
+- [x] Changing the Visit window regroups Biggest crew
+- [x] The golden card shows won, unclaimed (greyed) and rolled-forward numbers correctly
+- [x] A straggler pops, then the recap returns with the count updated
+- [x] `/tv?event=<id>` renders a frozen past event's recap, and View recap links to it
+- [x] Recap total = TV count = CSV non-deleted rows
+- [x] Peak half-hour and Visit grouping are unit-tested

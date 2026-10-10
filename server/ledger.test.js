@@ -162,7 +162,9 @@ describe('snapshot', () => {
         live: true,
         countsOnly: false,
         ended: false,
+        frozen: false,
         clockShiftMs: 0,
+        visitWindowMs: 15_000,
       },
       tags: [],
       kids: [{ id: 'kid-a', number: 1, tagId: null, phoneName: 'Mom', tappedAt: 5_000, late: false, golden: false, source: 'tap' }],
@@ -179,6 +181,7 @@ describe('snapshot', () => {
         ],
       },
       golden: { left: 5, nextIsGolden: false },
+      recap: null,
       settings: { switches: expect.any(Object), mix: expect.any(Object), lanUrl: null, soundboard: [] },
       seq: 1,
     })
@@ -1083,5 +1086,59 @@ describe('End and Resume the night', () => {
     expect(ledger.apply({ type: 'resume' })).toEqual([])
     ledger.apply({ type: 'end' })
     expect(ledger.apply({ type: 'end' })).toEqual([])
+  })
+})
+
+describe('the recap reveals the golden numbers, and only after the night', () => {
+  function night() {
+    let clockMs = 1_000_000_000
+    const ledger = openLedger(new Database(':memory:'), {
+      ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] },
+      random: () => 0, // #3, #10, #17
+      now: () => clockMs,
+      switches: { milestones: false },
+    })
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Night' })
+    ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: ledger.snapshot().ghost.eventId, goldenCount: 3 })
+    ledger.apply({ type: 'goLive', eventId: event.id })
+    let i = 0
+    const live = () => ledger.apply(tap(`k${++i}`, { tappedAt: clockMs }))
+    const late = () => ledger.apply(tap(`k${++i}`, { tappedAt: clockMs - 60_000 }))
+    for (let n = 1; n <= 3; n++) live() // #3 won live
+    for (let n = 4; n <= 10; n++) late() // #10 lands late…
+    live() // …and rolls forward to #11
+    return { ledger, eventId: event.id }
+  }
+
+  test('nothing while the night is on', () => {
+    const { ledger } = night()
+
+    expect(ledger.snapshot().recap).toBeNull()
+  })
+
+  test('once ended: every number, won, rolled forward (with its winner) or unclaimed', () => {
+    const { ledger } = night()
+    const [ended] = ledger.apply({ type: 'end' })
+
+    expect(ended.recap).toEqual(ledger.snapshot().recap) // the TV gets it the moment the night ends
+    expect(ledger.snapshot().recap).toEqual({
+      tickets: [
+        { number: 3, state: 'won', kidNumber: 3 },
+        { number: 10, state: 'rolled', kidNumber: 11 },
+        { number: 17, state: 'expired', kidNumber: null },
+      ],
+    })
+  })
+
+  test("a past event's recap renders from stored data", () => {
+    const { ledger, eventId } = night()
+    const [{ event: next }] = ledger.apply({ type: 'createEvent', name: 'Next year' })
+    ledger.apply({ type: 'goLive', eventId: next.id })
+
+    const past = ledger.snapshot(eventId)
+
+    expect(past.event).toMatchObject({ name: 'Night', live: false, frozen: true })
+    expect(past.kids).toHaveLength(11)
+    expect(past.recap.tickets.map((t) => t.state)).toEqual(['won', 'rolled', 'hidden'])
   })
 })

@@ -19,7 +19,13 @@ export function startServer({ configPath, port, heartbeatMs }) {
   const hub = createHub({ heartbeatMs })
 
   const routes = {
-    'GET /api/snapshot': () => Response.json(ledger.snapshot()),
+    // ?event=<id> reads any event (a past night's recap on /tv?event=<id>); otherwise the live one.
+    'GET /api/snapshot': (req) => {
+      const id = new URL(req.url).searchParams.get('event')
+      if (id == null) return Response.json(ledger.snapshot())
+      if (!ledger.events().some((e) => e.id === Number(id))) return notFound()
+      return Response.json(ledger.snapshot(Number(id)))
+    },
     'GET /api/stream': (req, server) => hub.attach(req, server, () => ledger.snapshot()),
     'POST /api/taps': write(async (req) => {
       const { id, tagId, tappedAt, phoneName } = await req.json()
