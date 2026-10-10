@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Count Dracula</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #eee;
+           display: flex; flex-direction: column; align-items: center; gap: 1.5rem; padding: 2rem 1rem; }
+    #count { font-size: 5rem; font-weight: 800; }
+    #add { font-size: 2rem; padding: 1.5rem 3rem; border: 0; border-radius: 1rem; background: #f60; color: #111; }
+    #status { min-height: 1.5em; opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <div id="event"></div>
+  <div id="count">–</div>
+  <button id="add">+1 Kid</button>
+  <div id="status"></div>
+  <script type="module">
+    import { connectLive } from '/live.js'
+
+    // The join key arrives as ?key=… once (QR code or tailnet hand-off) and is remembered.
+    const params = new URLSearchParams(location.search)
+    if (params.get('key')) localStorage.setItem('cd.joinKey', params.get('key'))
+    if (params.get('name')) localStorage.setItem('cd.phoneName', params.get('name'))
+    const joinKey = localStorage.getItem('cd.joinKey') ?? ''
+    const phoneName = localStorage.getItem('cd.phoneName') ?? 'Phone'
+
+    const $ = (id) => document.getElementById(id)
+    const live = connectLive()
+    live.on(({ state }) => {
+      $('event').textContent = state?.event.name ?? ''
+      $('count').textContent = state ? state.kids.length : '–'
+    })
+
+    // Plain HTTP on the LAN: no crypto.randomUUID, so build a v4 UUID by hand.
+    function uuid() {
+      const b = crypto.getRandomValues(new Uint8Array(16))
+      b[6] = (b[6] & 0x0f) | 0x40
+      b[8] = (b[8] & 0x3f) | 0x80
+      const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+      return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+    }
+
+    $('add').addEventListener('click', async () => {
+      const tap = { id: uuid(), tagId: null, tappedAt: Date.now(), phoneName }
+      try {
+        const res = await fetch('/api/taps', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Join-Key': joinKey },
+          body: JSON.stringify(tap),
+        })
+        $('status').textContent = res.ok ? '' : res.status === 403 ? 'Wrong join key' : `Error ${res.status}`
+      } catch {
+        $('status').textContent = 'Not sent: no connection'
+      }
+    })
+  </script>
+</body>
+</html>

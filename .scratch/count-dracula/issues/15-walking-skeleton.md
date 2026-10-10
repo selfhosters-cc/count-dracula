@@ -20,11 +20,11 @@ Each device opens one SSE stream: a full snapshot (live event, tags, kids, ghost
 
 ## Acceptance criteria
 
-- [ ] A fresh database ends up with "Rehearsal" live (exactly one live event) and the 2025 counts-only event holding 346 kids across five buckets
-- [ ] Writes without the right join key are rejected; reads (snapshot/SSE) need no key
-- [ ] POSTing the same tap ID twice stores one kid, returns 200 both times and broadcasts once
-- [ ] Kid numbers equal the live count at arrival, with tests covering an undone kid's number being reused by the next arrival
-- [ ] The phone page's "+1 Kid" bumps the `/tv` count live, and a TV that reconnects gets a fresh snapshot with the right count
-- [ ] The SSE connection survives more than 2 minutes idle (heartbeat plus timeout disabled)
-- [ ] Config file values (PIN, switches) are read at startup and the switches appear in the snapshot
-- [ ] Server-side tests cover idempotent insert, numbering and the snapshot shape
+- [x] A fresh database ends up with "Rehearsal" live (exactly one live event) and the 2025 counts-only event holding 346 kids across five buckets
+- [x] Writes without the right join key are rejected; reads (snapshot/SSE) need no key
+- [x] POSTing the same tap ID twice stores one kid, returns 200 both times and broadcasts once
+- [x] Kid numbers equal the live count at arrival, with tests covering an undone kid's number being reused by the next arrival
+- [x] The phone page's "+1 Kid" bumps the `/tv` count live, and a TV that reconnects gets a fresh snapshot with the right count
+- [x] The SSE connection survives more than 2 minutes idle (heartbeat plus timeout disabled)
+- [x] Config file values (PIN, switches) are read at startup and the switches appear in the snapshot
+- [x] Server-side tests cover idempotent insert, numbering and the snapshot shape

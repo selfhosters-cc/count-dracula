@@ -1,0 +1,23 @@
+{
+  "adminPin": "1031",
+  "port": 3131,
+  "dbPath": "../count-dracula.sqlite",
+  "ghostSeed": "2025-counts.json",
+  "switches": {
+    "milestones": true,
+    "goldenTickets": true,
+    "costumeLeaderboard": true,
+    "newTrendAlert": true,
+    "soundboard": true,
+    "pumpkinPatch": true,
+    "recap": true
+  },
+  "soundboard": [
+    { "label": "Evil laugh", "file": "sounds/board-1.mp3" },
+    { "label": "Wolf howl", "file": "sounds/board-2.mp3" },
+    { "label": "Scream", "file": "sounds/board-3.mp3" },
+    { "label": "Creaky door", "file": "sounds/board-4.mp3" },
+    { "label": "Thunder", "file": "sounds/board-5.mp3" },
+    { "label": "Bats", "file": "sounds/board-6.mp3" }
+  ]
+}

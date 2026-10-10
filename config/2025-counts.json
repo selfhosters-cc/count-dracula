@@ -1,0 +1,11 @@
+{
+  "name": "Halloween 2025 (counts)",
+  "date": "2025-10-31",
+  "buckets": [
+    { "start": "17:42", "end": "18:00", "count": 14 },
+    { "start": "18:00", "end": "18:30", "count": 72 },
+    { "start": "18:30", "end": "19:00", "count": 107 },
+    { "start": "19:00", "end": "19:30", "count": 119 },
+    { "start": "19:30", "end": "20:00", "count": 34 }
+  ]
+}
