@@ -12,3 +12,4 @@ Source: the user, 2026-10-10. Times are local evening (pm).
 
 - **Total: 346 kids.** First kid around 17:42, last bucket ends at 20:00.
 - Peak: 119 kids in 30 min (~4/min on average, so bursts will be much faster).
+- **The drop-off was natural:** kids stopped coming. Candy didn't run out and the porch light stayed on, so 346 shows real demand and is a fair target to beat. The ghost line stays flat at 346 after 20:00.

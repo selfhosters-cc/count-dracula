@@ -30,6 +30,7 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 
 <!-- one line per closed ticket: [title](issues/NN-slug.md) — gist -->
 
+- [Last year's numbers](issues/01-last-years-numbers.md) — 346 kids from 17:42 to 20:00, peak 119 in 19:00–19:30; natural drop-off, so 346 is a fair target; ghost line flat after 20:00.
 - [Live-update stack](issues/02-live-update-stack.md) — Bun + bun:sqlite, POST taps + SSE with a snapshot on connect, phone-generated IDs for idempotent offline taps, no-build TV with Chart.js/Motion/confetti.
 - [Laptop kiosk setup](issues/03-laptop-kiosk-setup.md) — "Start the night" click plus Chrome autoplay flag and `--kiosk`; OS-level keep-awake; 1080p60 with TV "Just Scan"; Web Audio with capped overlaps; 11-step rehearsal checklist.
 
