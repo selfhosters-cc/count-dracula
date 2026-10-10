@@ -1,0 +1,4 @@
+/* Latin subsets from Google Fonts, vendored so the TV loads nothing from a CDN on the night. */
+@font-face { font-family: 'Bungee'; font-style: normal; font-weight: 400; font-display: block; src: url('bungee.woff2') format('woff2'); }
+@font-face { font-family: 'Creepster'; font-style: normal; font-weight: 400; font-display: block; src: url('creepster.woff2') format('woff2'); }
+@font-face { font-family: 'Fredoka'; font-style: normal; font-weight: 300 700; font-display: block; src: url('fredoka.woff2') format('woff2'); }

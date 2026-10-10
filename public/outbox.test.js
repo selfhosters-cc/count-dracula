@@ -1,36 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createOutbox } from './outbox.js'
-
-// A clock whose timers only fire when the test advances it.
-function fakeClock(start = 1_000_000) {
-  let now = start
-  let timers = []
-  let nextId = 1
-  return {
-    now: () => now,
-    setTimeout(fn, ms) {
-      const id = nextId++
-      timers.push({ id, at: now + ms, fn })
-      return id
-    },
-    clearTimeout(id) {
-      timers = timers.filter((t) => t.id !== id)
-    },
-    async advance(ms) {
-      const end = now + ms
-      for (;;) {
-        timers.sort((a, b) => a.at - b.at)
-        if (!timers.length || timers[0].at > end) break
-        const timer = timers.shift()
-        now = timer.at
-        timer.fn()
-        await settle()
-      }
-      now = end
-      await settle()
-    },
-  }
-}
+import { fakeClock, settle } from '../test/fake-clock.js'
 
 // A server that is up or down; records every POST it receives.
 function fakeServer() {
@@ -52,8 +22,6 @@ function fakeStorage() {
     setItem: (k, v) => items.set(k, String(v)),
   }
 }
-
-const settle = () => new Promise((resolve) => setImmediate(resolve))
 
 function setup({ storage = fakeStorage(), server = fakeServer(), clock = fakeClock() } = {}) {
   const outbox = createOutbox({ send: server.send, storage, clock, phoneName: 'Dad' })

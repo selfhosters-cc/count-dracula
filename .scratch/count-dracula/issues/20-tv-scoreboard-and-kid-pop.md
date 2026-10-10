@@ -22,10 +22,10 @@ The TV's sound comes in the sound engine ticket; this one is visual only.
 
 ## Acceptance criteria
 
-- [ ] At 1920×1080 the layout matches the prototype's Scoreboard frame
-- [ ] A single tap shows the pop with the server-assigned number, and a burst of 5 in 3 s shows one merged pop
-- [ ] Opening or reloading the TV with kids already stored shows the count with no pop
-- [ ] A batch of late taps produces a quiet roll-up and no chips
-- [ ] Stopping the server freezes the screen, the 🦇 chip appears after 20 s, and recovery does one quiet roll-up to the exact total
-- [ ] Nothing is loaded from a CDN (check in devtools)
-- [ ] The queue is unit-tested for priority ordering and merging
+- [x] At 1920×1080 the layout matches the prototype's Scoreboard frame
+- [x] A single tap shows the pop with the server-assigned number, and a burst of 5 in 3 s shows one merged pop
+- [x] Opening or reloading the TV with kids already stored shows the count with no pop
+- [x] A batch of late taps produces a quiet roll-up and no chips
+- [x] Stopping the server freezes the screen, the 🦇 chip appears after 20 s, and recovery does one quiet roll-up to the exact total
+- [x] Nothing is loaded from a CDN (check in devtools)
+- [x] The queue is unit-tested for priority ordering and merging
