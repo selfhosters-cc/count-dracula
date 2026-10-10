@@ -13,3 +13,5 @@ Candidates to rank (add more): **typed-in half-hour counts** from last year (a f
 For each: value, build cost, privacy cost, and whether it needs density we may not have in year one. Output a ranked list with a cut line; everything below it goes to Out of scope "after Halloween".
 
 A neighbourhood-average ghost was ruled out in [What becomes per-household](05-what-becomes-per-household.md): before Oct 31 no other Household has a past night.
+
+**Given** ([Nearby activity indicator](08-nearby-activity.md)): nearby is a small always-on box on the TV and a one-line strip on the phone (kids in the last half hour, houses counting, the Area's top costume). Below the minimum or with no Location, the phone strip shows a **site-wide total** (live, non-Rehearsal Events right now), so that candidate already exists on the phone. The trend line, "you vs the average house" and a history chart were prototyped and not chosen.

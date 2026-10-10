@@ -43,3 +43,7 @@ _Avoid_: Address, position, postal code, pin
 **Area**:
 The fixed region (the Location's 4-character geohash parent, about 20 × 25 km) whose rounded totals a Household adds to and sees as "near you". It shows nothing until at least 5 Households in it are active.
 _Avoid_: Neighbourhood, radius, zone (that's the Household's time zone), nearby (that's the feature)
+
+**Active Household**:
+For nearby figures, a Household whose live, non-Rehearsal Event has counted at least one kid in the last 30 minutes. Only Active Households count toward an Area's minimum of 5 and its totals.
+_Avoid_: Live household, online household
