@@ -12,4 +12,5 @@ Already covered: Wi-Fi blips (phone outbox + snapshot on reconnect, see Live-upd
 
 - **Server/LXC down:** do phones keep counting offline into their outbox until it returns, how long that can last, and how the TV signals "reconnecting" to the porch without looking broken.
 - **Everything down:** the manual fallback (a paper tally by the door?) and how missed kids get **backfilled** afterwards (a bulk "add N kids between 6:40–6:55" action?) so the chart and ghost race stay honest. Should backfilled kids celebrate? (Probably not.)
+- **Bulk add for the rehearsal:** the same bulk-add action, or a dev-only route, also lets the rehearsal reach BEAT LAST YEAR without 347 taps (from [Event setup and phone menu](09-event-setup-and-phone-menu.md)). Decide whether it's one feature or two.
 - **Data safety:** is a Proxmox backup or a simple SQLite file copy after the night enough, so 2026 is kept as next year's ghost line?

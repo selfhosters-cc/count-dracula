@@ -38,6 +38,7 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 - [TV screen prototype](issues/06-tv-screen-prototype.md) — Layout A "Scoreboard": giant count + pace left, ghost-race chart right, full-width costume leaderboard, pumpkin-patch ground strip; merged burst pops, priority queue, full-screen takeovers for 100s/golden/beat-last-year.
 - [Sound design](issues/07-sound-design.md) — arcade bloops for each kid (5 variations, rising scale for bursts, quieter in the rush), cartoony-spooky stings for big moments, wind/cricket ambience bed, 6-button soundboard (3 homemade) on the TV with a 3 s cooldown, mute toggles in the phone menu.
 - [Hosting and phone access](issues/08-hosting-and-phone-access.md) — Bun + SQLite in a new Proxmox LXC; tailnet devices via https://halloween.example.com, helpers via LAN HTTP; per-event join key required for writes; QR only on a phone, never the porch TV; phone names in Recent.
+- [Event setup and phone menu](issues/09-event-setup-and-phone-menu.md) — Go live freezes the old event and keeps the join key; costumes per event with "Copy from"; 2025 ghost seeded from a file; per-event Clock shift for the rehearsal; blind stratified golden draw at Go live; ☰ door menu for every helper, `/setup` behind an admin PIN.
 
 ## Not yet specified
 
