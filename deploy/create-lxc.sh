@@ -81,7 +81,8 @@ for job in json.load(sys.stdin):
         continue
     print(job["id"], ",".join(ids + [vmid]))
 ' "$VMID" | while read -r job ids; do
-  pve "pvesh set /cluster/backup/$job --vmid $ids" && echo "    $job now backs up: $ids"
+  # -n: ssh must not read the loop's stdin, or it swallows the remaining jobs.
+  ssh -n -o BatchMode=yes "$PVE" "pvesh set /cluster/backup/$job --vmid $ids" && echo "    $job now backs up: $ids"
 done
 
 echo "==> LXC $VMID is ready at $IP. Next: deploy/deploy.sh"
