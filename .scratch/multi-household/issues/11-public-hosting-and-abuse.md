@@ -14,3 +14,4 @@ How does the app run on the open internet without one bad actor ruining a porch 
 - **User text on shared screens**: household names and live-created costume names show on public TVs, nearby and summaries. A word filter, a review step, an operator "hide", or accept the risk?
 - **Backups and incident plan** for a database that now holds other people's nights.
 - **Given** ([What becomes per-household](05-what-becomes-per-household.md)): tailnet auto-join (`autoJoinHosts`) is dropped; `lanUrl`, meaning where the helper QR points, is decided here. The rollback plan is a `v1-final` tag plus a timestamped DB copy taken before the v2 deploy.
+- **Given** ([Shareable TV: link, code and QR](06-shareable-tv.md)): one secret TV link per Household, shared by the porch TV and every viewer, read-only, live Event only, no expiry, Rotate in `/setup`. The viewer cap per TV link is decided here. TV pairing codes need a rate limit on redeeming (per Manager).

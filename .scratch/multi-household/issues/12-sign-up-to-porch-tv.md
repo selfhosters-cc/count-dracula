@@ -13,3 +13,4 @@ How does a stranger, with no help from us, get from "sign up" to a TV on their p
 - Sound: the "Start the night" click, autoplay on smart-TV browsers.
 - A built-in "test night" so strangers can rehearse before Oct 31 (v1's Clock shift and bulk add already exist).
 - **Given** ([What becomes per-household](05-what-becomes-per-household.md)): sign-up already creates a live "Rehearsal" with a join key, a starter costume list and no golden tickets, and captures the browser's time zone. New Households race None; Expected kids is the only "how big a night" input.
+- **Given** ([Shareable TV: link, code and QR](06-shareable-tv.md)): the porch TV opens the Household's TV link (Copy/Share from `/setup`), or a bare `/tv` shows a TV pairing code plus a scan-to-pair QR that a Manager redeems from their phone. Decide here how the kiosk scripts take the TV link and how the smart-TV walkthrough uses pairing.

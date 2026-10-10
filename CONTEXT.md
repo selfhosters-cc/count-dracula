@@ -24,6 +24,14 @@ _Avoid_: User, volunteer, member
 Whoever runs the deployment itself, across all Households (today, us). A Manager whose email is on the operator list in `deploy/local.env`.
 _Avoid_: Admin, superuser, site admin
 
+**TV link**:
+The one secret link that lets a device watch a Household's live Event read-only, on the same TV page the porch shows. The porch TV and every remote viewer use the same link. It never expires; rotating it cuts off every device holding the old one, the Household's own porch TV included.
+_Avoid_: Share link (that's the Night summary's), watch link, viewer key, join key (that's for Helpers' writes)
+
+**TV pairing code**:
+A short code shown on a TV that has no TV link yet. A Manager enters or scans it to give that TV their Household's TV link. It expires after a few minutes and does nothing without a Manager.
+_Avoid_: TV code, share code, join code
+
 **Night summary**:
 The shareable tap-through slides of one ended Event, viewable by a public share link for as long as the Household keeps sharing on.
 _Avoid_: Recap (that's the TV's end-of-night screen), wrapped, report

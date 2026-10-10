@@ -16,3 +16,5 @@ Prototype two or three takes with fake data (one dense suburb, one sparse town) 
 - **Privacy**: within the rules settled in [Fuzzy location](07-fuzzy-location.md). Nothing that singles out one home.
 
 Link the prototype branch from the answer. Use `dataviz` for anything chart- or map-shaped.
+
+**Given** ([Shareable TV: link, code and QR](06-shareable-tv.md)): anyone holding a Household's TV link sees the same `/tv` as the porch, so a nearby strip on the TV is also seen by remote viewers. Today the TV shows no Household name and nothing location-related.

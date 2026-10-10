@@ -32,6 +32,7 @@ A build-ready **v2 spec plus build tickets** for Count Dracula as one public, mu
 - [Public exposure: abuse protection and live-connection capacity](issues/03-public-exposure-limits.md) — CPU, not memory, limits SSE (fan-out blocks the tap: 37 ms per 1,000 viewers); the global hub, global `seq` and unbounded slow-reader buffers must change first; `synchronous=NORMAL` removes multi-second stalls; app-level caps and rate limits; Turnstile + email verification for bots.
 - [Household identity and sign-up](issues/04-household-identity-and-sign-up.md) — Google sign-in only, no email sent; a Manager (Google account) belongs to one Household; more Managers join by a shared invite link (phone share sheet / copy); admin PIN gone, Helpers unchanged; Operators listed in `deploy/local.env`; delete = immediate hard delete.
 - [What becomes per-household](issues/05-what-becomes-per-household.md) — the credential carries the Household (no slugs; reads no longer open); one live Event per Household, sign-up creates a live Rehearsal with starter costumes; switches and sounds stay Operator-wide until after Halloween, TV mix per Household; one IANA zone per Household (from the browser) drives all event-time maths; new Households race None; `user_version` migration into Household #1, linked by email in `local.env`, `v1-final` tag + DB copy as rollback.
+- [Shareable TV: link, code and QR](issues/06-shareable-tv.md) — one secret TV link per Household for the porch and every viewer (same `/tv`, live Event only, phone names stripped, no expiry, Rotate drops devices to pairing); a bare `/tv` shows a 10-minute TV pairing code + scan-to-pair QR a Manager redeems; link QR only in `/setup`; past recaps and tally need a Manager; separate from summary links.
 
 ## Not yet specified
 
@@ -44,3 +45,4 @@ A build-ready **v2 spec plus build tickets** for Count Dracula as one public, mu
 - Native apps / app stores: web only, as in v1.
 - Per-Household feature switches, sound uploads and per-Household soundboards: after Halloween ([What becomes per-household](issues/05-what-becomes-per-household.md) kept switches and sounds Operator-wide).
 - Passkeys, email sign-in links, Apple sign-in, and any outgoing email: after Halloween ([Household identity and sign-up](issues/04-household-identity-and-sign-up.md) chose Google sign-in only).
+- A portrait (phone) layout for TV viewers, expiring or per-viewer TV links, and a porch poster with the TV link: after Halloween ([Shareable TV: link, code and QR](issues/06-shareable-tv.md) chose one TV link on the same landscape `/tv`).
