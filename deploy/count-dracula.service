@@ -1,0 +1,21 @@
+[Unit]
+Description=Count Dracula (trick-or-treat counter)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=countdracula
+Group=countdracula
+WorkingDirectory=/opt/count-dracula
+ExecStart=/usr/local/bin/bun server/main.js /etc/count-dracula/config.json
+# Back in a second if it ever dies (spec §11: "Bun process crash → back in seconds").
+Restart=always
+RestartSec=1
+# The ghost from a 2026-style event and the CSV summary are bucketed by local time of day.
+Environment=TZ=America/Toronto
+# /var/lib/count-dracula, owned by the service user: the SQLite file (WAL) lives here.
+StateDirectory=count-dracula
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

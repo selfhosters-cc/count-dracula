@@ -35,6 +35,12 @@ export function startServer({ configPath, port, heartbeatMs }) {
       const { kidId } = await req.json()
       hub.publish(ledger.apply({ type: 'remove', kidId }))
     }),
+    // Tailnet phones join on first open: the key is handed out only on the private *.int name.
+    'GET /api/join': (req) => {
+      const host = (req.headers.get('Host') ?? '').replace(/:\d+$/, '').toLowerCase()
+      if (!config.autoJoinHosts.includes(host)) return new Response('Scan a helper code to join', { status: 403 })
+      return Response.json({ joinKey: ledger.joinKey() })
+    },
     // Setup (spec §6): the join key and the admin PIN.
     'GET /api/events': (req) =>
       isAdmin(req) ? Response.json(ledger.events()) : new Response('Wrong PIN', { status: 403 }),

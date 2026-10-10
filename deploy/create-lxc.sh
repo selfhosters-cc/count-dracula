@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Creates the Count Dracula LXC on Proxmox. Run once, from the dev machine: deploy/create-lxc.sh
+# Then deploy/deploy.sh puts the app on it. Everything goes through `ssh proxmox` + pct, so the LXC
+# needs no SSH keys of its own.
+set -euo pipefail
+
+PVE=${PVE:-proxmox}            # ssh host alias for the Proxmox node (root@192.168.5.1)
+VMID=${VMID:-118}
+IP=${IP:-192.168.5.31}         # static, like the other LXCs; the helper QR code bakes it in
+GW=${GW:-192.168.1.1}
+STORAGE=${STORAGE:-zstorage2}
+TEMPLATE=${TEMPLATE:-local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst}
+
+pve() { ssh -o BatchMode=yes "$PVE" "$@"; }
+
+if pve "pct status $VMID" >/dev/null 2>&1; then
+  echo "LXC $VMID already exists on $PVE; nothing to do." >&2
+  exit 1
+fi
+if pve "ping -c1 -W1 $IP" >/dev/null 2>&1; then
+  echo "$IP already answers ping: pick another IP (IP=...)." >&2
+  exit 1
+fi
+
+echo "==> Creating LXC $VMID (count-dracula, $IP)"
+pve pct create "$VMID" "$TEMPLATE" \
+  --hostname count-dracula \
+  --cores 1 --memory 512 --swap 256 \
+  --rootfs "$STORAGE:4" \
+  --net0 "name=eth0,bridge=vmbr0,gw=$GW,ip=$IP/20,type=veth" \
+  --unprivileged 1 --features nesting=1 \
+  --timezone America/Toronto \
+  --onboot 1 \
+  --description "'Count Dracula: trick-or-treat counter. Deployed with deploy/deploy.sh from the count-dracula repo.'"
+pve pct start "$VMID"
+
+echo "==> Waiting for the network"
+for _ in $(seq 1 30); do
+  pve "pct exec $VMID -- getent hosts deb.debian.org" >/dev/null 2>&1 && break
+  sleep 1
+done
+
+echo "==> Base setup inside the LXC"
+pve "pct exec $VMID -- bash -euc '
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq --no-install-recommends ca-certificates >/dev/null
+  id countdracula >/dev/null 2>&1 || useradd --system --home-dir /nonexistent --shell /usr/sbin/nologin countdracula
+  mkdir -p /etc/count-dracula /opt
+'"
+
+# Spec §11: the existing scheduled Proxmox backup jobs must include the new LXC. Ours list guests
+# explicitly, so add this one to every job that backs up more than one guest.
+echo "==> Adding LXC $VMID to the scheduled backup jobs"
+pve "pvesh get /cluster/backup --output-format json" | python3 -c '
+import json, sys
+vmid = sys.argv[1]
+for job in json.load(sys.stdin):
+    ids = [i for i in (job.get("vmid") or "").split(",") if i]
+    if job.get("all") or len(ids) < 2 or vmid in ids:
+        continue
+    print(job["id"], ",".join(ids + [vmid]))
+' "$VMID" | while read -r job ids; do
+  pve "pvesh set /cluster/backup/$job --vmid $ids" && echo "    $job now backs up: $ids"
+done
+
+echo "==> LXC $VMID is ready at $IP. Next: deploy/deploy.sh"

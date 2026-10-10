@@ -225,6 +225,11 @@
       params.delete('key')
       history.replaceState(null, '', location.pathname + (params.size ? `?${params}` : ''))
     }
+    // On the tailnet (HTTPS) name, the server hands the key over on first open; elsewhere it says no.
+    if (!localStorage.getItem('cd.joinKey')) {
+      const res = await fetch('/api/join').catch(() => null)
+      if (res?.ok) localStorage.setItem('cd.joinKey', (await res.json()).joinKey)
+    }
     const joinKey = localStorage.getItem('cd.joinKey') ?? ''
 
     let problem = ''

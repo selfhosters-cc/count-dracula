@@ -376,3 +376,24 @@ describe('past events for /tv?event=<id>', () => {
     expect((await fetch(`${app.url}/api/snapshot?event=99999`)).status).toBe(404)
   })
 })
+
+describe('tailnet auto-join', () => {
+  const join = (app, host) => fetch(`${app.url}/api/join`, { headers: host ? { Host: host } : {} })
+
+  test('hands the join key to a phone that came in on the private tailnet name', async () => {
+    const app = start({ autoJoinHosts: ['count-dracula.example.com'] })
+
+    const res = await join(app, 'count-dracula.example.com')
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ joinKey: app.ledger.joinKey() })
+  })
+
+  test('refuses on any other address: LAN phones join with the QR code', async () => {
+    const app = start({ autoJoinHosts: ['count-dracula.example.com'] })
+
+    expect((await join(app)).status).toBe(403)
+    expect((await join(app, 'evil.example.com')).status).toBe(403)
+    expect((await join(start(), 'count-dracula.example.com')).status).toBe(403) // not configured: never
+  })
+})
