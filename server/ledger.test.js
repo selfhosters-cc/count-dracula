@@ -535,9 +535,15 @@ describe('costume presets', () => {
 
 describe('milestones and Beat last year (fired moments)', () => {
   // A ledger with a movable clock; tapsUpTo(n) brings the live count to n with on-time taps.
-  function race(config = {}) {
+  // Golden tickets off: a randomly drawn ticket landing on #50 would add 'golden' to that kid's moments.
+  function race({ switches = {}, ...config } = {}) {
     let clockMs = 1_000_000_000
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed, now: () => clockMs, ...config })
+    const ledger = openLedger(new Database(':memory:'), {
+      ghostSeed,
+      now: () => clockMs,
+      switches: { goldenTickets: false, ...switches },
+      ...config,
+    })
     let i = 0
     const live = (id = `k${++i}`) => ledger.apply(tap(id, { tappedAt: clockMs }))
     const late = (id = `k${++i}`) => ledger.apply(tap(id, { tappedAt: clockMs - 60_000 }))
