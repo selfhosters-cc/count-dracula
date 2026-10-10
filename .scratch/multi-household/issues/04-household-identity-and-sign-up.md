@@ -1,7 +1,7 @@
 # Household identity and sign-up
 
 Type: grilling (HITL)
-Status: open
+Status: claimed
 Blocked by: 01
 
 ## Question
