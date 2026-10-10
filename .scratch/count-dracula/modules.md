@@ -156,7 +156,8 @@ director.overlay(show)                              // soundboard, new-costume b
 ## 7. Sound engine (TV)
 
 ```js
-const sound = createSound(slots)          // file per slot; missing → generated fallback
+const sound = createSound({ audio, clock, random })   // audio = await createWebAudio(): file per slot via
+                                                      // /sounds/manifest.json, missing → generated fallback
 sound.unlock() / sound.running            // drives "Start the night"
 sound.cue(name, opts?)                    // 'bloop' | 'pop-scale' {n} | 'sting:50' | 'takeover'
                                           // 'golden' | 'ding' | 'tick' | 'close' | 'board:<1–6>'
@@ -174,6 +175,8 @@ sound.mix({ volume, mutes })              // from settings deltas
 - the closing sting followed by the ~5 s fade
 
 Callers learn one verb, and the mixing rules live in one file.
+
+**Seam:** `audio` is the only part that touches Web Audio (`createWebAudio`: buses, compressor, voices, ramps, the ambience loop). Tests pass a fake that records voices and ramps, so every mixing rule is unit-tested without an AudioContext.
 
 **Tickets:** 25, 26, 27, 28, 31, 32, 35, 38.
 

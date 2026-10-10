@@ -6,12 +6,27 @@ import { animate } from '/vendor/motion/motion.js'
 import { create as createConfetti } from '/vendor/canvas-confetti/confetti.module.js'
 import { createRaceChart } from '/race-chart.js'
 import { eventNow, ghost, minuteOfDay, pace } from '/shared/night-maths.js'
+import { createSound } from '/sound.js'
+import { createWebAudio } from '/web-audio.js'
 
 const $ = (id) => document.getElementById(id)
 const CATCHING_UP_AFTER_MS = 20_000
 const ROLL_UP_MS = 2_000
 
 const confetti = createConfetti($('confetti'), { resize: true, useWorker: false })
+const clock = { now: () => Date.now(), setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (id) => clearTimeout(id) }
+
+// ---- sound: "Start the night" whenever the AudioContext isn't running; one click unlocks it
+const audio = await createWebAudio()
+const sound = createSound({ audio, clock })
+const showStart = () => ($('start').hidden = sound.running)
+audio.onStateChange(showStart)
+showStart()
+if (sound.running) sound.unlock() // the kiosk's autoplay flag (ticket 37) starts it without a click
+$('start').addEventListener('click', async () => {
+  await sound.unlock()
+  showStart()
+})
 
 // ---- the giant count: set, bump, quiet roll-up, quiet dip
 let shown = null // the number on screen
@@ -25,6 +40,7 @@ function showCount(target, mode) {
     return
   }
   if (mode === 'roll' && target !== shown) {
+    if (target > shown) sound.cue('tick') // one soft tick for a backlog (the engine keeps it to one)
     const from = Number(el.textContent) // mid-roll, carry on from what's on screen
     shown = target
     roll = animate(from, target, {
@@ -40,15 +56,19 @@ function showCount(target, mode) {
   if (mode === 'dip') animate(el, { opacity: [1, 0.55, 1], y: [0, 6, 0] }, { duration: 0.6 })
 }
 
-// ---- celebrations: the director decides, this renders
+// ---- celebrations: the director decides, this renders (and cues the sound)
+let playing = null
 function play(show) {
   const pop = $('pop')
+  const merging = show?.kind === 'pop' && playing?.kind === 'pop' && playing.from === show.from
+  playing = show
   if (!show) {
     animate(pop, { opacity: 0, scale: 0.9 }, { duration: 0.25 })
     return
   }
   if (show.kind !== 'pop') return // milestones and takeovers render in their own tickets
   const merged = show.from !== show.to
+  sound.cue(merging ? 'scale' : 'bloop', { step: show.to - show.from })
   pop.innerHTML = merged ? `<small>Welcome, kids</small>#${show.from}–${show.to}!` : `<small>You're kid</small>#${show.from}!`
   animate(pop, { opacity: 1, scale: [0.3, 1] }, { type: 'spring', bounce: 0.5, duration: 0.45 })
   confetti({
@@ -60,10 +80,7 @@ function play(show) {
   })
 }
 
-const director = createDirector({
-  clock: { now: () => Date.now(), setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (id) => clearTimeout(id) },
-  play,
-})
+const director = createDirector({ clock, play })
 
 // ---- the race: chart, legend and the hero's pace line, redrawn in the same pass as the count
 const race = createRaceChart($('race'))

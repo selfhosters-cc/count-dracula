@@ -55,6 +55,13 @@
     #confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 45; }
 
     /* Disconnected: decorative, never alarming (spec §7 States) */
+    /* "Start the night": shown whenever the AudioContext isn't running (spec §7 States) */
+    #start { position: fixed; inset: 0; z-index: 50; display: grid; place-content: center; gap: 2vh; text-align: center;
+      background: rgba(10, 6, 20, .92); border: 0; color: var(--ink); cursor: pointer; font: inherit; }
+    #start[hidden] { display: none; }
+    #start b { font-family: var(--f-spooky); font-size: clamp(48px, 9vw, 180px); color: var(--pumpkin); font-weight: 400; }
+    #start span { font-size: clamp(14px, 1.8vw, 32px); color: var(--ink-dim); }
+
     #catching-up { position: fixed; right: 5vw; bottom: 5vh; z-index: 20; padding: .4em .9em; border-radius: 999px;
       background: var(--night-2); color: var(--ink-dim); font-size: clamp(12px, 1.4vw, 24px); font-weight: 600;
       opacity: 0; transition: opacity 1s; }
@@ -83,6 +90,7 @@
   <div id="pop" aria-live="polite"></div>
   <canvas id="confetti"></canvas>
   <div id="catching-up">🦇 catching up…</div>
+  <button id="start" hidden><b>Start the night</b><span>Click once to turn the sound on</span></button>
 
   <script type="module" src="/tv.js"></script>
 </body>

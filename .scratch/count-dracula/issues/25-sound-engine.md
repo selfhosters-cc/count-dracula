@@ -21,9 +21,9 @@ The TV becomes porch-audible. See [spec §10](../spec.md#10-sound) and [§7 Stat
 
 ## Acceptance criteria
 
-- [ ] With no sound files present, every moment still makes a generated sound
-- [ ] "Start the night" appears whenever the AudioContext isn't running, and one click starts ambience
-- [ ] A 5-kid burst plays a capped rising scale with no clipping, and never more than 4 voices
-- [ ] Bloops get quieter during a sustained burst and return to full when it's sparse
-- [ ] Ambience ducks under a pop and comes back
-- [ ] A roll-up plays one soft tick; an undo plays nothing
+- [x] With no sound files present, every moment still makes a generated sound
+- [x] "Start the night" appears whenever the AudioContext isn't running, and one click starts ambience
+- [x] A 5-kid burst plays a capped rising scale with no clipping, and never more than 4 voices
+- [x] Bloops get quieter during a sustained burst and return to full when it's sparse
+- [x] Ambience ducks under a pop and comes back
+- [x] A roll-up plays one soft tick; an undo plays nothing
