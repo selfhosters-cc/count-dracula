@@ -1,7 +1,7 @@
 # v2 rehearsal and launch-day plan
 
 Type: grilling (HITL)
-Status: open
+Status: claimed
 Blocked by:
 
 ## Question
