@@ -39,6 +39,8 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 - [Sound design](issues/07-sound-design.md) — arcade bloops for each kid (5 variations, rising scale for bursts, quieter in the rush), cartoony-spooky stings for big moments, wind/cricket ambience bed, 6-button soundboard (3 homemade) on the TV with a 3 s cooldown, mute toggles in the phone menu.
 - [Hosting and phone access](issues/08-hosting-and-phone-access.md) — Bun + SQLite in a new Proxmox LXC; tailnet devices via https://halloween.example.com, helpers via LAN HTTP; per-event join key required for writes; QR only on a phone, never the porch TV; phone names in Recent.
 - [Event setup and phone menu](issues/09-event-setup-and-phone-menu.md) — Go live freezes the old event and keeps the join key; costumes per event with "Copy from"; 2025 ghost seeded from a file; per-event Clock shift for the rehearsal; blind stratified golden draw at Go live; ☰ door menu for every helper, `/setup` behind an admin PIN.
+- [Quiet stretches and end of night](issues/10-quiet-stretches-and-end-of-night.md) — one silent idle teaser after 45 s; any helper can "🌙 End the night" (reversible, event stays live, unwon golden tickets released or expired); the ended state is a static recap screen (Must #9), viewable per past event.
+- [Failure fallback](issues/11-failure-fallback.md) — phones count offline with a ⏳ pill ("don't reload"); TV freezes calmly with a 🦇 chip, then one quiet roll-up; late taps skip #100s, delay Beat last year, roll golden tickets forward; paper tally sheet + "Add missed kids" backfill (also the rehearsal's bulk add); CSV export + existing Proxmox backup job.
 
 ## Not yet specified
 
