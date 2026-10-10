@@ -18,6 +18,10 @@ Every file here is **CC0 1.0** (public domain dedication, https://creativecommon
 | `stock/ding-confirm.ogg` | Confirmation chime | [Kenney — Interface Sounds](https://kenney.nl/assets/interface-sounds) | `confirmation_004.ogg` | CC0 1.0 |
 | `stock/ding-glass.ogg` | Glass chime | [Kenney — Interface Sounds](https://kenney.nl/assets/interface-sounds) | `glass_004.ogg` | CC0 1.0 |
 | `stock/ding-twotone.ogg` | Two-tone | [Kenney — Digital Audio](https://kenney.nl/assets/digital-audio) | `twoTone1.ogg` | CC0 1.0 |
+| `stock/ghost-1.mp3` | Ghost #1 | [BigSoundBank (Joseph Sardin) — Ghost #1](https://bigsoundbank.com/ghost-1-s2046.html) | `2046.mp3` | CC0 1.0 |
+| `stock/ghost-3.mp3` | Ghost #3 | [BigSoundBank (Joseph Sardin) — Ghost #3](https://bigsoundbank.com/ghost-3-s2048.html) | `2048.mp3` | CC0 1.0 |
+| `stock/ghost-4.mp3` | Ghost #4 | [BigSoundBank (Joseph Sardin) — Ghost #4](https://bigsoundbank.com/ghost-4-s2049.html) | `2049.mp3` | CC0 1.0 |
+| `stock/ghost-7.mp3` | Ghost #7 | [BigSoundBank (Joseph Sardin) — Ghost #7](https://bigsoundbank.com/ghost-7-s2052.html) | `2052.mp3` | CC0 1.0 |
 | `stock/jingle-hit15.ogg` | Orchestra hit fanfare | [Kenney — Music Jingles](https://kenney.nl/assets/music-jingles) | `jingles_HIT15.ogg` | CC0 1.0 |
 | `stock/jingle-nes00.ogg` | 8-bit fanfare | [Kenney — Music Jingles](https://kenney.nl/assets/music-jingles) | `jingles_NES00.ogg` | CC0 1.0 |
 | `stock/jingle-nes03.ogg` | 8-bit win | [Kenney — Music Jingles](https://kenney.nl/assets/music-jingles) | `jingles_NES03.ogg` | CC0 1.0 |
@@ -27,9 +31,6 @@ Every file here is **CC0 1.0** (public domain dedication, https://creativecommon
 | `stock/jingle-steel02.ogg` | Steel drum, rising | [Kenney — Music Jingles](https://kenney.nl/assets/music-jingles) | `jingles_STEEL02.ogg` | CC0 1.0 |
 | `stock/note-glass.ogg` | Glass tap | [Kenney — Interface Sounds](https://kenney.nl/assets/interface-sounds) | `glass_002.ogg` | CC0 1.0 |
 | `stock/note-pluck.ogg` | Pluck | [Kenney — Interface Sounds](https://kenney.nl/assets/interface-sounds) | `pluck_001.ogg` | CC0 1.0 |
-| `stock/scream-girl-1.mp3` | Girl screaming #1 | [BigSoundBank (Joseph Sardin) — Howling of a Girl #1](https://bigsoundbank.com/howling-of-a-girl-1-s1662.html) | `1662.mp3` | CC0 1.0 |
-| `stock/scream-girl-2.mp3` | Girl screaming #2 | [BigSoundBank (Joseph Sardin) — Howling of a Girl #2](https://bigsoundbank.com/howling-of-a-girl-2-s1663.html) | `1663.mp3` | CC0 1.0 |
-| `stock/scream-kids.mp3` | Kids screaming | [BigSoundBank (Joseph Sardin) — Kids Screaming #1](https://bigsoundbank.com/kids-scream-1-s1148.html) | `1148.mp3` | CC0 1.0 |
 | `stock/thunder-2.mp3` | Thunder (short) | [BigSoundBank (Joseph Sardin) — Thunder #2](https://bigsoundbank.com/thunder-2-s3113.html) | `3113.mp3` | CC0 1.0 |
 | `stock/thunder-3.mp3` | Thunder (crack) | [BigSoundBank (Joseph Sardin) — Thunder #3](https://bigsoundbank.com/thunder-3-s3114.html) | `3114.mp3` | CC0 1.0 |
 | `stock/thunder-4.mp3` | Thunder (rolling) | [BigSoundBank (Joseph Sardin) — Thunder #4](https://bigsoundbank.com/thunder-4-s3115.html) | `3115.mp3` | CC0 1.0 |

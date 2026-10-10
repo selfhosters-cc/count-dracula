@@ -182,11 +182,26 @@ function playBoard({ slot, label }) {
   const shout = Object.assign(document.createElement('div'), { className: 'shout', textContent: entry?.shout ?? `${label.toUpperCase()}!` })
   $('fx').append(shout)
   animate(shout, { opacity: [0, 1, 1, 0], scale: [0.6, 1.1, 1, 1] }, { duration: 2.4, times: [0, 0.15, 0.8, 1] }).then(() => shout.remove())
-  for (let i = 0; i < 5; i++) {
-    const flyer = Object.assign(document.createElement('div'), { className: 'flyer', textContent: entry?.emoji ?? FLYERS[(slot - 1) % FLYERS.length] })
-    flyer.style.top = `${10 + i * 12}vh`
+  // The icons drift up from below the screen like smoke: random spots, sizes, starts, speeds and sways.
+  const icon = entry?.emoji ?? FLYERS[(slot - 1) % FLYERS.length]
+  const count = 8 + Math.floor(Math.random() * 4)
+  const rand = (lo, hi) => lo + Math.random() * (hi - lo)
+  for (let i = 0; i < count; i++) {
+    const flyer = Object.assign(document.createElement('div'), { className: 'flyer', textContent: icon })
+    flyer.style.left = `${rand(4, 92)}vw`
+    flyer.style.fontSize = `${rand(3.5, 8)}vw`
     $('fx').append(flyer)
-    animate(flyer, { x: ['-15vw', '55vw', '120vw'], y: [0, '-18vh', '4vh'], rotate: [-10, 8, -6] }, { duration: 2.4, delay: i * 0.15, ease: 'linear' }).then(() => flyer.remove())
+    const sway = rand(2, 6) * (Math.random() < 0.5 ? -1 : 1)
+    animate(
+      flyer,
+      {
+        y: ['110vh', '70vh', '35vh', '-25vh'],
+        x: ['0vw', `${sway}vw`, `${-sway * 0.6}vw`, `${sway * 0.4}vw`],
+        rotate: [rand(-15, 15), rand(-15, 15), rand(-15, 15), rand(-15, 15)],
+        opacity: [0, 0.95, 0.9, 0],
+      },
+      { duration: rand(3.5, 5.5), delay: rand(0, 1.4), ease: 'easeInOut' },
+    ).then(() => flyer.remove())
   }
 }
 

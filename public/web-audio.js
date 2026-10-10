@@ -20,7 +20,7 @@ const GENERATORS = {
   board1: { seconds: 2.2, draw: (ctx) => cackle(ctx) },
   board2: { seconds: 2.6, draw: (ctx) => howl(ctx) },
   board3: { seconds: 1.6, draw: (ctx) => cheer(ctx) },
-  board4: { seconds: 1.6, draw: (ctx) => scream(ctx) },
+  board4: { seconds: 3.2, draw: (ctx) => ghostWail(ctx) },
   board5: { seconds: 1.8, draw: (ctx) => creak(ctx) },
   board6: { seconds: 3, draw: (ctx, s) => thunder(ctx, s) },
   ambience: { seconds: 8, draw: nightLoop },
@@ -293,15 +293,31 @@ function cheer(ctx) {
   ;[523.3, 659.3, 784, 1046.5].forEach((f, i) => tone(ctx, { type: 'triangle', from: f, at: i * 0.22, length: i === 3 ? 0.7 : 0.18, level: 0.3 }))
 }
 
-// A scream: a high sawtooth sliding up and down, roughened with noise.
-function scream(ctx, seconds = 1.6) {
-  const osc = tone(ctx, { type: 'sawtooth', from: 900, to: 1500, length: 1.4, level: 0.18, filter: { type: 'bandpass', frequency: 2200, Q: 1.5 } })
-  osc.frequency.setValueAtTime(900, 0)
-  osc.frequency.linearRampToValueAtTime(1500, 0.3)
-  osc.frequency.linearRampToValueAtTime(1100, 1.4)
-  const noise = noiseSource(ctx, seconds)
-  noise.connect(new BiquadFilterNode(ctx, { type: 'highpass', frequency: 2500 })).connect(envelope(ctx, 0.08, 0.05, 1.3))
-  noise.start(0)
+// A friendly ghost's "oooooh-ahhhh": a soft voice gliding up and back down with a slow vibrato, its
+// tone opening from "oo" to "ah" (the user found the scream too scary for the porch).
+function ghostWail(ctx) {
+  const voice = new OscillatorNode(ctx, { type: 'sawtooth', frequency: 220 })
+  voice.frequency.setValueAtTime(220, 0)
+  voice.frequency.linearRampToValueAtTime(330, 1.2)
+  voice.frequency.linearRampToValueAtTime(294, 1.8)
+  voice.frequency.linearRampToValueAtTime(196, 3.1)
+  const vibrato = new OscillatorNode(ctx, { frequency: 4.5 })
+  vibrato.connect(new GainNode(ctx, { gain: 7 })).connect(voice.frequency)
+  const mouth = new BiquadFilterNode(ctx, { type: 'lowpass', frequency: 450, Q: 6 }) // "oo"
+  mouth.frequency.setValueAtTime(450, 0)
+  mouth.frequency.linearRampToValueAtTime(500, 1.2)
+  mouth.frequency.linearRampToValueAtTime(1100, 1.9) // "ah"
+  mouth.frequency.linearRampToValueAtTime(800, 3.1)
+  const level = new GainNode(ctx, { gain: 0 })
+  level.gain.setValueAtTime(0, 0)
+  level.gain.linearRampToValueAtTime(0.35, 0.5)
+  level.gain.setValueAtTime(0.35, 2.4)
+  level.gain.linearRampToValueAtTime(0, 3.15)
+  voice.connect(mouth).connect(level).connect(ctx.destination)
+  voice.start(0)
+  vibrato.start(0)
+  voice.stop(3.2)
+  vibrato.stop(3.2)
 }
 
 // A creaky door: a low sawtooth whose pitch judders and slowly climbs.

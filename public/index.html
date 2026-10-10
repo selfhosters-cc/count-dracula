@@ -68,9 +68,22 @@
     #menu .mutes button[aria-pressed=true] { background: var(--orange); color: #1a0d00; }
     #menu .wide { display: block; width: 100%; height: 50px; border-radius: 12px; background: var(--panel2); font-weight: 800;
       text-align: center; line-height: 50px; color: var(--text); text-decoration: none; margin-top: 8px; }
-    #board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    #board button { height: 64px; border-radius: 14px; background: var(--panel2); font-weight: 800; font-size: 14px; padding: 4px; }
-    #board button .e { display: block; font-size: 22px; }
+    /* The soundboard: its own page, swiped in from the right (or the 🔊 edge tab) */
+    #sounds { position: absolute; inset: 0; z-index: 22; background: var(--bg); transform: translateX(100%);
+      transition: transform .25s ease; display: flex; flex-direction: column; gap: 12px; padding: 14px 12px 18px; }
+    #sounds.on { transform: none; }
+    .sounds-head { display: flex; align-items: center; gap: 10px; }
+    .sounds-head b { font-size: 20px; }
+    .sounds-head button { height: 44px; padding: 0 14px; border-radius: 12px; background: var(--panel2); font-weight: 800; }
+    #board { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 10px; }
+    #board button { border-radius: 18px; background: var(--panel); font-weight: 800; font-size: 17px; padding: 6px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; transition: opacity .2s; }
+    #board button .e { font-size: 44px; line-height: 1; }
+    #board.cooling button { opacity: .45; }
+    .cool { height: 8px; border-radius: 999px; background: var(--panel2); overflow: hidden; }
+    #cool-fill { height: 100%; width: 0; background: var(--orange); }
+    #sounds-tab { position: absolute; right: 0; top: 42%; z-index: 15; width: 30px; height: 76px; border-radius: 14px 0 0 14px;
+      background: var(--panel2); font-size: 16px; opacity: .85; }
     #helper-qr { background: #fff; border-radius: 14px; padding: 14px; margin-top: 10px; text-align: center; }
     #helper-qr svg { width: min(72vw, 280px); height: auto; }
     #helper-qr p { color: #333; font-size: 12px; word-break: break-all; margin: 8px 0 0; }
@@ -139,10 +152,7 @@
           <b>☰ Door menu</b><button class="close" id="menu-close" aria-label="Close" style="width:44px;height:44px;border-radius:12px;background:#ffffff10">▾</button>
         </div>
         <p class="unjoined" id="unjoined" hidden>This phone hasn't joined yet: scan a helper's code first.</p>
-        <div id="board-box" hidden>
-          <h4>Soundboard (plays on the TV)</h4>
-          <div id="board"></div>
-        </div>
+        <button class="wide" id="sounds-from-menu" hidden>🔊 Soundboard (or swipe ←)</button>
         <h4>TV sound</h4>
         <input type="range" id="volume" min="0" max="100" step="1" aria-label="TV volume">
         <div class="mutes">
@@ -175,6 +185,14 @@
         <div id="recent-rows"></div>
       </div>
     </div>
+
+    <div id="sounds" aria-hidden="true">
+      <div class="sounds-head"><button id="sounds-close">‹ Back</button><b>🔊 Soundboard</b><span class="dim">plays on the TV</span></div>
+      <div id="board"></div>
+      <div class="cool" title="One sound every 3 s, across all phones"><div id="cool-fill"></div></div>
+      <p class="dim" style="margin:0;text-align:center">Swipe right to go back to counting</p>
+    </div>
+    <button id="sounds-tab" aria-label="Soundboard" hidden>🔊</button>
 
     <div id="flash"></div>
     <div id="toast"></div>
@@ -437,22 +455,11 @@
         const shift = live.state?.event.clockShiftMs ?? 0
         $('release-box').hidden = !(left > 0 && releaseOpen(eventNow(Date.now(), shift)))
         $('release').textContent = `🎫 Release remaining tickets (${left})`
-        const sounds = live.state?.settings.soundboard ?? []
-        $('board-box').hidden = !sounds.length // switched off → hidden in ☰
-        if ($('board').childElementCount !== sounds.length) {
-          $('board').replaceChildren(
-            ...sounds.map((s) => {
-              const b = document.createElement('button')
-              b.dataset.slot = s.slot
-              b.append(Object.assign(document.createElement('span'), { className: 'e', textContent: s.emoji ?? '🔊' }), s.label)
-              return b
-            }),
-          )
-        }
+        renderSounds()
         $('unjoined').hidden = joined
         const ended = !!live.state?.event.ended
         $('end-night').textContent = ended ? '☀️ Resume the night' : '🌙 End the night'
-        for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release, #board button, #end-night')) c.disabled = !joined
+        for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release, #end-night')) c.disabled = !joined
       }
       $('menu-open').addEventListener('click', () => {
         renderMenu()
@@ -474,12 +481,71 @@
       live.on(({ delta }) => {
         if (!delta || delta.type === 'mix.changed' || delta.type === 'event.ended' || 'golden' in delta) renderMenu()
       })
+      // ---- the soundboard page: swipe left from counting (or tap the 🔊 edge tab), swipe right to come back
+      function renderSounds() {
+        const sounds = live.state?.settings.soundboard ?? []
+        $('sounds-tab').hidden = !sounds.length // switched off → no page, no tab
+        $('sounds-from-menu').hidden = !sounds.length
+        if (!sounds.length) closeSounds()
+        const labels = sounds.map((s) => `${s.slot}:${s.emoji}:${s.label}`).join('|')
+        if ($('board').dataset.labels !== labels) {
+          $('board').dataset.labels = labels
+          $('board').replaceChildren(
+            ...sounds.map((s) => {
+              const b = document.createElement('button')
+              b.dataset.slot = s.slot
+              b.append(Object.assign(document.createElement('span'), { className: 'e', textContent: s.emoji ?? '🔊' }), s.label)
+              return b
+            }),
+          )
+        }
+        for (const b of $('board').children) b.disabled = !joinKey
+      }
+      const soundsOpen = () => $('sounds').classList.contains('on')
+      function openSounds() {
+        if (!(live.state?.settings.soundboard ?? []).length) return
+        renderSounds()
+        $('menu').classList.remove('on')
+        $('sounds').classList.add('on')
+        $('sounds').setAttribute('aria-hidden', 'false')
+      }
+      function closeSounds() {
+        $('sounds').classList.remove('on')
+        $('sounds').setAttribute('aria-hidden', 'true')
+      }
+      $('sounds-tab').addEventListener('click', openSounds)
+      $('sounds-from-menu').addEventListener('click', openSounds)
+      $('sounds-close').addEventListener('click', closeSounds)
+
+      // A deliberate sideways swipe: far enough, mostly horizontal and quick. Taps on tiles stay taps.
+      let swipe = null
+      $('app').addEventListener('touchstart', (e) => {
+        const t = e.touches[0]
+        swipe = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, at: Date.now() } : null
+      }, { passive: true })
+      $('app').addEventListener('touchend', (e) => {
+        if (!swipe) return
+        const t = e.changedTouches[0]
+        const dx = t.clientX - swipe.x
+        const dy = t.clientY - swipe.y
+        const quick = Date.now() - swipe.at < 700
+        swipe = null
+        if (!quick || Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy)) return
+        const sheetUp = ['menu', 'sheet', 'recent'].some((id) => $(id).classList.contains('on')) || $('who').style.display === 'flex'
+        if (dx < 0 && !soundsOpen() && !sheetUp) openSounds()
+        else if (dx > 0 && soundsOpen()) closeSounds()
+      }, { passive: true })
+
       $('board').addEventListener('click', async (e) => {
         const b = e.target.closest('[data-slot]')
         if (!b) return
         const res = await post('/api/soundboard', { slot: Number(b.dataset.slot) }).catch(() => null)
         if (!res?.ok) return toast("Couldn't reach the TV")
-        toast((await res.json()).played ? `🔊 ${b.textContent.trim()}` : 'Cooling down: one sound every 3 s')
+        if (!(await res.json()).played) return toast('Cooling down: one sound every 3 s')
+        navigator.vibrate?.(15)
+        // The shared 3 s cooldown, shown as a bar emptying.
+        $('board').classList.add('cooling')
+        $('cool-fill').animate([{ width: '100%' }, { width: '0%' }], { duration: 3_000, easing: 'linear' }).finished.then(() => $('board').classList.remove('cooling'))
       })
       // 🌙 End the night / Resume. With tickets left, the spec's three choices instead of a plain yes/no.
       const nightCall = async (path, done) => {

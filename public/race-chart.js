@@ -4,7 +4,7 @@
 // TV); the validator passes them on separation and contrast, and flags the ghost's pale low chroma,
 // which is intended: it's a reference line, not a peer series. No hover layer: the TV is a kiosk.
 import { Chart } from '/vendor/chartjs/chart.js'
-import { eventNow, ghost as ghostCurve, minuteOfDay } from '/shared/night-maths.js'
+import { eventNow, ghost as ghostCurve, minuteOfDay, raceWindow } from '/shared/night-maths.js'
 
 const INK = '#f7efe0'
 const INK_DIM = '#b3aacb'
@@ -13,8 +13,6 @@ const PUMPKIN = '#ff7a1a'
 const GHOST = '#c9d2ff'
 const SURFACE = '#1f1838'
 
-const X_MIN = 17 * 60 + 30 // 5:30pm event time
-const X_MAX = 20 * 60 + 30 // 8:30pm
 
 const timeLabel = (minute) => {
   const h = Math.floor(minute / 60)
@@ -69,8 +67,8 @@ export function createRaceChart(canvas) {
       scales: {
         x: {
           type: 'linear',
-          min: X_MIN,
-          max: X_MAX,
+          min: 17 * 60 + 30, // 5:30–8:30pm event time; update() stretches it (raceWindow)
+          max: 20 * 60 + 30,
           grid: { display: false },
           border: { color: GRID },
           ticks: {
@@ -104,16 +102,16 @@ export function createRaceChart(canvas) {
       const count = kidMinutes.length
       const g = state.ghost
 
-      // Builder's latitude (§16): if kids keep coming after 8:30pm, the axis stretches to "now".
-      const xMax = Math.max(X_MAX, Math.ceil(now / 30) * 30)
+      const { min: xMin, max: xMax } = raceWindow(kidMinutes, now)
       const top = Math.max(count, g?.total ?? 0)
+      chart.options.scales.x.min = xMin
       chart.options.scales.x.max = xMax
       chart.options.scales.y.max = Math.max(400, Math.ceil((top + 30) / 100) * 100)
 
       const datasets = []
       if (g) {
         const at = ghostCurve(g.buckets)
-        const corners = [X_MIN, ...g.buckets.flatMap((b) => [toMinute(b.start), toMinute(b.end)]), xMax]
+        const corners = [xMin, ...g.buckets.flatMap((b) => [toMinute(b.start), toMinute(b.end)]), xMax]
         datasets.push({
           label: g.label,
           data: [...new Set(corners)].sort((a, b) => a - b).map((x) => ({ x, y: at(x) })),
@@ -146,7 +144,7 @@ export function createRaceChart(canvas) {
       chart.data.datasets = datasets
       chart.options.plugins.raceLabels = {
         ghostEnd: g && { text: `${g.label}: ${g.total}`, y: g.total },
-        ghostNow: g && { x: Math.min(Math.max(now, X_MIN), xMax), y: ghostCurve(g.buckets)(now) },
+        ghostNow: g && { x: Math.min(Math.max(now, xMin), xMax), y: ghostCurve(g.buckets)(now) },
         tonight: count ? { x: Math.max(now, kidMinutes[count - 1]), y: count } : null,
       }
       chart.update(animate ? undefined : 'none')

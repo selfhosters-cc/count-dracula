@@ -149,3 +149,14 @@ export function rush(kids, realNowMs) {
   const perMinute = Math.round((kids.filter((k) => k.tappedAt > since).length / RUSH_WINDOW_MIN) * 10) / 10
   return { perMinute, level: perMinute >= 3 ? 'rush' : perMinute >= 1 ? 'busy' : 'quiet' }
 }
+
+// The race chart's x-axis (minutes into the day, event time): 5:30–8:30pm, stretched to the half-hour
+// to take in the earliest tap and "now" (builder's latitude, spec §16), so a daytime test without a
+// Clock shift still shows its line instead of an empty chart.
+export function raceWindow(kidMinutes, nowMinute) {
+  const earliest = Math.min(nowMinute, ...kidMinutes)
+  return {
+    min: Math.min(17 * 60 + 30, Math.floor(earliest / 30) * 30),
+    max: Math.max(20 * 60 + 30, Math.ceil(nowMinute / 30) * 30),
+  }
+}

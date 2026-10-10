@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { atEventTime, biggestCrew, rush, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, releaseOpen, slots, tagColour, toBuckets, visits } from './night-maths.js'
+import { atEventTime, biggestCrew, raceWindow, rush, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, releaseOpen, slots, tagColour, toBuckets, visits } from './night-maths.js'
 import seed2025 from '../config/2025-counts.json'
 
 describe('tagColour', () => {
@@ -216,5 +216,22 @@ describe('rush meter', () => {
     expect(rush(n(14), NOW).level).toBe('busy') // 2.8/min
     expect(rush(n(15), NOW)).toEqual({ perMinute: 3, level: 'rush' })
     expect(rush([], NOW)).toEqual({ perMinute: 0, level: 'quiet' })
+  })
+})
+
+describe('race chart window', () => {
+  const at = (hh, mm = 0) => hh * 60 + mm
+
+  test('is 5:30–8:30pm event time on the night', () => {
+    expect(raceWindow([at(17, 45), at(19, 10)], at(19, 30))).toEqual({ min: at(17, 30), max: at(20, 30) })
+  })
+
+  test('stretches back to the earliest tap and to "now", so an afternoon test still shows its line', () => {
+    expect(raceWindow([at(15, 6), at(15, 13)], at(15, 15))).toEqual({ min: at(15), max: at(20, 30) })
+    expect(raceWindow([], at(14, 10))).toEqual({ min: at(14), max: at(20, 30) })
+  })
+
+  test('stretches forward past 8:30pm when kids keep coming', () => {
+    expect(raceWindow([at(18)], at(20, 41))).toEqual({ min: at(17, 30), max: at(21) })
   })
 })

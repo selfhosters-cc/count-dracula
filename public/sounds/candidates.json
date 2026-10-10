@@ -232,32 +232,51 @@
     "options": []
   },
   "board4": {
-    "label": "Soundboard 4: Scream",
+    "label": "Soundboard 4: Ghost (oooooh-ahhhh)",
     "options": [
       {
-        "entry": "stock/scream-girl-1.mp3",
-        "title": "Girl screaming #1",
-        "source": "BigSoundBank (Joseph Sardin) — Howling of a Girl #1",
-        "url": "https://bigsoundbank.com/howling-of-a-girl-1-s1662.html",
-        "original": "1662.mp3"
-      },
-      {
-        "entry": "stock/scream-girl-2.mp3",
-        "title": "Girl screaming #2",
-        "source": "BigSoundBank (Joseph Sardin) — Howling of a Girl #2",
-        "url": "https://bigsoundbank.com/howling-of-a-girl-2-s1663.html",
-        "original": "1663.mp3"
+        "entry": {
+          "file": "stock/ghost-1.mp3",
+          "start": 0.05,
+          "length": 3.6
+        },
+        "title": "Ghost #1",
+        "source": "BigSoundBank (Joseph Sardin) — Ghost #1 (\"Cry of a ghost. Hooouuuu!\")",
+        "url": "https://bigsoundbank.com/ghost-1-s2046.html",
+        "original": "2046.mp3"
       },
       {
         "entry": {
-          "file": "stock/scream-kids.mp3",
-          "start": 0.15,
-          "length": 3
+          "file": "stock/ghost-3.mp3",
+          "start": 0.1,
+          "length": 3.9
         },
-        "title": "Kids screaming",
-        "source": "BigSoundBank (Joseph Sardin) — Kids Screaming #1",
-        "url": "https://bigsoundbank.com/kids-scream-1-s1148.html",
-        "original": "1148.mp3"
+        "title": "Ghost #3",
+        "source": "BigSoundBank (Joseph Sardin) — Ghost #3 (\"Cry of a ghost. Hooouuuu!\")",
+        "url": "https://bigsoundbank.com/ghost-3-s2048.html",
+        "original": "2048.mp3"
+      },
+      {
+        "entry": {
+          "file": "stock/ghost-4.mp3",
+          "start": 0.15,
+          "length": 4.8
+        },
+        "title": "Ghost #4",
+        "source": "BigSoundBank (Joseph Sardin) — Ghost #4 (\"Cry of a ghost. Hooouuuu!\")",
+        "url": "https://bigsoundbank.com/ghost-4-s2049.html",
+        "original": "2049.mp3"
+      },
+      {
+        "entry": {
+          "file": "stock/ghost-7.mp3",
+          "start": 0.2,
+          "length": 4.6
+        },
+        "title": "Ghost #7",
+        "source": "BigSoundBank (Joseph Sardin) — Ghost #7 (\"Cry of a ghost. Hooouuuu!\")",
+        "url": "https://bigsoundbank.com/ghost-7-s2052.html",
+        "original": "2052.mp3"
       }
     ]
   },
