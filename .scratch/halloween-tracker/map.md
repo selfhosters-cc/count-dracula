@@ -37,18 +37,13 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 - [Phone controller prototype](issues/05-phone-controller-prototype.md) — "Thumb pad": giant +1 Kid at the bottom, 3-column costume grid above, Undo + slide-up Recent between them; "+ New" also counts the kid at the door.
 - [TV screen prototype](issues/06-tv-screen-prototype.md) — Layout A "Scoreboard": giant count + pace left, ghost-race chart right, full-width costume leaderboard, pumpkin-patch ground strip; merged burst pops, priority queue, full-screen takeovers for 100s/golden/beat-last-year.
 - [Sound design](issues/07-sound-design.md) — arcade bloops for each kid (5 variations, rising scale for bursts, quieter in the rush), cartoony-spooky stings for big moments, wind/cricket ambience bed, 6-button soundboard (3 homemade) on the TV with a 3 s cooldown, mute toggles in the phone menu.
+- [Hosting and phone access](issues/08-hosting-and-phone-access.md) — Bun + SQLite in a new Proxmox LXC; tailnet devices via https://halloween.example.com, helpers via LAN HTTP; per-event join key required for writes; QR only on a phone, never the porch TV; phone names in Recent.
 
 ## Not yet specified
 
-- **Dress rehearsal** — what the Oct 24 rehearsal must exercise and what "pass" means. Laptop kiosk setup supplies an 11-step hardware checklist; still open: app-level scenarios (burst of 10 kids, phone offline, server restart).
-- **Idle / attract mode** — the Scoreboard layout (see TV screen prototype) is always on and already readable when idle; still open whether quiet stretches need anything extra (e.g. a periodic "next golden ticket could be YOU" teaser).
-- **End-of-night recap** — a summary screen once the night winds down; maybe a shareable image.
-- **Failure resilience** — phone outbox + snapshot-on-reconnect covers Wi-Fi blips (see Live-update stack); still open: server/laptop crash recovery and a manual fallback if everything dies.
-- **Visit window tuning** — the actual grouping threshold; may want to be adjustable live.
-- **Event setup** — creating an event before the night: name, tags set up ahead of time, golden ticket count and draw, entering ghost data, choosing which event is live. Probably a small admin view on the phone.
-- **Tag presentation** — TV side: six validated colours then grey, top 5 on the leaderboard (see TV screen prototype); open how emoji get chosen when a tag is created live. Phone side: a 3-column grid that scrolls (see Phone controller prototype); open whether rarely-used tags should sink or hide.
-- **Phone secondary controls** — where the soundboard (6 buttons), "release remaining tickets", master volume and the 3 mute toggles (see Sound design) and event admin live, kept off the main counting screen (a menu? a second tab?). Still depends on Event setup.
-- **Final spec assembly** — rolling every decision into the hand-off spec.
+<!-- Charting-time fog has graduated: event setup + phone secondary controls + visit window → Event setup and phone menu; idle + recap → Quiet stretches and end of night; resilience → Failure fallback; rehearsal → Dress rehearsal plan; spec assembly → Assemble the v1 spec. Tag presentation was answered by the two prototypes (emoji picked in "+ New"; six TV colours then grey). -->
+
+- Nothing un-ticketable remains in view. New fog may appear as the last tickets resolve.
 
 ## Out of scope
 
