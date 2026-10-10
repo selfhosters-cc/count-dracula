@@ -1,7 +1,7 @@
 # Walking skeleton: one tap reaches the TV
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by:
 
 ## What to build

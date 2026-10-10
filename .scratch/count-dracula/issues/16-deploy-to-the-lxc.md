@@ -1,7 +1,7 @@
 # Deploy to the LXC on both routes
 
 Type: task (HITL)
-Status: ready-for-agent
+Status: done
 Blocked by: 15
 
 ## What to build

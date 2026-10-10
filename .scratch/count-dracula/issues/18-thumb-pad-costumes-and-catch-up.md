@@ -1,7 +1,7 @@
 # Thumb-pad counting screen with costumes and Catch-up
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 17
 
 ## What to build

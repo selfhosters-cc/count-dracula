@@ -1,7 +1,7 @@
 # Phone soundboard (Must #7)
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 26
 
 ## What to build

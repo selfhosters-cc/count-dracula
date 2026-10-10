@@ -1,7 +1,7 @@
 # Phone offline outbox and phone name
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 15
 
 ## What to build

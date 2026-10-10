@@ -1,7 +1,7 @@
 # Add missed kids and the tally sheet
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 20, 22
 
 ## What to build

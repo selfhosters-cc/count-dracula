@@ -1,7 +1,7 @@
 # End and resume the night
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 26, 29
 
 ## What to build

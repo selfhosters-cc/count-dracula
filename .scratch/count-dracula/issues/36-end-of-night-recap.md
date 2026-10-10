@@ -1,7 +1,7 @@
 # End-of-night recap (Must #9)
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 35
 
 ## What to build

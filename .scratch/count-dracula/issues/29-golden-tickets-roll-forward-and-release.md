@@ -1,7 +1,7 @@
 # Golden tickets: roll forward, Add a ticket, Release remaining
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 26, 28
 
 ## What to build

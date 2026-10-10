@@ -1,7 +1,7 @@
 # Milestones and Beat last year (Must #3)
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 21, 25
 
 ## What to build

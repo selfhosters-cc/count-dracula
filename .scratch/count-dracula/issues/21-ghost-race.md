@@ -1,7 +1,7 @@
 # Ghost race (Must #2)
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 20
 
 ## What to build

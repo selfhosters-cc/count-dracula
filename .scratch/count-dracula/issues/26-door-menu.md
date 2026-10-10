@@ -1,7 +1,7 @@
 # ☰ door menu: volume, mutes, Add a helper
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 25
 
 ## What to build

@@ -1,7 +1,7 @@
 # Undo and Recent
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 18
 
 ## What to build

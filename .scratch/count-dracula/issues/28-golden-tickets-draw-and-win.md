@@ -1,7 +1,7 @@
 # Golden tickets: draw and live win (Must #4)
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 17, 22, 27
 
 ## What to build

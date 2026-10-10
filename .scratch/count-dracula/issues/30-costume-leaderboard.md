@@ -1,7 +1,7 @@
 # Costume leaderboard (Must #5)
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 18, 20
 
 ## What to build

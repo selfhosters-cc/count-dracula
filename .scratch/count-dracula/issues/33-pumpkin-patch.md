@@ -1,7 +1,7 @@
 # Pumpkin patch (Must #8)
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 20, 28
 
 ## What to build

@@ -1,7 +1,7 @@
 # TV Scoreboard frame and kid pop (Must #1)
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 15
 
 ## What to build

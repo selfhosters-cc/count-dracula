@@ -1,7 +1,7 @@
 # New-costume alert (Must #6)
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 18, 25
 
 ## What to build

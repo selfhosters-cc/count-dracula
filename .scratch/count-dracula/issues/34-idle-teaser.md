@@ -1,7 +1,7 @@
 # Idle teaser
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 21, 27, 28
 
 ## What to build

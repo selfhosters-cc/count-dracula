@@ -1,7 +1,7 @@
 # Export CSV
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 22
 
 ## What to build

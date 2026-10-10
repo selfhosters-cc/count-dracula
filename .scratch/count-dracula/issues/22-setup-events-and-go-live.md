@@ -1,7 +1,7 @@
 # Setup: events, Go live, costumes and settings
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 18
 
 ## What to build
