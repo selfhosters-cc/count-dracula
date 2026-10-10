@@ -15,6 +15,13 @@ const GENERATORS = {
   fanfare: { seconds: 3, draw: fanfare },
   golden: { seconds: 4, draw: goldenFanfare },
   ding: { seconds: 0.7, draw: dingDing },
+  // Soundboard fallbacks until the real (mostly homemade) recordings land: rough cartoon versions.
+  board1: { seconds: 2.2, draw: (ctx) => cackle(ctx) },
+  board2: { seconds: 2.6, draw: (ctx) => howl(ctx) },
+  board3: { seconds: 1.6, draw: (ctx) => cheer(ctx) },
+  board4: { seconds: 1.6, draw: (ctx) => scream(ctx) },
+  board5: { seconds: 1.8, draw: (ctx) => creak(ctx) },
+  board6: { seconds: 3, draw: (ctx, s) => thunder(ctx, s) },
   ambience: { seconds: 8, draw: nightLoop },
 }
 
@@ -22,9 +29,10 @@ export async function createWebAudio({ manifestUrl = '/sounds/manifest.json' } =
   const ctx = new AudioContext({ latencyHint: 'interactive' })
   const compressor = new DynamicsCompressorNode(ctx, { threshold: -14, knee: 8, ratio: 6, attack: 0.003, release: 0.2 })
   const master = new GainNode(ctx, { gain: 1 })
-  const buses = { master, fx: new GainNode(ctx), ambience: new GainNode(ctx) }
+  const buses = { master, fx: new GainNode(ctx), ambience: new GainNode(ctx), board: new GainNode(ctx) }
   buses.fx.connect(master)
   buses.ambience.connect(master)
+  buses.board.connect(master)
   master.connect(compressor).connect(ctx.destination)
 
   const manifest = await fetch(manifestUrl).then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
@@ -45,9 +53,17 @@ export async function createWebAudio({ manifestUrl = '/sounds/manifest.json' } =
     },
     resume: () => ctx.resume(),
 
-    voice(slot, { gain, detune }) {
+    // Swap a slot's generated sound for a real file (the soundboard's, named in the server config).
+    async useFile(slot, path) {
+      try {
+        const res = await fetch(path)
+        if (res.ok) buffers[slot] = await ctx.decodeAudioData(await res.arrayBuffer())
+      } catch {}
+    },
+
+    voice(slot, { gain, detune, bus = 'fx' }) {
       const source = new AudioBufferSourceNode(ctx, { buffer: buffers[slot], detune })
-      source.connect(new GainNode(ctx, { gain })).connect(buses.fx)
+      source.connect(new GainNode(ctx, { gain })).connect(buses[bus])
       source.start()
       return {
         duration: buffers[slot].duration / 2 ** (detune / 1200),
@@ -198,6 +214,69 @@ function dingDing(ctx) {
       osc.stop(at + 0.5)
     }
   }
+}
+
+function tone(ctx, { type = 'sine', from, to = from, at = 0, length, level, filter }) {
+  const osc = new OscillatorNode(ctx, { type, frequency: from })
+  osc.frequency.setValueAtTime(from, at)
+  osc.frequency.exponentialRampToValueAtTime(to, at + length)
+  const out = envelope(ctx, level, 0.02, length, at)
+  if (filter) osc.connect(new BiquadFilterNode(ctx, filter)).connect(out)
+  else osc.connect(out)
+  osc.start(at)
+  osc.stop(at + length + 0.05)
+  return osc
+}
+
+// "MWAHAHAHA": six falling sawtooth "ha"s through a vowel-ish band-pass.
+function cackle(ctx) {
+  for (let i = 0; i < 6; i++) tone(ctx, { type: 'sawtooth', from: 330 - i * 22, to: 260 - i * 22, at: 0.15 + i * 0.3, length: 0.22, level: 0.25, filter: { type: 'bandpass', frequency: 900, Q: 2 } })
+}
+
+// "AWOOOOO": a sine that rises, holds with vibrato, and falls away.
+function howl(ctx) {
+  const osc = tone(ctx, { from: 300, to: 620, length: 2.4, level: 0.3 })
+  osc.frequency.setValueAtTime(300, 0)
+  osc.frequency.exponentialRampToValueAtTime(620, 0.6)
+  osc.frequency.setValueAtTime(620, 1.6)
+  osc.frequency.exponentialRampToValueAtTime(380, 2.4)
+  const vibrato = new OscillatorNode(ctx, { frequency: 5.5 })
+  vibrato.connect(new GainNode(ctx, { gain: 12 })).connect(osc.frequency)
+  vibrato.start(0.6)
+  vibrato.stop(2.4)
+}
+
+// "Happy Halloween!": a jolly four-note "hap-py hal-lo-ween" stand-in.
+function cheer(ctx) {
+  ;[523.3, 659.3, 784, 1046.5].forEach((f, i) => tone(ctx, { type: 'triangle', from: f, at: i * 0.22, length: i === 3 ? 0.7 : 0.18, level: 0.3 }))
+}
+
+// A scream: a high sawtooth sliding up and down, roughened with noise.
+function scream(ctx, seconds = 1.6) {
+  const osc = tone(ctx, { type: 'sawtooth', from: 900, to: 1500, length: 1.4, level: 0.18, filter: { type: 'bandpass', frequency: 2200, Q: 1.5 } })
+  osc.frequency.setValueAtTime(900, 0)
+  osc.frequency.linearRampToValueAtTime(1500, 0.3)
+  osc.frequency.linearRampToValueAtTime(1100, 1.4)
+  const noise = noiseSource(ctx, seconds)
+  noise.connect(new BiquadFilterNode(ctx, { type: 'highpass', frequency: 2500 })).connect(envelope(ctx, 0.08, 0.05, 1.3))
+  noise.start(0)
+}
+
+// A creaky door: a low sawtooth whose pitch judders and slowly climbs.
+function creak(ctx) {
+  const osc = tone(ctx, { type: 'sawtooth', from: 90, to: 160, length: 1.6, level: 0.3, filter: { type: 'bandpass', frequency: 700, Q: 6 } })
+  const judder = new OscillatorNode(ctx, { type: 'square', frequency: 23 })
+  judder.connect(new GainNode(ctx, { gain: 18 })).connect(osc.frequency)
+  judder.start(0)
+  judder.stop(1.6)
+}
+
+// Thunder with a held organ chord underneath.
+function thunder(ctx, seconds) {
+  const rumble = noiseSource(ctx, seconds)
+  rumble.connect(new BiquadFilterNode(ctx, { type: 'lowpass', frequency: 260 })).connect(envelope(ctx, 0.9, 0.04, 2.6))
+  rumble.start(0)
+  for (const f of [110, 164.8, 220, 261.6]) tone(ctx, { from: f, at: 0.3, length: 2.5, level: 0.07 })
 }
 
 // Wind, crickets and one owl, looping every `seconds` (all modulation divides the loop evenly).

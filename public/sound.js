@@ -24,6 +24,8 @@ const DUCK_RELEASE_S = 0.8
 // spooky flourish for #100/#200/#300 and Beat last year.
 const STINGS = { 'sting:50': 'sting50', fanfare: 'fanfare', ding: 'ding' } // ding: the new-costume "ding-ding"
 
+const BOARD_DUCK = 0.35 // the soundboard ducks the automatic sounds (spec §10)
+
 const TICK_GAIN = 0.4 // a late-tap roll-up: one soft tick
 const TICK_QUIET_MS = 2_000 // a backlog arrives as a run of late kids: one tick for the lot
 
@@ -40,6 +42,7 @@ export function createSound({ audio, clock, random = Math.random }) {
   let unduckTimer = null
   let lastTick = -Infinity
   let goldenUntil = 0 // nothing else plays during the golden fanfare (spec §10)
+  let boardTimer = null
   let mutes = {}
 
   const ambienceLevel = () => (mutes.ambience ? 0 : 1) // muted, the loop keeps running silently: the keep-alive
@@ -99,6 +102,16 @@ export function createSound({ audio, clock, random = Math.random }) {
         return
       }
       if (clock.now() < goldenUntil) return
+      if (name.startsWith('board:')) {
+        // On its own bus, outside the voice cap; the automatic sounds and the ambience duck under it.
+        const voice = audio.voice(`board${name.slice(6)}`, { gain: 1, detune: 0, bus: 'board' })
+        const until = clock.now() + voice.duration * 1000
+        audio.ramp('fx', BOARD_DUCK, DUCK_ATTACK_S)
+        clock.clearTimeout(boardTimer)
+        boardTimer = clock.setTimeout(() => audio.ramp('fx', 1, DUCK_RELEASE_S), until - clock.now() + DUCK_HOLD_MS)
+        duckUntil(until)
+        return
+      }
       if (name === 'tick') {
         const now = clock.now()
         if (now - lastTick >= TICK_QUIET_MS) play('tick', { gain: TICK_GAIN, detune: 0 })

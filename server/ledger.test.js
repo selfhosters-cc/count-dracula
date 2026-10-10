@@ -178,7 +178,7 @@ describe('snapshot', () => {
         ],
       },
       golden: { left: 5, nextIsGolden: false },
-      settings: { switches: expect.any(Object), mix: expect.any(Object), lanUrl: null },
+      settings: { switches: expect.any(Object), mix: expect.any(Object), lanUrl: null, soundboard: [] },
       seq: 1,
     })
     expect(JSON.stringify(snap)).not.toContain(ledger.joinKey())
@@ -973,5 +973,39 @@ describe('new costume alert', () => {
     const [added] = ledger.apply(catchUp('door', 0))
 
     expect(added.newCostume).toBeUndefined()
+  })
+})
+
+describe('soundboard', () => {
+  const board = [1, 2, 3, 4, 5, 6].map((n) => ({ label: `Sound ${n}`, file: `board-${n}.mp3` }))
+  function setup(config = {}) {
+    let clockMs = 1_000_000
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed, soundboard: board, now: () => clockMs, ...config })
+    return { ledger, wait: (ms) => (clockMs += ms) }
+  }
+
+  test('a press plays its slot on the TV; the labels come from the config file', () => {
+    const { ledger } = setup()
+
+    expect(ledger.snapshot().settings.soundboard.map((s) => s.label)).toEqual(['Sound 1', 'Sound 2', 'Sound 3', 'Sound 4', 'Sound 5', 'Sound 6'])
+    expect(ledger.apply({ type: 'soundboard', slot: 3 })).toMatchObject([{ type: 'soundboard', slot: 3, label: 'Sound 3' }])
+  })
+
+  test('one 3 s cooldown across every button and every phone', () => {
+    const { ledger, wait } = setup()
+    ledger.apply({ type: 'soundboard', slot: 1 })
+
+    wait(1_000)
+    expect(ledger.apply({ type: 'soundboard', slot: 4 })).toEqual([])
+    wait(1_999)
+    expect(ledger.apply({ type: 'soundboard', slot: 2 })).toEqual([])
+    wait(1)
+    expect(ledger.apply({ type: 'soundboard', slot: 2 })).toHaveLength(1)
+  })
+
+  test('refuses slots outside 1–6, and everything with the switch off', () => {
+    expect(() => setup().ledger.apply({ type: 'soundboard', slot: 7 })).toThrow(BadCommand)
+    const off = setup({ switches: { soundboard: false } })
+    expect(() => off.ledger.apply({ type: 'soundboard', slot: 1 })).toThrow(BadCommand)
   })
 })

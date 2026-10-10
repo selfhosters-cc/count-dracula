@@ -68,6 +68,9 @@
     #menu .mutes button[aria-pressed=true] { background: var(--orange); color: #1a0d00; }
     #menu .wide { display: block; width: 100%; height: 50px; border-radius: 12px; background: var(--panel2); font-weight: 800;
       text-align: center; line-height: 50px; color: var(--text); text-decoration: none; margin-top: 8px; }
+    #board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    #board button { height: 64px; border-radius: 14px; background: var(--panel2); font-weight: 800; font-size: 14px; padding: 4px; }
+    #board button .e { display: block; font-size: 22px; }
     #helper-qr { background: #fff; border-radius: 14px; padding: 14px; margin-top: 10px; text-align: center; }
     #helper-qr svg { width: min(72vw, 280px); height: auto; }
     #helper-qr p { color: #333; font-size: 12px; word-break: break-all; margin: 8px 0 0; }
@@ -136,6 +139,10 @@
           <b>☰ Door menu</b><button class="close" id="menu-close" aria-label="Close" style="width:44px;height:44px;border-radius:12px;background:#ffffff10">▾</button>
         </div>
         <p class="unjoined" id="unjoined" hidden>This phone hasn't joined yet: scan a helper's code first.</p>
+        <div id="board-box" hidden>
+          <h4>Soundboard (plays on the TV)</h4>
+          <div id="board"></div>
+        </div>
         <h4>TV sound</h4>
         <input type="range" id="volume" min="0" max="100" step="1" aria-label="TV volume">
         <div class="mutes">
@@ -417,8 +424,20 @@
         const shift = live.state?.event.clockShiftMs ?? 0
         $('release-box').hidden = !(left > 0 && releaseOpen(eventNow(Date.now(), shift)))
         $('release').textContent = `🎫 Release remaining tickets (${left})`
+        const sounds = live.state?.settings.soundboard ?? []
+        $('board-box').hidden = !sounds.length // switched off → hidden in ☰
+        if ($('board').childElementCount !== sounds.length) {
+          $('board').replaceChildren(
+            ...sounds.map((s) => {
+              const b = document.createElement('button')
+              b.dataset.slot = s.slot
+              b.append(Object.assign(document.createElement('span'), { className: 'e', textContent: s.emoji ?? '🔊' }), s.label)
+              return b
+            }),
+          )
+        }
         $('unjoined').hidden = joined
-        for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release')) c.disabled = !joined
+        for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release, #board button')) c.disabled = !joined
       }
       $('menu-open').addEventListener('click', () => {
         renderMenu()
@@ -439,6 +458,13 @@
       })
       live.on(({ delta }) => {
         if (!delta || delta.type === 'mix.changed' || 'golden' in delta) renderMenu()
+      })
+      $('board').addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-slot]')
+        if (!b) return
+        const res = await post('/api/soundboard', { slot: Number(b.dataset.slot) }).catch(() => null)
+        if (!res?.ok) return toast("Couldn't reach the TV")
+        toast((await res.json()).played ? `🔊 ${b.textContent.trim()}` : 'Cooling down: one sound every 3 s')
       })
       $('release').addEventListener('click', async () => {
         const left = live.state?.golden?.left ?? 0

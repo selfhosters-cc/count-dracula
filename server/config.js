@@ -14,7 +14,8 @@ export function loadConfig(configPath) {
     lanUrl: raw.lanUrl ?? null, // what "Add a helper" puts in its QR code; null → this machine's LAN address
     dbPath: fromConfigDir(raw.dbPath ?? 'count-dracula.sqlite'),
     switches: raw.switches ?? {},
-    soundboard: (raw.soundboard ?? []).map((slot) => ({ label: slot.label, file: slot.file })),
+    // 6 slots (3 homemade, 3 stock): the button label, the file the TV plays, and its TV visual.
+    soundboard: (raw.soundboard ?? []).map((slot) => ({ label: slot.label, file: slot.file ?? null, shout: slot.shout ?? null, emoji: slot.emoji ?? null })),
     ghostSeed: raw.ghostSeed ? readGhostSeed(fromConfigDir(raw.ghostSeed)) : null,
   }
 }

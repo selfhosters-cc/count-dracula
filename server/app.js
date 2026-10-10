@@ -56,6 +56,13 @@ export function startServer({ configPath, port, heartbeatMs }) {
     'POST /api/release': write(async () => {
       hub.publish(ledger.apply({ type: 'release' }))
     }),
+    // ☰ soundboard: any phone with the key; the answer says whether it played or hit the cooldown.
+    'POST /api/soundboard': write(async (req) => {
+      const { slot } = await req.json()
+      const deltas = ledger.apply({ type: 'soundboard', slot })
+      hub.publish(deltas)
+      return Response.json({ played: deltas.length > 0 })
+    }),
     'POST /api/mix': write(async (req) => {
       const { volume, mutes } = await req.json()
       hub.publish(ledger.apply({ type: 'mix', volume, mutes }))

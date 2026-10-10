@@ -158,6 +158,30 @@ function showNewCostume({ name, emoji, count }) {
   bannerTimer = setTimeout(() => animate($('banner'), { transform: 'translateY(-110%)' }, { duration: 0.4 }), 4_000)
 }
 
+// ---- the soundboard (Must #7): its own layer, so it never waits for or interrupts the queue
+const FLYERS = ['🦇', '🐺', '🎃', '👻', '🚪', '⚡']
+function playBoard({ slot, label }) {
+  const entry = live.state?.settings.soundboard.find((s) => s.slot === slot)
+  sound.cue(`board:${slot}`) // the engine keeps it out of the golden fanfare
+  const shout = Object.assign(document.createElement('div'), { className: 'shout', textContent: entry?.shout ?? `${label.toUpperCase()}!` })
+  $('fx').append(shout)
+  animate(shout, { opacity: [0, 1, 1, 0], scale: [0.6, 1.1, 1, 1] }, { duration: 2.4, times: [0, 0.15, 0.8, 1] }).then(() => shout.remove())
+  for (let i = 0; i < 5; i++) {
+    const flyer = Object.assign(document.createElement('div'), { className: 'flyer', textContent: entry?.emoji ?? FLYERS[(slot - 1) % FLYERS.length] })
+    flyer.style.top = `${10 + i * 12}vh`
+    $('fx').append(flyer)
+    animate(flyer, { x: ['-15vw', '55vw', '120vw'], y: [0, '-18vh', '4vh'], rotate: [-10, 8, -6] }, { duration: 2.4, delay: i * 0.15, ease: 'linear' }).then(() => flyer.remove())
+  }
+}
+
+// The soundboard's own recordings, once the snapshot says which files they are.
+let boardFilesLoaded = false
+function loadBoardFiles(state) {
+  if (boardFilesLoaded) return
+  boardFilesLoaded = true
+  for (const s of state.settings.soundboard ?? []) if (s.file) audio.useFile(`board${s.slot}`, `/${s.file}`)
+}
+
 // ---- the costume leaderboard (Must #5): top 5 bars, keyed by costume so an overtake slides into place
 const lbRows = new Map()
 function renderLeaderboard(state) {
@@ -235,8 +259,10 @@ live.on(({ state, cause, delta }) => {
     renderGoldenPill(state)
     renderLeaderboard(state)
     applyMix(state)
+    loadBoardFiles(state)
     return
   }
+  if (delta.type === 'soundboard') return playBoard(delta)
   if (delta.type === 'mix.changed') return applyMix(state)
   renderRace(state)
   renderGoldenPill(state)

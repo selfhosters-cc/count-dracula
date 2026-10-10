@@ -13,10 +13,10 @@ function fakeAudio(clock) {
     async resume() {
       audio.state = 'running'
     },
-    voice(slot, { gain, detune }) {
-      const v = { slot, gain, detune, at: clock.now(), until: clock.now() + lengths[slot] * 1000, stopped: false }
+    voice(slot, { gain, detune, bus = 'fx' }) {
+      const v = { slot, gain, detune, bus, at: clock.now(), until: clock.now() + (lengths[slot] ?? 2) * 1000, stopped: false }
       audio.voices.push(v)
-      return { duration: lengths[slot], stop: () => ((v.stopped = true), (v.until = clock.now())) }
+      return { duration: lengths[slot] ?? 2, stop: () => ((v.stopped = true), (v.until = clock.now())) }
     },
     ramp(bus, level, seconds) {
       audio.ramps.push({ bus, level, seconds, at: clock.now() })
@@ -238,5 +238,34 @@ describe('golden fanfare', () => {
     await clock.advance(3_100)
     sound.cue('bloop')
     expect(audio.voices.at(-1).slot).toBe('bloop')
+  })
+})
+
+describe('soundboard', () => {
+  const lastRamp = (audio, bus) => audio.ramps.filter((r) => r.bus === bus).at(-1)?.level
+
+  test('plays its slot on its own bus over everything, ducking the automatic sounds and the ambience until it ends', async () => {
+    const { sound, audio, clock } = await setup()
+    sound.cue('bloop')
+
+    sound.cue('board:3')
+
+    expect(audio.voices.at(-1)).toMatchObject({ slot: 'board3', bus: 'board', gain: 1 })
+    expect(audio.voices[0].stopped).toBe(false) // it doesn't cut off the pop
+    expect(lastRamp(audio, 'fx')).toBeLessThan(1)
+    expect(lastRamp(audio, 'ambience')).toBeLessThan(1)
+
+    await clock.advance(5_000)
+    expect(lastRamp(audio, 'fx')).toBe(1)
+    expect(lastRamp(audio, 'ambience')).toBe(1)
+  })
+
+  test("doesn't play during the golden fanfare", async () => {
+    const { sound, audio } = await setup()
+    sound.cue('golden')
+
+    sound.cue('board:1')
+
+    expect(audio.voices.map((v) => v.slot)).toEqual(['golden'])
   })
 })

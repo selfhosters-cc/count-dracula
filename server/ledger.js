@@ -77,6 +77,9 @@ export class BadCommand extends Error {}
 
 // The TV's volume and mutes from the ☰ menu. Global, not per event: a level tuned at the rehearsal
 // should survive Go live (builder's latitude, spec §16).
+// The soundboard's shared cooldown: one sound per 3 s across every button and phone (spec §10).
+const SOUNDBOARD_COOLDOWN_MS = 3_000
+
 const DEFAULT_MIX = { volume: 1, mutes: { ambience: false, bloops: false, everything: false } }
 
 // A tap that reaches the server more than this long after it was tapped is late (spec §2).
@@ -98,6 +101,8 @@ export function openLedger(db, config) {
   const now = config.now ?? Date.now
   const random = config.random ?? Math.random
   const lanUrl = typeof config.lanUrl === 'function' ? config.lanUrl : () => config.lanUrl ?? null
+  const soundboard = (config.soundboard ?? []).slice(0, 6).map((s, i) => ({ slot: i + 1, ...s }))
+  let lastBoardAt = -Infinity
 
   db.exec('PRAGMA journal_mode = WAL')
   db.exec(SCHEMA)
@@ -331,6 +336,17 @@ export function openLedger(db, config) {
       // Kept, marked removed: a deleted row's id could be reused by the next batch.
       db.query('UPDATE backfill_batches SET removed_at = ? WHERE id = ? AND event_id = ?').run(now(), batchId, event.id)
       return kidIds.length ? [{ type: 'kids.removed', kidIds, golden: goldenSummary(event) }] : []
+    },
+
+    // ☰ soundboard (Must #7): plays on the TV straight away, at most once per 3 s across all phones.
+    soundboard({ slot }) {
+      if (!switches.soundboard) throw new BadCommand('The soundboard is switched off')
+      const entry = soundboard.find((s) => s.slot === slot)
+      if (!entry) throw new BadCommand('No such soundboard button')
+      const at = now()
+      if (at - lastBoardAt < SOUNDBOARD_COOLDOWN_MS) return []
+      lastBoardAt = at
+      return [{ type: 'soundboard', slot, label: entry.label }]
     },
 
     // ---- The ☰ menu's TV controls (spec §5): any phone with the join key.
@@ -567,7 +583,7 @@ export function openLedger(db, config) {
           .map(toKid),
         ghost: ghostOf(event),
         golden: goldenSummary(event),
-        settings: { switches, mix: currentMix(), lanUrl: lanUrl() },
+        settings: { switches, mix: currentMix(), lanUrl: lanUrl(), soundboard: switches.soundboard ? soundboard : [] },
         seq,
       }
     },

@@ -17,8 +17,8 @@ Six scare buttons in the ☰ menu that play on the TV, behind the Must #7 featur
 
 ## Acceptance criteria
 
-- [ ] All 6 buttons show their configured labels and play on the TV within a moment of the press
-- [ ] Mashing buttons from two phones plays at most one sound per 3 s
-- [ ] A soundboard press during a pop doesn't cut off or delay the pop
-- [ ] A press during the golden fanfare doesn't play
-- [ ] With the switch off, the soundboard is hidden in ☰
+- [x] All 6 buttons show their configured labels and play on the TV within a moment of the press
+- [x] Mashing buttons from two phones plays at most one sound per 3 s
+- [x] A soundboard press during a pop doesn't cut off or delay the pop
+- [x] A press during the golden fanfare doesn't play
+- [x] With the switch off, the soundboard is hidden in ☰
