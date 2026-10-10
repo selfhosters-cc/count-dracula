@@ -35,7 +35,7 @@ const labels = {
       ctx.fillText(marks.ghostEnd.text, scales.x.right + fs * 0.4, scales.y.getPixelForValue(marks.ghostEnd.y))
     }
     if (marks.ghostNow) {
-      ctx.font = `${fs * 1.6}px sans-serif`
+      ctx.font = `${fs * 1.6}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`
       ctx.textAlign = 'center'
       const y = scales.y.getPixelForValue(marks.ghostNow.y)
       const above = marks.ghostNow.y >= marks.tonight?.y // keep 👻 off tonight's dot
