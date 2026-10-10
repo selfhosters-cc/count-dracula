@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { eventNow, ghost, minuteOfDay, pace, tagColour, toBuckets } from './night-maths.js'
+import { eventNow, ghost, minuteOfDay, pace, releaseOpen, tagColour, toBuckets } from './night-maths.js'
 import seed2025 from '../config/2025-counts.json'
 
 describe('tagColour', () => {
@@ -104,5 +104,20 @@ describe('pace against the ghost', () => {
   test("is a new record once tonight passes the ghost's total, not when it ties", () => {
     expect(pace(346, 346, 346)).toEqual({ kind: 'level', by: 0 })
     expect(pace(347, 346, 346)).toEqual({ kind: 'record', by: 1 })
+  })
+})
+
+describe('releaseOpen', () => {
+  const local = (hh, mm) => new Date(2026, 9, 31, hh, mm).getTime()
+
+  test('opens "Release remaining" from 7:45pm event time', () => {
+    expect(releaseOpen(local(19, 44))).toBe(false)
+    expect(releaseOpen(local(19, 45))).toBe(true)
+    expect(releaseOpen(local(20, 30))).toBe(true)
+  })
+
+  test('goes by event time: a +3h rehearsal at 4:45pm real time is past the gate', () => {
+    expect(releaseOpen(eventNow(local(16, 45), 3 * 3_600_000))).toBe(true)
+    expect(releaseOpen(eventNow(local(16, 45), 0))).toBe(false)
   })
 })

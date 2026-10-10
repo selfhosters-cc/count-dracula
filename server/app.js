@@ -9,7 +9,7 @@ import { createHub } from './hub.js'
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html' }
-const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag'])
+const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket'])
 
 export function startServer({ configPath, port, heartbeatMs }) {
   const config = loadConfig(configPath)
@@ -38,6 +38,10 @@ export function startServer({ configPath, port, heartbeatMs }) {
       const deltas = ledger.apply(command)
       hub.publish(deltas)
       return Response.json({ deltas, joinKey: ledger.joinKey() })
+    }),
+    // ☰ "Release remaining tickets": any phone with the join key (the phone shows it from 7:45pm event time).
+    'POST /api/release': write(async () => {
+      hub.publish(ledger.apply({ type: 'release' }))
     }),
     'POST /api/mix': write(async (req) => {
       const { volume, mutes } = await req.json()

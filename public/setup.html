@@ -55,6 +55,7 @@
       <h2>Live now: <span id="live-name"></span></h2>
       <p class="muted"><span id="live-kids"></span> kids · join key <code id="join-key"></code></p>
       <div class="row">
+        <button id="add-ticket">🎫 Add a golden ticket</button>
         <button id="change-key" class="danger">Change join key</button>
       </div>
     </section>
@@ -283,6 +284,13 @@
       if (typed !== event.name) return say("That didn't match, so nothing was deleted", true)
       admin({ type: 'deleteEvent', eventId: event.id, confirm: typed }, `Deleted ${event.name}`)
     }
+
+    // Draws one more number between tonight's count + 5 and the top of the range (spec §9).
+    $('add-ticket').addEventListener('click', async () => {
+      if (!confirm('Add a golden ticket to tonight? Its number is drawn secretly from the rest of the range.')) return
+      const done = await admin({ type: 'addTicket' })
+      if (done) say(`Ticket added: ${done.deltas[0].golden.left} left`)
+    })
 
     $('change-key').addEventListener('click', async () => {
       if (!confirm('Change the join key? Every phone using the old key stops counting until it rejoins.')) return

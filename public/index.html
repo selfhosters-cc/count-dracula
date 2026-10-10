@@ -143,6 +143,10 @@
           <button data-mute="bloops" aria-pressed="false">Kid bloops</button>
           <button data-mute="everything" aria-pressed="false">Everything</button>
         </div>
+        <div id="release-box" hidden>
+          <h4>Golden tickets</h4>
+          <button class="wide" id="release">🎫 Release remaining tickets</button>
+        </div>
         <h4>Helpers</h4>
         <button class="wide" id="helper-show">📱 Add a helper</button>
         <div id="helper-qr" hidden></div>
@@ -193,6 +197,7 @@
     import { createOutbox, uuid } from '/outbox.js'
     import { doorView } from '/door-view.js'
     import qrcode from '/vendor/qrcode/qrcode.js'
+    import { eventNow, releaseOpen } from '/shared/night-maths.js'
 
     const $ = (id) => document.getElementById(id)
     const EMOJIS = ['🧙', '🧛', '🧟', '👻', '🎃', '🦸', '🕷️', '👑', '🦖', '🐶', '🐱', '🦄', '🤖', '🦇', '🧚', '🏴‍☠️', '🐉', '🤡', '❓']
@@ -408,8 +413,12 @@
         if (document.activeElement !== $('volume')) $('volume').value = Math.round(m.volume * 100)
         for (const b of $('menu').querySelectorAll('[data-mute]')) b.setAttribute('aria-pressed', String(!!m.mutes[b.dataset.mute]))
         const joined = !!joinKey
+        const left = live.state?.golden?.left ?? 0
+        const shift = live.state?.event.clockShiftMs ?? 0
+        $('release-box').hidden = !(left > 0 && releaseOpen(eventNow(Date.now(), shift)))
+        $('release').textContent = `🎫 Release remaining tickets (${left})`
         $('unjoined').hidden = joined
-        for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show')) c.disabled = !joined
+        for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release')) c.disabled = !joined
       }
       $('menu-open').addEventListener('click', () => {
         renderMenu()
@@ -429,7 +438,13 @@
         b.setAttribute('aria-pressed', String(!m.mutes[b.dataset.mute])) // feels instant; the delta confirms
       })
       live.on(({ delta }) => {
-        if (delta?.type === 'mix.changed' || !delta) renderMenu()
+        if (!delta || delta.type === 'mix.changed' || 'golden' in delta) renderMenu()
+      })
+      $('release').addEventListener('click', async () => {
+        const left = live.state?.golden?.left ?? 0
+        if (!confirm(`Release the ${left} golden ticket${left === 1 ? '' : 's'} left? The next ${left} kid${left === 1 ? '' : 's'} at the door will win.`)) return
+        const res = await post('/api/release', {}).catch(() => null)
+        toast(res?.ok ? `🎫 Released: the next ${left} kid${left === 1 ? '' : 's'} win` : "Couldn't release: check the connection")
       })
 
       // A LAN phone that scans this joins without typing anything. Only ever drawn here, never on the TV.

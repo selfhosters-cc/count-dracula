@@ -777,3 +777,99 @@ describe('TV mix (☰ volume and mutes)', () => {
     expect(() => ledger.apply({ type: 'mix', ...mix })).toThrow(BadCommand)
   })
 })
+
+describe('golden tickets: roll forward, add and release', () => {
+  // A night racing a 30-kid ghost (range #3–#24), with tickets drawn at the start of each band.
+  function night({ tickets = 1 } = {}) {
+    let clockMs = 1_000_000_000
+    const ledger = openLedger(new Database(':memory:'), {
+      ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] },
+      random: () => 0,
+      now: () => clockMs,
+      switches: { milestones: false },
+    })
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Night' })
+    ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: ledger.snapshot().ghost.eventId, goldenCount: tickets })
+    ledger.apply({ type: 'goLive', eventId: event.id })
+    let i = 0
+    const live = () => ledger.apply(tap(`k${++i}`, { tappedAt: clockMs }))
+    const late = () => ledger.apply(tap(`k${++i}`, { tappedAt: clockMs - 60_000 }))
+    const won = (deltas) => deltas[0].moments.includes('golden')
+    return { ledger, live, late, won, tickets: () => ledger.tickets(event.id) }
+  }
+
+  test('a golden number that lands on a late tap goes to the next live kid, keeping its original number', () => {
+    const { ledger, live, late, won, tickets } = night() // ticket at #3
+    live()
+    live()
+    expect(won(late())).toBe(false) // #3 arrives late
+    expect(ledger.snapshot().golden).toEqual({ left: 1, nextIsGolden: true })
+
+    const next = live() // #4
+
+    expect(won(next)).toBe(true)
+    expect(next[0].golden).toEqual({ left: 0, nextIsGolden: false })
+    expect(tickets()).toEqual([{ number: 3, state: 'rolled', kidId: next[0].kid.id }])
+  })
+
+  test('several rolled tickets go to the next live kids, one each; late kids never take them', () => {
+    const { live, late, won, tickets } = night({ tickets: 3 }) // #3, #10, #17
+    for (let n = 1; n <= 20; n++) late() // a backlog flushes past all three
+
+    expect(won(late())).toBe(false)
+    expect([won(live()), won(live()), won(live()), won(live())]).toEqual([true, true, true, false])
+    expect(tickets().map((t) => t.state)).toEqual(['rolled', 'rolled', 'rolled'])
+  })
+
+  test("a live kid on its own hidden number wins that one; the rolled ticket waits for the next", () => {
+    const { live, late, tickets } = night({ tickets: 2 }) // #3 and #14
+    for (let n = 1; n <= 3; n++) late() // #3 rolls
+    for (let n = 4; n <= 13; n++) live() // #4 takes the rolled #3
+    const fourteen = live()
+
+    expect(fourteen[0].kid.number).toBe(14)
+    expect(tickets()).toMatchObject([{ number: 3, state: 'rolled' }, { number: 14, state: 'won', kidId: fourteen[0].kid.id }])
+  })
+
+  test('removing the late kids afterwards never brings a ticket back', () => {
+    const { ledger, live, late, tickets } = night()
+    live()
+    live()
+    const [lateThree] = late()
+    live() // wins the rolled #3
+
+    ledger.apply({ type: 'remove', kidId: lateThree.kid.id })
+
+    expect(ledger.snapshot().golden).toEqual({ left: 0, nextIsGolden: false })
+    expect(tickets().some((t) => t.state === 'hidden')).toBe(false)
+  })
+
+  test('Add a ticket draws one number between the count + 5 and the top of the range', () => {
+    const { ledger, live, tickets } = night()
+    for (let n = 1; n <= 4; n++) live() // #3 won; count 4
+
+    const deltas = ledger.apply({ type: 'addTicket' })
+
+    expect(deltas).toMatchObject([{ type: 'golden.changed', golden: { left: 1, nextIsGolden: false } }])
+    expect(tickets().find((t) => t.state === 'hidden').number).toBe(9) // random 0 → the bottom: 4 + 5
+  })
+
+  test("Add a ticket refuses when there's no room left in the range", () => {
+    const { ledger, live } = night()
+    for (let n = 1; n <= 20; n++) live() // 20 + 5 is past the top (#24)
+
+    expect(() => ledger.apply({ type: 'addTicket' })).toThrow(BadCommand)
+  })
+
+  test('Release remaining makes the next K live kids winners', () => {
+    const { ledger, live, late, won, tickets } = night({ tickets: 3 }) // #3, #10, #17, none reached
+    live()
+
+    const deltas = ledger.apply({ type: 'release' })
+
+    expect(deltas).toMatchObject([{ type: 'golden.changed', golden: { left: 3, nextIsGolden: true } }])
+    expect(won(late())).toBe(false)
+    expect([won(live()), won(live()), won(live()), won(live())]).toEqual([true, true, true, false])
+    expect(tickets().map((t) => t.state)).toEqual(['released', 'released', 'released'])
+  })
+})

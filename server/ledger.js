@@ -123,9 +123,11 @@ export function openLedger(db, config) {
   // All a client ever learns about the tickets: how many are left, and whether the next kid wins one.
   function goldenSummary(event) {
     if (!switches.goldenTickets) return null
-    const left = db.query("SELECT COUNT(*) AS n FROM golden_tickets WHERE event_id = ? AND state IN ('hidden', 'rolled')").get(event.id).n
+    const unclaimed = "event_id = ? AND kid_id IS NULL AND state IN ('hidden', 'rolled', 'released')"
+    const left = db.query(`SELECT COUNT(*) AS n FROM golden_tickets WHERE ${unclaimed}`).get(event.id).n
     const next = liveCount.get(event.id).n + 1
-    const nextIsGolden = !!db.query("SELECT 1 FROM golden_tickets WHERE event_id = ? AND state = 'hidden' AND number = ?").get(event.id, next)
+    const waiting = db.query("SELECT 1 FROM golden_tickets WHERE event_id = ? AND kid_id IS NULL AND state IN ('rolled', 'released')").get(event.id)
+    const nextIsGolden = !!waiting || !!db.query("SELECT 1 FROM golden_tickets WHERE event_id = ? AND state = 'hidden' AND number = ?").get(event.id, next)
     return { left, nextIsGolden }
   }
 
@@ -210,15 +212,24 @@ export function openLedger(db, config) {
   function referee(event, kid) {
     const moments = []
     const deferred = []
-    const ticket = switches.goldenTickets
-      ? db.query("SELECT id FROM golden_tickets WHERE event_id = ? AND state = 'hidden' AND number = ?").get(event.id, kid.number)
-      : null
-    if (ticket && kid.late) {
-      // Not left hidden below the count: ticket 29 hands a rolled ticket to the next live kid.
-      db.query("UPDATE golden_tickets SET state = 'rolled' WHERE id = ?").run(ticket.id)
-    } else if (ticket) {
-      db.query("UPDATE golden_tickets SET state = 'won', kid_id = ? WHERE id = ?").run(kid.id, ticket.id)
-      moments.push('golden')
+    if (switches.goldenTickets) {
+      const own = db.query("SELECT id FROM golden_tickets WHERE event_id = ? AND state = 'hidden' AND number = ?").get(event.id, kid.number)
+      if (kid.late) {
+        // Never left hidden below the count: it rolls forward to the next live kid, keeping its number.
+        if (own) db.query("UPDATE golden_tickets SET state = 'rolled' WHERE id = ?").run(own.id)
+      } else if (own) {
+        db.query("UPDATE golden_tickets SET state = 'won', kid_id = ? WHERE id = ?").run(kid.id, own.id)
+        moments.push('golden')
+      } else {
+        // One rolled-forward or released ticket per live kid, oldest first.
+        const waiting = db
+          .query("SELECT id FROM golden_tickets WHERE event_id = ? AND state IN ('rolled', 'released') AND kid_id IS NULL ORDER BY id LIMIT 1")
+          .get(event.id)
+        if (waiting) {
+          db.query('UPDATE golden_tickets SET kid_id = ? WHERE id = ?').run(kid.id, waiting.id)
+          moments.push('golden')
+        }
+      }
     }
     if (switches.milestones) {
       const fire = (moment, state = 'fired') => markMoment.run(event.id, moment, state, kid.id, now())
@@ -281,6 +292,27 @@ export function openLedger(db, config) {
       const mix = { volume, mutes: { ambience: !!mutes.ambience, bloops: !!mutes.bloops, everything: !!mutes.everything } }
       db.query("INSERT OR REPLACE INTO kv (key, value) VALUES ('mix', ?)").run(JSON.stringify(mix))
       return [{ type: 'mix.changed', mix }]
+    },
+
+    // "Add a ticket" (Setup, after Go live): one number between tonight's count + 5 and the top of the
+    // range, never one another hidden ticket already holds.
+    addTicket() {
+      const event = eventById()
+      const base = ghostOf(event)?.total ?? event.expected_kids
+      if (!switches.goldenTickets || !base) throw new BadCommand('Golden tickets need Race against or Expected kids')
+      const taken = new Set(db.query("SELECT number FROM golden_tickets WHERE event_id = ? AND state = 'hidden'").all(event.id).map((r) => r.number))
+      const free = []
+      for (let n = liveCount.get(event.id).n + 5; n <= Math.floor((base * 8) / 10); n++) if (!taken.has(n)) free.push(n)
+      if (!free.length) throw new BadCommand('No room left in the range for another ticket')
+      db.query("INSERT INTO golden_tickets (event_id, number, state) VALUES (?, ?, 'hidden')").run(event.id, free[Math.floor(random() * free.length)])
+      return [{ type: 'golden.changed', golden: goldenSummary(event) }]
+    },
+
+    // "Release remaining" (☰, from 7:45pm event time): the next K live kids win the K tickets left.
+    release() {
+      const event = eventById()
+      db.query("UPDATE golden_tickets SET state = 'released' WHERE event_id = ? AND state = 'hidden'").run(event.id)
+      return [{ type: 'golden.changed', golden: goldenSummary(event) }]
     },
 
     // ---- Setup (spec §6). Creating an event doesn't make it live.

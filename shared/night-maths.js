@@ -72,3 +72,8 @@ export function pace(count, ghostNow, ghostTotal) {
   if (gap < 0) return { kind: 'behind', by: -gap }
   return { kind: 'level', by: 0 }
 }
+
+// "Release remaining tickets" shows in the ☰ menu from 7:45pm event time (spec §5, §9).
+export function releaseOpen(eventNowMs) {
+  return minuteOfDay(eventNowMs) >= 19 * 60 + 45
+}

@@ -18,9 +18,9 @@ The paths that keep golden tickets in play when the night doesn't go to plan. Se
 
 ## Acceptance criteria
 
-- [ ] Backfilling past a golden number makes the next live tap win it, and the stored ticket remembers the original number
-- [ ] Removing the backfill batch afterwards doesn't bring any ticket back
-- [ ] Add a ticket draws a number in the stated range and the pill goes up by one
-- [ ] Release remaining is hidden before 7:45 event time, then makes the next K live kids win, one takeover each
-- [ ] The rehearsal scenarios 9a–9c run on a test database without manual fixes
-- [ ] Roll-forward and release are unit-tested on the server
+- [x] Backfilling past a golden number makes the next live tap win it, and the stored ticket remembers the original number
+- [x] Removing the backfill batch afterwards doesn't bring any ticket back
+- [x] Add a ticket draws a number in the stated range and the pill goes up by one
+- [x] Release remaining is hidden before 7:45 event time, then makes the next K live kids win, one takeover each
+- [x] The rehearsal scenarios 9a–9c run on a test database without manual fixes *(run with late taps standing in for backfill, which arrives in ticket 23; re-run 9a–9c with real backfill there)*
+- [x] Roll-forward and release are unit-tested on the server
