@@ -12,7 +12,7 @@ APP=/opt/count-dracula
 cd "$(dirname "$0")/.."
 
 pve() { ssh -o BatchMode=yes "$PVE" "$@"; }
-in_lxc() { pve "pct exec $VMID -- bash -euc $(printf '%q' "$1")"; }
+in_lxc() { pve "pct exec $VMID -- env -u SSH_CLIENT -u SSH2_CLIENT -u SSH_CONNECTION bash -euc $(printf '%q' "$1")"; } # (no SSH_* or Debian bash reads bash.bashrc)
 
 health() {
   for _ in $(seq 1 20); do
