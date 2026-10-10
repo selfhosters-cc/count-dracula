@@ -28,7 +28,7 @@ const labels = {
     const { ctx, scales, options } = chart
     const marks = options.plugins.raceLabels
     if (!marks) return
-    const fs = Math.max(14, chart.height / 18)
+    const fs = Math.min(26, Math.max(14, chart.height / 18)) // capped: a taller chart (leaderboard off) mustn't push labels off the edge
     ctx.save()
     ctx.textBaseline = 'middle'
     if (marks.ghostEnd) {

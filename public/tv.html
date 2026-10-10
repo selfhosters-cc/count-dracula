@@ -46,7 +46,20 @@
     .chartbox .legend:empty { display: none; }
     .chartbox .legend i { display: inline-block; width: 2.2em; height: 0; vertical-align: middle; margin-right: .5em; }
     .chartbox .plot { position: relative; flex: 1; min-height: 0; }
-    .boardbox { grid-column: 1 / -1; min-width: 0; }
+    .boardbox { grid-column: 1 / -1; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+      font-size: clamp(11px, 1.25vw, 24px); }
+    #board.no-leaderboard { grid-template-rows: auto 1fr 10vh; }
+    #board.no-leaderboard .boardbox { display: none; }
+    .rows { position: relative; flex: 1; margin-top: .5em; }
+    .lb-row { position: absolute; left: 0; right: 0; height: 18%; display: grid; grid-template-columns: minmax(0, 14em) 1fr;
+      align-items: center; gap: .8em; transition: top .6s cubic-bezier(.4, 1.4, .5, 1); }
+    .lb-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+    .lb-track { position: relative; height: 70%; }
+    .lb-bar { position: absolute; left: 0; top: 0; bottom: 0; min-width: 6px; border-radius: 0 6px 6px 0;
+      transition: width .6s cubic-bezier(.4, 1.4, .5, 1); }
+    .lb-val { position: absolute; top: 50%; transform: translateY(-50%); font-family: var(--f-display); padding-left: .4em;
+      transition: left .6s cubic-bezier(.4, 1.4, .5, 1); }
+    .lb-empty { color: var(--ink-dim); margin-top: .5em; }
     .patchbox { grid-column: 1 / -1; min-width: 0; border-top: 2px solid var(--grid); }
 
     #count { display: inline-block; transform-origin: left center; }
@@ -101,7 +114,10 @@
       <div class="legend" id="legend"></div>
       <div class="plot"><canvas id="race" role="img" aria-label="Tonight's count racing last year's ghost"></canvas></div>
     </div>
-    <div class="boardbox" id="leaderboard"></div>
+    <div class="boardbox">
+      <div class="eyebrow">Costume leaderboard</div>
+      <div class="rows" id="leaderboard"></div>
+    </div>
     <div class="patchbox" id="patch"></div>
   </section>
 

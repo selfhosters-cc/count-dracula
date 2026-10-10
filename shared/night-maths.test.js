@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { atEventTime, eventNow, ghost, minuteOfDay, pace, releaseOpen, slots, tagColour, toBuckets } from './night-maths.js'
+import { atEventTime, eventNow, ghost, leaderboard, minuteOfDay, pace, releaseOpen, slots, tagColour, toBuckets } from './night-maths.js'
 import seed2025 from '../config/2025-counts.json'
 
 describe('tagColour', () => {
@@ -143,5 +143,23 @@ describe('atEventTime', () => {
 
   test('undoes the clock shift: with +3h at 3:10pm real, a 6:30pm row is 3:30pm real', () => {
     expect(atEventTime('18:30', local(15, 10), 3 * HOUR)).toBe(local(15, 30))
+  })
+})
+
+describe('leaderboard', () => {
+  const tags = ['Witch', 'Ghost', 'Bluey', 'Spidey', 'Elsa', 'Dino', 'Pirate'].map((name, i) => ({ id: i + 1, name, emoji: '🎃', order: i + 1 }))
+  const kids = (counts) => Object.entries(counts).flatMap(([tagId, n]) => Array.from({ length: n }, () => ({ tagId: Number(tagId) })))
+
+  test('ranks the top 5 costumes by count, in their tag colours; untagged kids are not a costume', () => {
+    const board = leaderboard([...kids({ 1: 2, 2: 9, 3: 4, 4: 1, 5: 7, 6: 3, 7: 8 }), { tagId: null }, { tagId: null }], tags)
+
+    expect(board.map((r) => [r.name, r.count])).toEqual([['Ghost', 9], ['Pirate', 8], ['Elsa', 7], ['Bluey', 4], ['Dino', 3]])
+    expect(board.map((r) => r.colour)).toEqual(['#199e70', '#8a84a8', '#9085e9', '#c98500', '#e66767'])
+  })
+
+  test('breaks ties by the costumes\' order, and keeps costumes nobody wore yet', () => {
+    const board = leaderboard(kids({ 3: 2, 2: 2 }), tags.slice(0, 4))
+
+    expect(board.map((r) => [r.name, r.count])).toEqual([['Ghost', 2], ['Bluey', 2], ['Witch', 0], ['Spidey', 0]])
   })
 })

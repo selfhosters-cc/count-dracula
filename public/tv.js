@@ -5,7 +5,7 @@ import { createDirector } from '/director.js'
 import { animate } from '/vendor/motion/motion.js'
 import confettiLib, { create as createConfetti } from '/vendor/canvas-confetti/confetti.module.js'
 import { createRaceChart } from '/race-chart.js'
-import { eventNow, ghost, minuteOfDay, pace } from '/shared/night-maths.js'
+import { eventNow, ghost, leaderboard, minuteOfDay, pace } from '/shared/night-maths.js'
 import { createSound } from '/sound.js'
 import { createWebAudio } from '/web-audio.js'
 
@@ -148,6 +148,41 @@ function paceText(state) {
   return p.kind === 'ahead' ? `👻 ${p.by} ahead of last year's ghost` : `👻 ${p.by} behind last year's ghost`
 }
 
+// ---- the costume leaderboard (Must #5): top 5 bars, keyed by costume so an overtake slides into place
+const lbRows = new Map()
+function renderLeaderboard(state) {
+  const on = state.settings.switches.costumeLeaderboard
+  $('board').classList.toggle('no-leaderboard', !on)
+  if (!on) return
+  const board = leaderboard(state.kids, state.tags)
+  const max = Math.max(1, ...board.map((r) => r.count))
+  const box = $('leaderboard')
+  if (!board.length) {
+    box.innerHTML = '<div class="lb-empty">Costumes show up here as the helpers add them.</div>'
+    lbRows.clear()
+    return
+  }
+  box.querySelector('.lb-empty')?.remove()
+  for (const [id, row] of lbRows) if (!board.some((r) => r.id === id)) (row.remove(), lbRows.delete(id))
+  board.forEach((r, rank) => {
+    let row = lbRows.get(r.id)
+    if (!row) {
+      row = Object.assign(document.createElement('div'), { className: 'lb-row' })
+      row.innerHTML = '<div class="lb-name"></div><div class="lb-track"><div class="lb-bar"></div><div class="lb-val num"></div></div>'
+      row.style.top = `${rank * 20}%`
+      box.append(row)
+      lbRows.set(r.id, row)
+    }
+    const share = (r.count / max) * 88 // leave room for the number at the end of the longest bar
+    row.style.top = `${rank * 20}%`
+    row.querySelector('.lb-name').textContent = `${r.emoji ?? ''} ${r.name}`.trim()
+    row.querySelector('.lb-bar').style.cssText = `width: ${share}%; background: ${r.colour}`
+    const val = row.querySelector('.lb-val')
+    val.textContent = r.count
+    val.style.left = `${share}%`
+  })
+}
+
 // The only golden thing the TV knows before a win: how many are left (spec §9).
 function renderGoldenPill(state) {
   const left = state.golden?.left ?? 0
@@ -188,12 +223,14 @@ live.on(({ state, cause, delta }) => {
     wasDisconnected = false
     renderRace(state)
     renderGoldenPill(state)
+    renderLeaderboard(state)
     applyMix(state)
     return
   }
   if (delta.type === 'mix.changed') return applyMix(state)
   renderRace(state)
   renderGoldenPill(state)
+  renderLeaderboard(state)
   if (delta.type === 'kid.added') {
     showCount(total, delta.kid.late ? 'roll' : 'bump')
     director.push(delta.moments ?? [], delta.kid)

@@ -92,3 +92,14 @@ export function atEventTime(hhmmText, realNowMs, shiftMs = 0) {
   day.setHours(h, m, 0, 0)
   return day.getTime() - shiftMs
 }
+
+// The TV's costume leaderboard (spec §7): the top 5 costumes by count, ties by their order, in the
+// same colours as the phone tiles. Costumes nobody has worn yet still show, at zero.
+export function leaderboard(kids, tags, size = 5) {
+  const counts = new Map(tags.map((t) => [t.id, 0]))
+  for (const k of kids) if (counts.has(k.tagId)) counts.set(k.tagId, counts.get(k.tagId) + 1)
+  return [...tags]
+    .sort((a, b) => counts.get(b.id) - counts.get(a.id) || a.order - b.order)
+    .slice(0, size)
+    .map((t) => ({ id: t.id, name: t.name, emoji: t.emoji, colour: tagColour(t.order), count: counts.get(t.id) }))
+}

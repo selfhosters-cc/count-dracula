@@ -17,8 +17,8 @@ The full-width leaderboard row on the TV, behind the Must #5 feature switch (off
 
 ## Acceptance criteria
 
-- [ ] With 7+ tags only the top 5 show, in the right colours
-- [ ] An overtake animates the reorder smoothly
-- [ ] Catch-up retags and costume renames update the bars live
-- [ ] Five long costume names don't overlap at 1080p
-- [ ] With the switch off, the row is hidden and the layout still looks deliberate
+- [x] With 7+ tags only the top 5 show, in the right colours
+- [x] An overtake animates the reorder smoothly
+- [x] Catch-up retags and costume renames update the bars live
+- [x] Five long costume names don't overlap at 1080p
+- [x] With the switch off, the row is hidden and the layout still looks deliberate
