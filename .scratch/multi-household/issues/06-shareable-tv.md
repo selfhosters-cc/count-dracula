@@ -1,7 +1,7 @@
 # Shareable TV: link, code and QR
 
 Type: grilling (HITL)
-Status: open
+Status: claimed
 Blocked by: 04
 
 ## Question
