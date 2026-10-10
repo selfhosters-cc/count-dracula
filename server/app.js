@@ -21,6 +21,10 @@ export function startServer({ configPath, port, heartbeatMs }) {
       const { id, tagId, tappedAt, phoneName } = await req.json()
       hub.publish(ledger.apply({ type: 'tap', id, tagId, tappedAt, phoneName }))
     }),
+    'POST /api/remove': write(async (req) => {
+      const { kidId } = await req.json()
+      hub.publish(ledger.apply({ type: 'remove', kidId }))
+    }),
     'POST /api/catch-up': write(async (req) => {
       const { tag, n, kid } = await req.json()
       hub.publish(ledger.apply({ type: 'catchUp', tag, n, kid }))

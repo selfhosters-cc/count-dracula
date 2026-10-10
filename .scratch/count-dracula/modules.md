@@ -116,14 +116,15 @@ The TV's "never celebrate a snapshot" rule is one check: `cause === 'delta'`.
 ```js
 const outbox = createOutbox({ send, storage, clock })
 outbox.tap(tagId) → entry
-outbox.undo() → { local: entry } | { server: kidId }   // pop an unsent tap, or ask the server
+outbox.remove(kidId) → { local: entry } | { server: kidId }   // drop an unsent tap, or queue a soft delete
+outbox.mine / outbox.claim(kidId)                       // ids this phone added: what Undo walks back through
 outbox.pending                                          // not yet acknowledged; persisted
 outbox.unconfirmed                                      // acknowledged, not yet seen in the live state
 outbox.sync({ cause, state })                           // feed it every live-state update
 outbox.retryNow()                                       // on `online` / `visibilitychange`
 outbox.status                                           // 'ok' | { waiting: n } | { down: n } | 'sent'
 
-doorView(liveState, outbox) → { total, untagged, tags, catchUp: { max, preview(n) }, recent, goldenBanner, … }
+doorView(liveState, outbox) → { total, untagged, tags, catchUp: { max, preview(n) }, recent, undo, goldenBanner, … }
 ```
 
 **Outbox hides:** UUIDs from `crypto.getRandomValues`, the localStorage outbox, retries on a timer and on `online`/`visibilitychange`, dropping entries once acknowledged (they stay `unconfirmed` until the live state shows them, so the door count doesn't dip while the stream reconnects after a server restart), and the ~5 s and ~2 min thresholds.

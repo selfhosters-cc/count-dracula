@@ -203,3 +203,83 @@ describe('acknowledged but not yet seen', () => {
     expect(outbox.unconfirmed).toEqual([])
   })
 })
+
+describe('removing kids', () => {
+  test('an unsent tap is just dropped from the outbox and never reaches the server', async () => {
+    const { outbox, server, clock } = setup()
+    server.up = false
+    const a = outbox.tap(null)
+    const b = outbox.tap(null)
+    await settle()
+
+    expect(outbox.remove(b.id)).toEqual({ local: b })
+
+    server.up = true
+    await clock.advance(2_000)
+    expect(server.received).toEqual([a])
+    expect(outbox.pending).toEqual([])
+  })
+
+  test('a kid the server has gets a queued removal, retried until acknowledged', async () => {
+    const { outbox, server, clock } = setup()
+    const a = outbox.tap(null)
+    await settle()
+    server.up = false
+
+    expect(outbox.remove(a.id)).toEqual({ server: a.id })
+    await clock.advance(10_000)
+    expect(outbox.pending).toEqual([{ type: 'remove', id: expect.any(String), kidId: a.id, queuedAt: expect.any(Number) }])
+    expect(outbox.status).toEqual({ waiting: 1 })
+
+    server.up = true
+    await clock.advance(2_000)
+    expect(server.received).toEqual([a, { type: 'remove', id: expect.any(String), kidId: a.id, queuedAt: expect.any(Number) }])
+    expect(outbox.pending).toEqual([])
+  })
+
+  test('a tap caught mid-send is removed on the server too, after it lands', async () => {
+    let release
+    const sent = []
+    const send = async (entry) => {
+      if (!entry.type) await new Promise((r) => (release = r)) // the tap's POST hangs
+      sent.push(entry)
+    }
+    const outbox = createOutbox({ send, storage: fakeStorage(), clock: fakeClock(), phoneName: 'Dad' })
+    const a = outbox.tap(null)
+
+    expect(outbox.remove(a.id)).toEqual({ server: a.id })
+
+    release()
+    await settle()
+    await settle()
+    expect(sent.map((e) => e.type ?? 'tap')).toEqual(['tap', 'remove'])
+  })
+
+  test('an acked removal stays unconfirmed until the live state no longer shows the kid', async () => {
+    const { outbox } = setup()
+    const a = outbox.tap(null)
+    await settle()
+    outbox.sync({ cause: 'delta', state: { kids: [{ id: a.id }] } })
+    outbox.remove(a.id)
+    await settle()
+
+    outbox.sync({ cause: 'delta', state: { kids: [{ id: a.id }] } }) // the stream hasn't caught up
+    expect(outbox.unconfirmed).toMatchObject([{ type: 'remove', kidId: a.id }])
+
+    outbox.sync({ cause: 'delta', state: { kids: [] } })
+    expect(outbox.unconfirmed).toEqual([])
+  })
+
+  test("remembers which kids are this phone's, across a reload, including a claimed catch-up kid", async () => {
+    const storage = fakeStorage()
+    const before = setup({ storage })
+    const a = before.outbox.tap(null)
+    const b = before.outbox.tap(3)
+    before.outbox.claim('door-kid')
+    await settle()
+
+    const after = setup({ storage })
+
+    expect([...after.outbox.mine]).toEqual([a.id, b.id, 'door-kid'])
+  })
+})

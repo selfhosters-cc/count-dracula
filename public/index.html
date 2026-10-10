@@ -52,6 +52,22 @@
       opacity: 0; transition: opacity .2s; pointer-events: none; }
     #toast.on { opacity: 1; }
 
+    #recent { position: absolute; inset: 0; z-index: 20; background: #000a; display: none; align-items: flex-end; }
+    #recent.on { display: flex; }
+    #recent .panel { background: var(--panel); width: 100%; border-radius: 22px 22px 0 0; max-height: 75%; overflow: auto; padding-bottom: 12px; }
+    #recent .grab { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px;
+      position: sticky; top: 0; background: var(--panel); }
+    .row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #ffffff10; }
+    .row .n { font-weight: 800; width: 48px; font-variant-numeric: tabular-nums; }
+    .row .who { flex: 1; min-width: 0; }
+    .row .meta { font-size: 12px; color: var(--dim); }
+    .row.queued { opacity: .55; }
+    .row .x, #recent .close { width: 44px; height: 44px; border-radius: 12px; background: #ffffff10; color: var(--danger); font-size: 20px; }
+    #recent .close { color: var(--text); }
+    .badge { font-size: 11px; padding: 2px 6px; border-radius: 6px; background: #ffffff18; margin-left: 6px; }
+    .badge.me { background: var(--orange-dk); }
+    .empty { padding: 16px; color: var(--dim); text-align: center; }
+
     #sheet { position: absolute; inset: 0; z-index: 50; background: #000b; display: none; align-items: flex-end; }
     #sheet.on { display: flex; }
     .sheet { background: var(--panel); width: 100%; border-radius: 22px 22px 0 0; padding: 16px; max-height: 92%; overflow: auto; }
@@ -86,10 +102,17 @@
       <button class="tile new" id="new">+ New</button>
     </div>
     <div class="util">
-      <button disabled title="Coming soon">↶ Undo</button>
-      <button disabled title="Coming soon">🕘 Recent ▴</button>
+      <button id="undo" disabled>↶ Undo</button>
+      <button id="recent-open">🕘 Recent ▴</button>
     </div>
     <button class="plus" id="add">+1 Kid</button>
+
+    <div id="recent">
+      <div class="panel">
+        <div class="grab"><b>Recent — all phones</b><button class="close" id="recent-close" aria-label="Close">▾</button></div>
+        <div id="recent-rows"></div>
+      </div>
+    </div>
 
     <div id="flash"></div>
     <div id="toast"></div>
@@ -147,7 +170,7 @@
     }
 
     async function send(entry) {
-      const res = await post('/api/taps', entry)
+      const res = entry.type === 'remove' ? await post('/api/remove', { kidId: entry.kidId }) : await post('/api/taps', entry)
       problem = res.status === 403 ? 'Wrong join key: taps are kept until it is fixed' : ''
       if (res.status === 400) return // the server will never take it; don't block the queue behind it
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -174,6 +197,10 @@
       clearTimeout(toastTimer)
       toastTimer = setTimeout(() => $('toast').classList.remove('on'), 1800)
     }
+
+    const esc = (text) => String(text ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+    const timeOf = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    const label = (row) => (row.tag ? `${row.tag.emoji ?? ''} ${row.tag.name}`.trim() : 'no costume')
 
     function pillHtml(status) {
       if (status === 'sent') return '<span class="sent">✓ sent</span>'
@@ -220,8 +247,57 @@
         wanted.forEach((tile, i) => {
           if (grid.children[i] !== tile) grid.insertBefore(tile, grid.children[i])
         })
+        $('undo').disabled = !view.undo
+        if (recentOpen) renderRecent()
         if (sheetOpen) renderSheet()
       }
+
+      // ---- Undo and Recent: both go through the outbox, so they work offline too
+      function removeKid(row) {
+        outbox.remove(row.id)
+        const number = row.number == null ? 'an unsent kid' : `#${row.number}`
+        toast(`Removed ${number} · ${label(row)}${row.mine ? '' : ` (${row.phoneName}'s)`}`)
+        render()
+      }
+
+      $('undo').addEventListener('click', () => {
+        if (view.undo) removeKid(view.undo)
+      })
+
+      let recentOpen = false
+      let recentHtml = ''
+      function renderRecent() {
+        const html = view.recent.length
+          ? view.recent
+              .map(
+                (r) => `
+          <div class="row ${r.queued ? 'queued' : ''}">
+            <span class="n">${r.number == null ? '⏳' : '#' + r.number}</span>
+            <span class="who">${esc(label(r))}<span class="badge ${r.mine ? 'me' : ''}">${esc(r.phoneName)}</span>
+              <div class="meta">${timeOf(r.tappedAt)}${r.queued ? ' · ⏳ not sent yet' : ''}</div></span>
+            <button class="x" data-remove="${esc(r.id)}" aria-label="Delete">✕</button>
+          </div>`,
+              )
+              .join('')
+          : '<div class="empty">No kids yet</div>'
+        if (html !== recentHtml) $('recent-rows').innerHTML = recentHtml = html // don't swap rows under a thumb
+      }
+      $('recent-open').addEventListener('click', () => {
+        recentOpen = true
+        $('recent').classList.add('on')
+        renderRecent()
+      })
+      const closeRecent = () => {
+        recentOpen = false
+        $('recent').classList.remove('on')
+      }
+      $('recent-close').addEventListener('click', closeRecent)
+      $('recent').addEventListener('click', (e) => {
+        if (e.target === $('recent')) return closeRecent()
+        const x = e.target.closest('[data-remove]')
+        const row = x && view.recent.find((r) => r.id === x.dataset.remove)
+        if (row) removeKid(row)
+      })
 
       function tap(tagId) {
         const entry = outbox.tap(tagId)
@@ -327,6 +403,7 @@
             kid: { id: draft.kidId, tappedAt: draft.tappedAt, phoneName },
           })
           if (!res.ok) throw new Error(res.status === 403 ? 'Wrong join key' : `HTTP ${res.status}`)
+          outbox.claim(draft.kidId)
           closeSheet()
           toast(`New: ${draft.emoji} ${name} ×${draft.n + 1}`)
           // The deltas are published before the reply, so the real number may already be here.

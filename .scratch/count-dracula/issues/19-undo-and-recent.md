@@ -17,10 +17,10 @@ Mis-taps can be fixed from any phone. See [spec §2 Undo/Recent](../spec.md#2-do
 
 ## Acceptance criteria
 
-- [ ] Undo on phone A removes A's latest kid, not B's, and repeated undos walk back through A's kids
-- [ ] Undoing an unsent kid removes it from the outbox and it never reaches the server
-- [ ] Deleting from Recent works for any phone's kid, and the toast names the other phone
-- [ ] Recent orders by arrival, shows tap times, and marks queued kids with ⏳
-- [ ] After an undo, the next kid gets the freed number and stored numbers are unchanged
-- [ ] The TV count dips with no celebration
-- [ ] Tests cover soft delete idempotency and the reuse of a freed number
+- [x] Undo on phone A removes A's latest kid, not B's, and repeated undos walk back through A's kids
+- [x] Undoing an unsent kid removes it from the outbox and it never reaches the server
+- [x] Deleting from Recent works for any phone's kid, and the toast names the other phone
+- [x] Recent orders by arrival, shows tap times, and marks queued kids with ⏳
+- [x] After an undo, the next kid gets the freed number and stored numbers are unchanged
+- [x] The TV count dips with no celebration
+- [x] Tests cover soft delete idempotency and the reuse of a freed number

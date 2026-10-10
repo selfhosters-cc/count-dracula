@@ -2,12 +2,19 @@
 // Pure. Phone screens read through it, never from the snapshot or localStorage directly.
 import { tagColour } from '../shared/night-maths.js'
 
-export function doorView(liveState, outbox) {
-  if (!liveState) return { total: null, untagged: null, tags: [], catchUp: { max: 0, preview: () => [] } }
+const RECENT_ROWS = 10
 
+export function doorView(liveState, outbox) {
+  if (!liveState) return { total: null, untagged: null, tags: [], recent: [], undo: null, catchUp: { max: 0, preview: () => [] } }
+
+  const outgoing = [...outbox.pending, ...outbox.unconfirmed]
+  const removed = new Set(outgoing.filter((e) => e.type === 'remove').map((e) => e.kidId))
   const arrived = new Set(liveState.kids.map((k) => k.id))
-  const queued = [...outbox.pending, ...outbox.unconfirmed].filter((e) => !arrived.has(e.id))
-  const everyKid = [...liveState.kids, ...queued]
+
+  // Every kid this phone counts, in arrival order: the server's, then taps it doesn't have yet.
+  const serverKids = liveState.kids.filter((k) => !removed.has(k.id))
+  const queuedTaps = outgoing.filter((e) => e.type !== 'remove' && !arrived.has(e.id) && !removed.has(e.id))
+  const everyKid = [...serverKids, ...queuedTaps]
 
   const counts = new Map(liveState.tags.map((t) => [t.id, 0]))
   let untagged = 0
@@ -20,7 +27,32 @@ export function doorView(liveState, outbox) {
     .sort((a, b) => a.order - b.order)
     .map((t) => ({ id: t.id, name: t.name, emoji: t.emoji, colour: tagColour(t.order), count: counts.get(t.id) }))
 
-  return { total: everyKid.length, untagged, tags, catchUp: catchUpPreview(liveState.kids) }
+  const tagsById = new Map(liveState.tags.map((t) => [t.id, t]))
+  const unsent = new Set(outbox.pending.map((e) => e.id))
+  const row = (k) => {
+    const tag = tagsById.get(k.tagId)
+    return {
+      id: k.id,
+      number: k.number ?? null, // a tap the server hasn't numbered yet
+      tag: tag ? { emoji: tag.emoji, name: tag.name } : null,
+      phoneName: k.phoneName,
+      tappedAt: k.tappedAt,
+      queued: unsent.has(k.id),
+      mine: outbox.mine.has(k.id),
+    }
+  }
+  const recent = everyKid.slice(-RECENT_ROWS).reverse().map(row)
+  // Undo takes this phone's latest kid that still counts. Phone names can repeat, so go by id.
+  const latestMine = everyKid.findLast((k) => outbox.mine.has(k.id))
+
+  return {
+    total: everyKid.length,
+    untagged,
+    tags,
+    recent,
+    undo: latestMine ? row(latestMine) : null,
+    catchUp: catchUpPreview(serverKids),
+  }
 }
 
 // Picks the kids the server will re-tag: the most recently *tapped* untagged ones it has
