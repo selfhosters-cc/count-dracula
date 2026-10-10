@@ -41,10 +41,11 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 - [Event setup and phone menu](issues/09-event-setup-and-phone-menu.md) — Go live freezes the old event and keeps the join key; costumes per event with "Copy from"; 2025 ghost seeded from a file; per-event Clock shift for the rehearsal; blind stratified golden draw at Go live; ☰ door menu for every helper, `/setup` behind an admin PIN.
 - [Quiet stretches and end of night](issues/10-quiet-stretches-and-end-of-night.md) — one silent idle teaser after 45 s; any helper can "🌙 End the night" (reversible, event stays live, unwon golden tickets released or expired); the ended state is a static recap screen (Must #9), viewable per past event.
 - [Failure fallback](issues/11-failure-fallback.md) — phones count offline with a ⏳ pill ("don't reload"); TV freezes calmly with a 🦇 chip, then one quiet roll-up; late taps skip #100s, delay Beat last year, roll golden tickets forward; paper tally sheet + "Add missed kids" backfill (also the rehearsal's bulk add); CSV export + existing Proxmox backup job.
+- [Dress rehearsal plan](issues/12-dress-rehearsal-plan.md) — Oct 24 in two parts (3pm app script with Clock shift +3h; 6:30pm dusk sidewalk, volume and idle checks); staged golden test; 7 blockers re-run Wed Oct 28; feature freeze Oct 24 with config switches for Must 3–9; paper plus Nov 1 backfill as the last resort; printed checklist.
 
 ## Not yet specified
 
-<!-- Charting-time fog has graduated: event setup + phone secondary controls + visit window → Event setup and phone menu; idle + recap → Quiet stretches and end of night; resilience → Failure fallback; rehearsal → Dress rehearsal plan; spec assembly → Assemble the v1 spec. Tag presentation was answered by the two prototypes (emoji picked in "+ New"; six TV colours then grey). -->
+<!-- Charting-time fog has graduated: event setup + phone secondary controls + visit window → Event setup and phone menu; idle + recap → Quiet stretches and end of night; resilience → Failure fallback; rehearsal → Dress rehearsal plan (resolved); spec assembly → Assemble the v1 spec. Tag presentation was answered by the two prototypes (emoji picked in "+ New"; six TV colours then grey). -->
 
 - Nothing un-ticketable remains in view. New fog may appear as the last tickets resolve.
 
