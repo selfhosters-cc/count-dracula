@@ -141,3 +141,11 @@ export function costumeOfTheNight(kids, tags) {
   const top = leaderboard(kids, tags, 1)[0]
   return top?.count ? top : null
 }
+
+// The rush meter (nice-to-have, ticket 39): kids per minute over the last 5 minutes, by tap time.
+const RUSH_WINDOW_MIN = 5
+export function rush(kids, realNowMs) {
+  const since = realNowMs - RUSH_WINDOW_MIN * 60_000
+  const perMinute = Math.round((kids.filter((k) => k.tappedAt > since).length / RUSH_WINDOW_MIN) * 10) / 10
+  return { perMinute, level: perMinute >= 3 ? 'rush' : perMinute >= 1 ? 'busy' : 'quiet' }
+}

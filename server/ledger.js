@@ -96,6 +96,7 @@ const DEFAULT_SWITCHES = {
   soundboard: true,
   pumpkinPatch: true,
   recap: true,
+  rushMeter: true, // a nice-to-have (ticket 39), switchable like the Musts
 }
 
 export function openLedger(db, config) {

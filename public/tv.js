@@ -5,7 +5,7 @@ import { createDirector } from '/director.js'
 import { animate } from '/vendor/motion/motion.js'
 import confettiLib, { create as createConfetti } from '/vendor/canvas-confetti/confetti.module.js'
 import { createRaceChart } from '/race-chart.js'
-import { biggestCrew, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, tagColour } from '/shared/night-maths.js'
+import { biggestCrew, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, rush, tagColour } from '/shared/night-maths.js'
 import { createSound } from '/sound.js'
 import { createWebAudio } from '/web-audio.js'
 import { createTeaser, teaserLines } from '/teaser.js'
@@ -67,7 +67,7 @@ function play(show) {
   playing = show
   if (!show) {
     if (ending?.kind === 'takeover') animate($('takeover'), { opacity: 0 }, { duration: 0.4 })
-    else if (ending?.kind === 'milestone') animate($('tomb'), { transform: 'translateY(120%)' }, { duration: 0.5, ease: 'easeIn' }) // back underground
+    if (ending?.kind === 'milestone' || ending?.moment === 'milestone') sinkTomb()
     else animate(pop, { opacity: 0, scale: 0.9 }, { duration: 0.25 })
     return
   }
@@ -86,16 +86,23 @@ function play(show) {
   })
 }
 
-// Every 50th: a headstone rises out of the ground with the milestone carved on it, emoji confetti and a
-// cartoon organ (spec §8; the headstone was the user's idea while building, Oct 10).
-function playMilestone({ number }) {
+// The headstone with the milestone carved on it (the user's idea while building, Oct 10): small for every
+// 50th, giant inside the #100/#200/#300 takeovers.
+function raiseTomb(number, { big = false } = {}) {
   const text = `#${number}`
   const size = text.length > 4 ? 78 : 96 // "#1000" still fits the stone
   for (const id of ['tomb-number', 'tomb-number-hi']) {
     $(id).textContent = text
     $(id).setAttribute('font-size', size)
   }
-  animate($('tomb'), { transform: ['translateY(120%) rotate(-4deg)', 'translateY(-4%) rotate(2deg)', 'translateY(0%) rotate(0deg)'] }, { duration: 0.9, ease: 'easeOut' })
+  $('tomb').classList.toggle('big', big)
+  animate($('tomb'), { transform: ['translateY(120%) rotate(-4deg)', 'translateY(-4%) rotate(2deg)', 'translateY(0%) rotate(0deg)'] }, { duration: big ? 1.2 : 0.9, ease: 'easeOut' })
+}
+const sinkTomb = () => animate($('tomb'), { transform: 'translateY(120%)' }, { duration: 0.5, ease: 'easeIn' }) // back underground
+
+// Every 50th: the headstone, emoji confetti and a cartoon organ (spec §8).
+function playMilestone({ number }) {
+  raiseTomb(number)
   emojiConfetti(['🎃', '🍬', '🦇'], 3)
   sound.cue('sting:50')
 }
@@ -103,7 +110,7 @@ function playMilestone({ number }) {
 // #100/#200/#300 and Beat last year: full screen, Creepster headline, fanfare plus a spooky flourish.
 const TAKEOVERS = {
   golden: ({ number }) => ['🎫 Golden ticket 🎫', `KID #${number} WINS!`, 'You found a golden ticket! 🍫'],
-  milestone: ({ number }) => ['Milestone', `KID #${number}!`, `${number} trick-or-treaters tonight 🎃`],
+  milestone: ({ number }) => ['🎃 What a night 🎃', `${number} trick-or-treaters!`, ''], // the giant headstone carries the number
   'beat-last-year': () => {
     const g = live?.state?.ghost
     return ['New record', 'WE BEAT LAST YEAR! 🏆', g ? `${g.label}: ${g.total} kids. Tonight: ${live.state.kids.length} and counting!` : '']
@@ -114,8 +121,11 @@ function playTakeover(show) {
   const text = TAKEOVERS[show.moment]?.(show)
   if (!text) return
   const gold = show.moment === 'golden'
+  const tomb = show.moment === 'milestone'
   ;[$('take-k').textContent, $('take-h').textContent, $('take-s').textContent] = text
   $('takeover').classList.toggle('gold', gold)
+  $('takeover').classList.toggle('with-tomb', tomb)
+  if (tomb) raiseTomb(show.number, { big: true })
   animate($('takeover'), { opacity: 1 }, { duration: 0.4 })
   animate($('take-h'), { scale: [2.2, 1], opacity: [0, 1] }, { type: 'spring', bounce: 0.45, duration: 0.7 })
   const emoji = gold ? ['🎫', '🍫', '⭐'] : ['🎃', '👻', '🍬']
@@ -368,11 +378,25 @@ function applyMix(state) {
   $('muted').hidden = !Object.values(mix.mutes).some(Boolean)
 }
 
+// ---- the rush meter (ticket 39): hidden on the recap and when switched off
+const RUSH_LABELS = { quiet: 'Quiet', busy: 'Busy', rush: '🔥 RUSH!' }
+function renderRush(state) {
+  const show = state.settings.switches.rushMeter !== false && !over(state)
+  $('rush').hidden = !show
+  if (!show) return
+  const { perMinute, level } = rush(state.kids, Date.now())
+  $('rush').className = `rush ${level}`
+  $('rush-label').textContent = RUSH_LABELS[level]
+  $('rush-fill').style.width = `${Math.min(100, (perMinute / 6) * 100)}%`
+  $('rush-rate').textContent = `${perMinute} kids/min`
+}
+
 function renderRace(state, animate = true) {
   // A recap's chart is the finished race: "now" is the night's last tap, not today's clock.
   const until = inRecap(state) && state.kids.length ? Math.max(...state.kids.map((k) => k.tappedAt)) : Date.now()
   race.update(state, until, animate)
   $('pace').textContent = paceText(state)
+  renderRush(state)
   $('legend').innerHTML = state.ghost
     ? `<span><i style="border-top: 6px solid var(--pumpkin)"></i>Tonight</span>` +
       `<span><i style="border-top: 4px dashed #c9d2ff"></i>${state.ghost.label}</span>`

@@ -41,6 +41,16 @@
     .hero { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
     .hero .big { font-family: var(--f-display); font-size: clamp(64px, 15vw, 300px); line-height: .9; }
     .pace { margin-top: 1.2vh; font-size: clamp(14px, 2.2vw, 40px); font-weight: 600; min-height: 1.3em; }
+    /* The rush meter (ticket 39): kids per minute over the last 5 minutes, up to 6/min */
+    .rush { margin-top: 2vh; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .3em 1em;
+      font-size: clamp(12px, 1.4vw, 26px); color: var(--ink-dim); max-width: 26em; }
+    .rush[hidden] { display: none; }
+    .rush .label { font-family: var(--f-display); white-space: nowrap; }
+    .rush .gauge { height: .7em; border-radius: 999px; background: var(--grid); overflow: hidden; }
+    .rush .fill { height: 100%; width: 0; border-radius: 999px; background: var(--ink-dim); transition: width .8s ease, background .8s; }
+    .rush.busy .label { color: #ffcf3a; } .rush.busy .fill { background: #ffcf3a; }
+    .rush.rush .label { color: var(--pumpkin); } .rush.rush .fill { background: var(--pumpkin); }
+    .rush .rate { grid-column: 2; font-size: .8em; }
     .chartbox { min-width: 0; min-height: 0; background: var(--night-2); border-radius: 14px; padding: 1.4vh 1vw 1vh;
       display: flex; flex-direction: column; }
     .chartbox .legend { display: flex; gap: 2em; color: var(--ink-dim); font-weight: 600; font-size: clamp(12px, 1.2vw, 22px); }
@@ -93,6 +103,9 @@
     #tomb { position: fixed; left: 50%; bottom: 4vh; width: min(30vw, 46vh); translate: -50% 0; z-index: 30;
       pointer-events: none; transform: translateY(120%); filter: drop-shadow(0 18px 40px rgba(0, 0, 0, .6)); }
     #tomb svg { width: 100%; height: auto; display: block; overflow: visible; }
+    #tomb.big { width: min(40vw, 64vh); bottom: 0; z-index: 41; } /* above the takeover's backdrop */
+    #takeover.with-tomb { place-content: start center; padding-top: 7vh; }
+    #takeover.with-tomb .h { font-size: clamp(40px, 7vw, 140px); }
     #tomb .carved { font-family: var(--f-display); fill: #3b3848; }
     #tomb .lit { font-family: var(--f-display); fill: #c7c2d6; }
     #tomb .spooky { font-family: var(--f-spooky); }
@@ -120,7 +133,7 @@
     /* /tv?border: everything inside the red frame should be visible; the white corner ticks mark the edge */
     body.overscan-test::after { content: 'Overscan test: all four red edges and white corners must be visible'; position: fixed; inset: 0;
       z-index: 99; border: 6px solid #ff2b2b; outline: 2px solid #fff; outline-offset: -14px; display: grid; place-content: center;
-      color: #fff; font-size: 2vw; background: rgba(0, 0, 0, .35); pointer-events: none; }
+      color: #fff; font-size: 2vw; background: rgba(0, 0, 0, .35); pointer-events: none; place-content: end center; padding-bottom: 12vh; }
     /* Disconnected: decorative, never alarming (spec §7 States) */
     /* "Start the night": shown whenever the AudioContext isn't running (spec §7 States) */
     #start { position: fixed; inset: 0; z-index: 50; display: grid; place-content: center; gap: 2vh; text-align: center;
@@ -149,6 +162,7 @@
       <div class="eyebrow">Kids tonight</div>
       <div class="big num"><span id="count">–</span></div>
       <div class="pace" id="pace"></div>
+      <div class="rush" id="rush" hidden><span class="label" id="rush-label"></span><div class="gauge"><div class="fill" id="rush-fill"></div></div><span class="rate" id="rush-rate"></span></div>
     </div>
     <div class="chartbox">
       <div class="legend" id="legend"></div>

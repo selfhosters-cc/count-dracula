@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { atEventTime, biggestCrew, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, releaseOpen, slots, tagColour, toBuckets, visits } from './night-maths.js'
+import { atEventTime, biggestCrew, rush, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, releaseOpen, slots, tagColour, toBuckets, visits } from './night-maths.js'
 import seed2025 from '../config/2025-counts.json'
 
 describe('tagColour', () => {
@@ -197,5 +197,24 @@ describe('recap stats', () => {
 
     expect(costumeOfTheNight([{ tagId: 2 }, { tagId: 2 }, { tagId: 1 }, { tagId: null }], tags)).toMatchObject({ name: 'Ghost', count: 2 })
     expect(costumeOfTheNight([{ tagId: null }], tags)).toBeNull()
+  })
+})
+
+describe('rush meter', () => {
+  const NOW = 1_800_000_000_000
+  const MIN = 60_000
+  const kidsAt = (...minutesAgo) => minutesAgo.map((m, i) => ({ id: `k${i}`, tappedAt: NOW - m * MIN }))
+
+  test('kids per minute over the last 5 minutes, by tap time', () => {
+    expect(rush(kidsAt(0.5, 1, 2, 4.9, 5.1, 30), NOW)).toEqual({ perMinute: 0.8, level: 'quiet' })
+  })
+
+  test('levels: quiet under 1/min, busy from 1/min, RUSH from 3/min', () => {
+    const n = (count) => kidsAt(...Array.from({ length: count }, (_, i) => (i * 4.9) / Math.max(1, count - 1)))
+    expect(rush(n(4), NOW).level).toBe('quiet') // 0.8/min
+    expect(rush(n(5), NOW)).toEqual({ perMinute: 1, level: 'busy' })
+    expect(rush(n(14), NOW).level).toBe('busy') // 2.8/min
+    expect(rush(n(15), NOW)).toEqual({ perMinute: 3, level: 'rush' })
+    expect(rush([], NOW)).toEqual({ perMinute: 0, level: 'quiet' })
   })
 })

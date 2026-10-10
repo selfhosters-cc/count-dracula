@@ -144,6 +144,7 @@ describe('feature switches', () => {
       soundboard: true,
       pumpkinPatch: true,
       recap: true,
+      rushMeter: true,
     })
   })
 })
