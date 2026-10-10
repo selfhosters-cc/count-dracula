@@ -1,7 +1,7 @@
 # Shareable night summary
 
 Type: prototype (HITL)
-Status: open
+Status: claimed
 Blocked by:
 
 ## Question

@@ -26,6 +26,8 @@ A build-ready **v2 spec plus build tickets** for Count Dracula as one public, mu
 
 <!-- one line per closed ticket: [title](issues/NN-slug.md) — gist -->
 
+- [Geocoding and location-fuzzing options](issues/02-geocoding-and-fuzzing-options.md) — local FSA (CA, GeoNames) + ZCTA (US, Census) tables, no web geocoder; store only a 5-char geohash (~5 × 3 km), nearby = cell + 8 neighbours; ≥ 5 households before an area shows; no map before the freeze.
+
 ## Not yet specified
 
 - **v2 rehearsal and launch-day plan.** How the Oct 24 rehearsal changes when it's also the multi-household acceptance test: a second test household, many public TV viewers, sign-up from a stranger's phone. And what Oct 25–31 looks like with strangers' nights depending on us (support channel, status, on-call on the night). Sharpens once the features are settled.
