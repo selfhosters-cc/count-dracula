@@ -10,35 +10,54 @@ IP=${IP:-192.168.5.31}         # static, like the other LXCs; the helper QR code
 GW=${GW:-192.168.1.1}
 STORAGE=${STORAGE:-zstorage2}
 TEMPLATE=${TEMPLATE:-local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst}
+# Like the other LXCs: the Proxmox host's own resolv.conf points at Tailscale (100.100.100.100), which an
+# LXC off the tailnet can't reach, so a container that inherits it can't resolve anything.
+NAMESERVER=${NAMESERVER:-1.1.1.1}
 
 pve() { ssh -o BatchMode=yes "$PVE" "$@"; }
 
 if pve "pct status $VMID" >/dev/null 2>&1; then
-  echo "LXC $VMID already exists on $PVE; nothing to do." >&2
-  exit 1
+  # Resumable: an earlier run that stopped part-way left our own LXC behind; finish setting it up.
+  if pve "pct config $VMID" | grep -qx 'hostname: count-dracula'; then
+    echo "==> LXC $VMID (count-dracula) already exists: finishing its setup"
+    pve pct set "$VMID" --nameserver "$NAMESERVER" --searchdomain lan
+    pve "pct status $VMID" | grep -q running || pve pct start "$VMID"
+  else
+    echo "LXC $VMID already exists on $PVE and isn't count-dracula: pick another VMID (VMID=...)." >&2
+    exit 1
+  fi
+else
+  if pve "ping -c1 -W1 $IP" >/dev/null 2>&1; then
+    echo "$IP already answers ping: pick another IP (IP=...)." >&2
+    exit 1
+  fi
+  echo "==> Creating LXC $VMID (count-dracula, $IP)"
+  pve pct create "$VMID" "$TEMPLATE" \
+    --hostname count-dracula \
+    --cores 1 --memory 512 --swap 256 \
+    --rootfs "$STORAGE:4" \
+    --net0 "name=eth0,bridge=vmbr0,gw=$GW,ip=$IP/20,type=veth" \
+    --nameserver "$NAMESERVER" --searchdomain lan \
+    --unprivileged 1 --features nesting=1 \
+    --timezone America/Toronto \
+    --onboot 1 \
+    --description "'Count Dracula: trick-or-treat counter. Deployed with deploy/deploy.sh from the count-dracula repo.'"
+  pve pct start "$VMID"
 fi
-if pve "ping -c1 -W1 $IP" >/dev/null 2>&1; then
-  echo "$IP already answers ping: pick another IP (IP=...)." >&2
-  exit 1
-fi
-
-echo "==> Creating LXC $VMID (count-dracula, $IP)"
-pve pct create "$VMID" "$TEMPLATE" \
-  --hostname count-dracula \
-  --cores 1 --memory 512 --swap 256 \
-  --rootfs "$STORAGE:4" \
-  --net0 "name=eth0,bridge=vmbr0,gw=$GW,ip=$IP/20,type=veth" \
-  --unprivileged 1 --features nesting=1 \
-  --timezone America/Toronto \
-  --onboot 1 \
-  --description "'Count Dracula: trick-or-treat counter. Deployed with deploy/deploy.sh from the count-dracula repo.'"
-pve pct start "$VMID"
 
 echo "==> Waiting for the network"
-for _ in $(seq 1 30); do
-  pve "pct exec $VMID -- getent hosts deb.debian.org" >/dev/null 2>&1 && break
+online=no
+for _ in $(seq 1 20); do
+  if pve "pct exec $VMID -- timeout 3 getent hosts deb.debian.org" >/dev/null 2>&1; then
+    online=yes
+    break
+  fi
   sleep 1
 done
+if [[ $online != yes ]]; then
+  echo "!! LXC $VMID can't resolve deb.debian.org. Check: ssh $PVE pct exec $VMID -- cat /etc/resolv.conf" >&2
+  exit 1
+fi
 
 echo "==> Base setup inside the LXC"
 pve "pct exec $VMID -- bash -euc '
