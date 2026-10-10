@@ -1,0 +1,123 @@
+<!doctype html>
+<!-- PROTOTYPE — throwaway (ticket: Shareable night summary). Lives only on the prototype/night-summary branch.
+     Four variants of a shareable night summary, switchable with ?variant=A|B|C|D (← → keys or the bottom bar).
+     Data: a fake 372-kid night by default; ?event=<id> loads a real one from /api/snapshot.
+     Toggles: ?hood=0 hides the neighbourhood line, ?name=0 hides the household name. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Night summary — prototype</title>
+  <link rel="stylesheet" href="/vendor/fonts/fonts.css">
+  <style>
+    :root {
+      --night: #140f26; --surface: #1f1838; --ink: #f7efe0; --ink-dim: #b3aacb; --pumpkin: #ff7a1a;
+      --ghost: #c9d2ff; --gold: #ffcf3a; --grid: #2c2449;
+      --f-display: "Bungee", "Arial Black", Impact, sans-serif;
+      --f-spooky: "Creepster", "Bungee", Impact, fantasy;
+      --f-body: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+      --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body { background: #0a0814; color: var(--ink); font-family: var(--f-body); display: grid; place-items: center; padding: 16px 16px 84px; }
+    #stage { width: 100%; display: grid; place-items: center; }
+
+    /* ---- shared frame: a 9:16 (or 1:1) card sized to the screen, everything inside in cqw units */
+    .frame { container-type: inline-size; position: relative; overflow: hidden; border-radius: 18px; box-shadow: 0 10px 40px #000a; }
+    .frame.tall { width: min(100%, calc((100dvh - 110px) * 9 / 16)); aspect-ratio: 9 / 16; }
+    .frame.square { width: min(100%, calc(100dvh - 110px), 640px); aspect-ratio: 1; }
+    .esc-emoji { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+
+    /* ---- A: story poster */
+    .poster { background: radial-gradient(120% 70% at 50% 0%, #2a1d52 0%, var(--night) 60%); padding: 6cqw 6cqw 5cqw; display: flex; flex-direction: column; gap: 2.4cqw; }
+    .poster .brand { font-family: var(--f-spooky); color: var(--pumpkin); font-size: 7cqw; letter-spacing: .03em; text-align: center; }
+    .poster .who { text-align: center; color: var(--ink-dim); font-size: 4cqw; margin-top: -1.6cqw; }
+    .poster .big { font-family: var(--f-display); font-size: 30cqw; line-height: .9; text-align: center; margin-top: 1cqw; }
+    .poster .unit { text-align: center; font-size: 5cqw; color: var(--ink-dim); margin-top: -1cqw; }
+    .poster .verdict { text-align: center; font-family: var(--f-display); font-size: 5cqw; color: var(--gold); }
+    .poster .chart { background: var(--surface); border-radius: 3cqw; padding: 2cqw 2cqw 1cqw; }
+    .poster .rows { display: grid; grid-template-columns: 1fr 1fr; gap: 2cqw; }
+    .poster .row { background: var(--surface); border-radius: 3cqw; padding: 2.4cqw 3cqw; }
+    .poster .row .k { font-size: 3.2cqw; color: var(--ink-dim); }
+    .poster .row .v { font-family: var(--f-display); font-size: 4.6cqw; line-height: 1.15; }
+    .poster .row .s { font-size: 3.2cqw; color: var(--ink-dim); }
+    .poster .row.wide { grid-column: 1 / -1; }
+    .poster .tickets { display: flex; flex-wrap: wrap; gap: 1cqw 3cqw; font-family: var(--f-display); font-size: 4.4cqw; color: var(--gold); }
+    .poster .tickets .miss { color: var(--ink-dim); text-decoration: line-through; opacity: .6; }
+    .poster .hood { text-align: center; font-size: 3.8cqw; background: #ff7a1a22; border: .4cqw solid #ff7a1a66; border-radius: 99px; padding: 1.6cqw 3cqw; }
+    .poster .foot { margin-top: auto; text-align: center; font-size: 3cqw; color: var(--ink-dim); }
+    .poster .foot b { color: var(--pumpkin); font-weight: 600; }
+
+    /* ---- B: candy receipt */
+    .receipt-wrap { background: #2b2440; padding: 5cqw 7cqw; display: flex; justify-content: center; align-items: flex-start; }
+    .receipt { width: 100%; background: #fbf7ee; color: #24201c; font-family: var(--f-mono); font-size: 3.3cqw; line-height: 1.45; padding: 6cqw 5.5cqw 8cqw;
+      --tooth: 3cqw; clip-path: polygon(0 0, 100% 0, 100% 100%, 95% calc(100% - var(--tooth)), 90% 100%, 85% calc(100% - var(--tooth)), 80% 100%, 75% calc(100% - var(--tooth)), 70% 100%, 65% calc(100% - var(--tooth)), 60% 100%, 55% calc(100% - var(--tooth)), 50% 100%, 45% calc(100% - var(--tooth)), 40% 100%, 35% calc(100% - var(--tooth)), 30% 100%, 25% calc(100% - var(--tooth)), 20% 100%, 15% calc(100% - var(--tooth)), 10% 100%, 5% calc(100% - var(--tooth)), 0 100%); }
+    .receipt .c { text-align: center; }
+    .receipt .shop { font-family: var(--f-spooky); font-size: 8cqw; color: #c2410c; line-height: 1; }
+    .receipt hr { border: 0; border-top: .4cqw dashed #24201c88; margin: 2cqw 0; }
+    .receipt .li { display: flex; gap: 1.5cqw; }
+    .receipt .li .n { flex: 1; overflow: hidden; white-space: nowrap; }
+    .receipt .li .n::after { content: " ................................................................"; color: #24201c55; }
+    .receipt .li .q { text-align: right; }
+    .receipt .total { font-size: 5.4cqw; font-weight: 700; }
+    .receipt .coupon { border: .5cqw dashed #b8860b; background: #fff3c4; padding: 1.6cqw 2.4cqw; margin: 1.6cqw 0; }
+    .receipt .barcode { display: block; width: 100%; height: 14cqw; margin-top: 2cqw; }
+    .receipt .tiny { font-size: 2.6cqw; color: #24201caa; }
+
+    /* ---- C: wrapped-style slides */
+    .slides { background: var(--night); }
+    .slides .bars { position: absolute; top: 3cqw; left: 4cqw; right: 4cqw; display: flex; gap: 1cqw; z-index: 2; }
+    .slides .bars i { flex: 1; height: .9cqw; border-radius: 1cqw; background: #ffffff33; }
+    .slides .bars i.on { background: var(--ink); }
+    .slide { position: absolute; inset: 0; padding: 14cqw 8cqw 10cqw; display: flex; flex-direction: column; justify-content: center; gap: 4cqw; }
+    .slide .eyebrow { font-size: 5cqw; color: var(--ink-dim); }
+    .slide .huge { font-family: var(--f-display); font-size: 24cqw; line-height: .95; }
+    .slide .mid { font-family: var(--f-display); font-size: 11cqw; line-height: 1.05; }
+    .slide .line { font-size: 6cqw; line-height: 1.3; }
+    .slide .tap { position: absolute; bottom: 5cqw; left: 0; right: 0; text-align: center; font-size: 3.4cqw; color: #ffffff88; }
+    .slide.s0 { background: linear-gradient(160deg, #3b1d6e, #140f26 70%); }
+    .slide.s1 { background: linear-gradient(160deg, #1d2a6e, #140f26 70%); }
+    .slide.s2 { background: linear-gradient(160deg, #6e2a1d, #140f26 70%); }
+    .slide.s3 { background: linear-gradient(160deg, #1d6e4f, #140f26 70%); }
+    .slide.s4 { background: linear-gradient(160deg, #6e1d55, #140f26 70%); }
+    .slide.s5 { background: linear-gradient(160deg, #6e5a1d, #140f26 70%); }
+    .slide.s6 { background: linear-gradient(160deg, #2a3f52, #140f26 70%); }
+    .slide.s7 { background: linear-gradient(160deg, #3b1d6e, #6e2a1d); }
+    .slide .gold { color: var(--gold); }
+
+    /* ---- D: pumpkin-patch square */
+    .patch { background: var(--night); padding: 5cqw; display: grid; grid-template-rows: auto 1fr auto; gap: 2.6cqw; }
+    .patch .top { display: flex; align-items: baseline; justify-content: space-between; gap: 3cqw; }
+    .patch .top .brand { font-family: var(--f-spooky); color: var(--pumpkin); font-size: 6cqw; }
+    .patch .top .who { font-size: 3.4cqw; color: var(--ink-dim); text-align: right; }
+    .patch .field { position: relative; min-height: 0; }
+    .patch .field svg { width: 100%; height: 100%; display: block; }
+    .patch .overlay { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+    .patch .overlay div { background: #140f26e6; border-radius: 4cqw; padding: 2cqw 6cqw 3cqw; text-align: center; box-shadow: 0 0 6cqw 3cqw #140f26cc; }
+    .patch .overlay .n { font-family: var(--f-display); font-size: 20cqw; line-height: .95; }
+    .patch .overlay .v { font-family: var(--f-display); font-size: 3.8cqw; color: var(--gold); }
+    .patch .legend { display: flex; flex-wrap: wrap; gap: 1.2cqw 3.4cqw; font-size: 3.2cqw; color: var(--ink-dim); }
+    .patch .legend span { display: inline-flex; align-items: center; gap: 1.2cqw; }
+    .patch .legend i { width: 2.6cqw; height: 2.6cqw; border-radius: 50%; display: inline-block; }
+
+    /* ---- the prototype switcher (not part of any design) */
+    #switcher { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px;
+      background: #fff; color: #111; font: 600 14px system-ui, sans-serif; padding: 6px; border-radius: 99px; box-shadow: 0 4px 24px #000c; z-index: 99; max-width: calc(100vw - 32px); }
+    #switcher button { border: 0; background: #eee; color: #111; font: inherit; border-radius: 99px; min-width: 36px; height: 36px; padding: 0 10px; cursor: pointer; }
+    #switcher button.off { opacity: .45; text-decoration: line-through; }
+    #switcher .label { padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="switcher">
+    <button id="prev" aria-label="Previous variant">←</button>
+    <span class="label" id="vlabel"></span>
+    <button id="next" aria-label="Next variant">→</button>
+    <button id="t-hood" title="Neighbourhood line">🏘</button>
+    <button id="t-name" title="Household name">🏠</button>
+  </div>
+  <script type="module" src="/summary-prototype.js"></script>
+</body>
+</html>
