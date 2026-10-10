@@ -1,7 +1,7 @@
 # Shareable night summary
 
 Type: prototype (HITL)
-Status: claimed
+Status: resolved
 Blocked by:
 
 ## Question
@@ -15,3 +15,14 @@ v1 ruled a shareable recap out ("a photo of the TV does the job"). It's back in 
 - **When and who**: available once the night is ended? Shareable by link without signing in?
 
 Link the prototype branch from the answer.
+
+## Answer
+
+Resolved 2026-10-10 (HITL). Prototype: branch [`prototype/night-summary`](https://github.com/selfhosters-cc/count-dracula/tree/prototype/night-summary) (`public/summary-prototype.html` + `.js`; `?variant=A|B|C|D`, `?event=<id>` for a real night). It showed four takes: A story poster, B candy receipt, C wrapped slides, D pumpkin-patch square.
+
+- **Format: C, Wrapped-style slides.** Tap-through 9:16 stories, one stat per slide. People screenshot the slides they want; each slide stands alone. The slides, in order: intro (name · night) → total and time span → vs the ghost with the race chart → peak half-hour and biggest crew → costume of the night and runners-up → golden tickets → nearby (when it exists) → closing card.
+- **Add a receipt slide (from B):** costume line items, teens, total, vs last year, golden tickets as a coupon, and the **kids-per-minute barcode**. Nothing else is taken from A or D.
+- **Sharing: screenshots plus a public share link.** A Share button on the last slide opens the phone's share sheet with a link that opens the slides without signing in. The link preview is **one fixed Count Dracula image**, not rendered per night. No "Save image" button and no server-side image rendering.
+- **Identity:** the household's **display name** shows on the slides (setup warns "this appears on anything you share"), with a per-share toggle to hide it. The nearby slide only ever says "near you" with rounded area totals, never a place name, within the rules from [Fuzzy location](07-fuzzy-location.md).
+- **When:** slides exist once the night is **ended** (🌙 End the night) and for any past night. Resuming the night just updates them. Golden numbers are revealed, as on the v1 recap. A share link lasts until the household turns sharing off or deletes the night.
+- With no ghost (a new household), the vs-ghost slide becomes "Next year: N is the number to beat" (as prototyped).

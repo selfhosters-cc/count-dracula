@@ -26,6 +26,7 @@ A build-ready **v2 spec plus build tickets** for Count Dracula as one public, mu
 
 <!-- one line per closed ticket: [title](issues/NN-slug.md) — gist -->
 
+- [Shareable night summary](issues/09-shareable-night-summary.md) — Wrapped-style 9:16 slides plus a receipt slide with the kids-per-minute barcode; screenshots + a public share link (fixed preview image); display name shown (toggle per share), nearby only as "near you"; exists once the night is ended, link lasts until turned off.
 - [Sign-in and email options](issues/01-sign-in-and-email-options.md) — all buildable dependency-free on Bun 1.3+; magic links by email are the realistic route; Resend (100/day free, $20 Pro) or SES as the provider; Google optional; passkeys and Apple after Halloween.
 - [Geocoding and location-fuzzing options](issues/02-geocoding-and-fuzzing-options.md) — local FSA (CA, GeoNames) + ZCTA (US, Census) tables, no web geocoder; store only a 5-char geohash (~5 × 3 km), nearby = cell + 8 neighbours; ≥ 5 households before an area shows; no map before the freeze.
 

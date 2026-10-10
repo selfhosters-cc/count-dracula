@@ -7,3 +7,7 @@ A Halloween trick-or-treater counter: helpers' phones at the door tap each kid i
 **Household**:
 One home that signs up and runs its own Halloween nights. It owns its Events, and nothing it owns is visible to another Household unless it chooses to share.
 _Avoid_: Account, tenant, user, customer
+
+**Night summary**:
+The shareable tap-through slides of one ended Event, viewable by a public share link for as long as the Household keeps sharing on.
+_Avoid_: Recap (that's the TV's end-of-night screen), wrapped, report

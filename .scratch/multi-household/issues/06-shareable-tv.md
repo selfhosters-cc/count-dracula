@@ -13,3 +13,4 @@ How does a household make its TV viewable by others, and what do viewers get?
 - **Viewer vs porch TV**: is a shared viewer the same `/tv` page (takeovers, sound on click) or a lighter "watch along" view? Does the household's own porch laptop sign in differently from a shared viewer?
 - **Revoke and rotate**: turning sharing off, regenerating the code, expiry after the night.
 - **What's exposed**: household name, costume names, kid numbers, golden-ticket wins, anything location-related.
+- **One sharing model?** [Shareable night summary](09-shareable-night-summary.md) already gives each ended night a public share link that works until turned off. Decide whether the TV's link/code is the same household-level "sharing on/off" or a separate one.
