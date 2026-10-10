@@ -39,7 +39,6 @@ A build-ready **v2 spec plus build tickets** for Count Dracula as one public, mu
 ## Not yet specified
 
 - **v2 rehearsal and launch-day plan.** How the Oct 24 rehearsal changes when it's also the multi-household acceptance test: a second test household, many public TV viewers, sign-up from a stranger's phone. And what Oct 25–31 looks like with strangers' nights depending on us (support channel, status, on-call on the night). Sharpens once the features are settled.
-- **How households find it.** Nearby is only interesting with density. [Nearby activity indicator](issues/08-nearby-activity.md) now covers low density: below 5 Active Households the phone shows a site-wide total and the TV shows nothing. What's left is whether launch is "tell the street / neighbourhood Facebook group" or broader, which mostly affects hosting load. Likely out of scope (promotion isn't the build); the user to rule.
 
 ## Out of scope
 
@@ -48,3 +47,4 @@ A build-ready **v2 spec plus build tickets** for Count Dracula as one public, mu
 - Passkeys, email sign-in links, Apple sign-in, and any outgoing email: after Halloween ([Household identity and sign-up](issues/04-household-identity-and-sign-up.md) chose Google sign-in only).
 - A portrait (phone) layout for TV viewers, expiring or per-viewer TV links, and a porch poster with the TV link: after Halloween ([Shareable TV: link, code and QR](issues/06-shareable-tv.md) chose one TV link on the same landscape `/tv`).
 - Postal-code and typed-address location entry, and any map on the night (TV, phones, nearby): ruled out, with a map picker in `/setup` instead ([Fuzzy location](issues/07-fuzzy-location.md)).
+- How households find it (telling the street, neighbourhood groups, wider promotion): promotion isn't the build, and [Nearby activity indicator](issues/08-nearby-activity.md) already covers low density with a site-wide total on the phone. Ruled out by the user, 2026-10-10.

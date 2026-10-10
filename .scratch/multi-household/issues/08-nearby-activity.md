@@ -36,7 +36,7 @@ Resolved 2026-10-10 (HITL). Prototype: branch [`prototype/nearby-activity`](http
 - **TV:** nothing at all; the box doesn't render.
 - **Phone:** the strip shows a **site-wide total** instead: "🎃 Count Dracula tonight: 212 houses · ~3,140 kids". *Site-wide* = Households with a live, non-Rehearsal Event right now and the kids counted in those Events, so there's no "tonight" to define across time zones. It follows the same rules: shown only with ≥ 5 such Households, kids rounded to 5s, refreshed every 10 minutes. Below that, the strip is hidden.
 
-**Top costume** (a rule added while recording the answer, not put to the user; cheap to change): the Area's most-counted costume across its active Households' live Events, **only from costumes counted in at least 3 different Households** (names matched case-insensitively, trimmed). One home's typed-in text never reaches other Households' screens, and a rare costume can't point to a single home. If none qualifies, the clause is left out.
+**Top costume** (confirmed by the user afterwards): the Area's most-counted costume across its active Households' live Events, **only from costumes counted in at least 3 different Households** (names matched case-insensitively, trimmed). One home's typed-in text never reaches other Households' screens, and a rare costume can't point to a single home. If none qualifies, the clause is left out.
 
 **Handed on**
 - User-entered costume names now reach other Households' TVs, but only through the 3-Household rule above → [Public hosting and abuse](11-public-hosting-and-abuse.md) decides whether that's enough.
