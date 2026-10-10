@@ -1,7 +1,7 @@
 # From sign-up to a TV on the porch
 
 Type: grilling (HITL)
-Status: open
+Status: claimed
 Blocked by: 05, 06
 
 ## Question
