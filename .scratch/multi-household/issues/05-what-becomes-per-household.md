@@ -1,7 +1,7 @@
 # What becomes per-household
 
 Type: grilling (HITL)
-Status: open
+Status: claimed
 Blocked by: 04
 
 ## Question
