@@ -8,6 +8,7 @@ import { createRaceChart } from '/race-chart.js'
 import { biggestCrew, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, tagColour } from '/shared/night-maths.js'
 import { createSound } from '/sound.js'
 import { createWebAudio } from '/web-audio.js'
+import { createTeaser, teaserLines } from '/teaser.js'
 
 const $ = (id) => document.getElementById(id)
 const CATCHING_UP_AFTER_MS = 20_000
@@ -374,6 +375,18 @@ function renderRace(state, animate = true) {
     : ''
 }
 
+// ---- the idle teaser: silent, gone on any tap, paused while ended or disconnected
+const teaser = createTeaser({
+  clock,
+  show: (line) => {
+    $('teaser').textContent = line
+    animate($('teaser'), { transform: 'translateY(0%)' }, { duration: 0.6, ease: 'easeOut' })
+  },
+  hide: () => animate($('teaser'), { transform: 'translateY(-110%)' }, { duration: 0.4 }),
+  lines: () => (live?.state ? teaserLines(live.state, Date.now()) : []),
+})
+const quietOrAway = (state) => !live?.connected || over(state)
+
 // ---- live state (or, with /tv?event=<id>, one past night's recap from stored data)
 const pastEventId = new URLSearchParams(location.search).get('event')
 const live = pastEventId ? null : connectLive()
@@ -403,9 +416,14 @@ if (pastEventId) {
 live?.on(({ state, cause, delta }) => {
   if (cause === 'disconnected') {
     wasDisconnected = true
+    teaser.pause(true)
     return // stay frozen: no error screen, spinner or red
   }
-  if (cause === 'snapshot') return renderSnapshot(state, cause)
+  teaser.pause(quietOrAway(state))
+  if (cause === 'snapshot') {
+    teaser.activity() // (re)connected: the 45 s count from now
+    return renderSnapshot(state, cause)
+  }
   const total = state.kids.length
   if (delta.type === 'event.ended') {
     renderGoldenPill(state) // End expires the tickets left; Resume brings them back
@@ -420,6 +438,7 @@ live?.on(({ state, cause, delta }) => {
   renderPatch(state)
   if (inRecap(state)) renderCards(state) // a straggler: it pops, and the recap keeps up
   if (delta.type === 'kid.added') {
+    teaser.activity() // any tap cancels the teaser and starts the 45 s over
     if (!delta.kid.late) born.set(delta.kid.id, performance.now()) // late kids appear quietly
     showCount(total, delta.kid.late ? 'roll' : 'bump')
     director.push(delta.moments ?? [], delta.kid)

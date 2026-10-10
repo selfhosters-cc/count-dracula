@@ -19,8 +19,8 @@ Quiet stretches still give the porch something to read. See [spec §7 States](..
 
 ## Acceptance criteria
 
-- [ ] 45 s hands-off shows the teaser, and it repeats every ~45 s with rotating lines
-- [ ] A tap hides it instantly
-- [ ] Lines for switched-off features or a None Race against never appear
-- [ ] The ghost line's numbers match the race chart's 👻 marker
-- [ ] It plays no sound, and stays hidden while the 🦇 chip is up
+- [x] 45 s hands-off shows the teaser, and it repeats every ~45 s with rotating lines
+- [x] A tap hides it instantly
+- [x] Lines for switched-off features or a None Race against never appear
+- [x] The ghost line's numbers match the race chart's 👻 marker
+- [x] It plays no sound, and stays hidden while the 🦇 chip is up
