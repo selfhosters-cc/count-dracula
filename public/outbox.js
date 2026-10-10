@@ -109,8 +109,9 @@ export function createOutbox({ send, storage, clock, phoneName }) {
       return 'ok'
     },
 
-    tap(tagId) {
-      const entry = { id: uuid(), tagId: tagId ?? null, tappedAt: clock.now(), phoneName }
+    // { teen: true }: counted, but can't win a golden ticket.
+    tap(tagId, { teen = false } = {}) {
+      const entry = { id: uuid(), tagId: tagId ?? null, tappedAt: clock.now(), phoneName, ...(teen && { teen: true }) }
       pending = [...pending, entry]
       claim(entry.id)
       flush()

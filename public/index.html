@@ -45,6 +45,12 @@
 
     .util { display: flex; gap: 8px; padding: 6px 12px; }
     .util button { flex: 1; height: 56px; border-radius: 14px; background: var(--panel2); font-weight: 800; font-size: 17px; }
+    /* 🧑 Teen: the next kid counts but can't win a golden ticket */
+    .util #teen { flex: 0 0 auto; padding: 0 14px; }
+    .util #teen[aria-pressed=true] { background: #ffd23f; color: #2a1a00; }
+    #app.teen .plus { background: #ffd23f; box-shadow: 0 6px 0 #b8901a; }
+    #app.teen .tile:not(.new) { outline: 3px dashed #ffd23f; outline-offset: -3px; }
+    .badge.teen { background: #ffd23f; color: #2a1a00; }
     .plus { height: 30dvh; max-height: 250px; margin: 6px 12px 14px; border-radius: 28px; background: var(--orange);
       color: #1a0d00; font-size: 44px; font-weight: 900; box-shadow: 0 6px 0 var(--orange-dk); flex-shrink: 0; }
 
@@ -143,6 +149,7 @@
     <div class="util">
       <button id="undo" disabled>↶ Undo</button>
       <button id="recent-open">🕘 Recent ▴</button>
+      <button id="teen" aria-pressed="false" title="Too old for a golden ticket: the next kid counts but can't win">🧑 Teen</button>
     </div>
     <button class="plus" id="add">+1 Kid</button>
 
@@ -310,6 +317,8 @@
       let view = doorView(null, outbox)
       // The optimistic "#N" just shown; corrected if the server numbers that kid differently.
       let lastFlash = null
+      let teenArmed = false
+      let teenTimer
 
       // ---- costume tiles, keyed by tag id and updated in place so a press is never swapped out mid-tap
       const tiles = new Map()
@@ -331,7 +340,7 @@
 
       function render() {
         view = doorView(live.state, outbox, { connected: live.connected })
-        $('golden').hidden = !view.goldenBanner
+        renderGolden()
         $('total').textContent = view.total ?? '–'
         $('untagged').textContent = view.untagged == null ? '' : `${view.untagged} untagged`
         $('pill').innerHTML = pillHtml(outbox.status)
@@ -372,7 +381,7 @@
                 (r) => `
           <div class="row ${r.queued ? 'queued' : ''}">
             <span class="n">${r.number == null ? '⏳' : '#' + r.number}</span>
-            <span class="who">${esc(label(r))}<span class="badge ${r.mine ? 'me' : ''}">${esc(r.phoneName)}</span>
+            <span class="who">${esc(label(r))}${r.teen ? '<span class="badge teen">teen</span>' : ''}<span class="badge ${r.mine ? 'me' : ''}">${esc(r.phoneName)}</span>
               <div class="meta">${timeOf(r.tappedAt)}${r.queued ? ' · ⏳ not sent yet' : ''}</div></span>
             <button class="x" data-remove="${esc(r.id)}" aria-label="Delete">✕</button>
           </div>`,
@@ -398,11 +407,32 @@
         if (row) removeKid(row)
       })
 
+      // 🧑 Teen arms the next kid only (a tile, +1 or + New), and lets go by itself after 30 s.
+      function armTeen(on) {
+        teenArmed = on
+        clearTimeout(teenTimer)
+        if (on) teenTimer = setTimeout(() => armTeen(false), 30_000)
+        $('teen').setAttribute('aria-pressed', on)
+        $('app').classList.toggle('teen', on)
+        $('add').textContent = on ? '+1 Teen' : '+1 Kid'
+        renderGolden()
+      }
+      $('teen').addEventListener('click', () => armTeen(!teenArmed))
+
+      function renderGolden() {
+        $('golden').hidden = !view.goldenBanner
+        $('golden').textContent = teenArmed
+          ? '⭐ NEXT KID IS GOLDEN — a teen passes it on to a later kid'
+          : '⭐ NEXT KID IS GOLDEN — get the prize ready'
+      }
+
       function tap(tagId) {
-        const entry = outbox.tap(tagId)
+        const teen = teenArmed
+        const entry = outbox.tap(tagId, { teen })
+        if (teen) armTeen(false)
         render()
         const tag = view.tags.find((t) => t.id === tagId)
-        showFlash(entry.id, view.total, tag?.emoji)
+        showFlash(entry.id, view.total, teen ? '🧑' : tag?.emoji)
         navigator.vibrate?.(20)
       }
 
@@ -613,7 +643,8 @@
       }
 
       $('new').addEventListener('click', () => {
-        draft = { name: '', emoji: EMOJIS[0], n: 0, kidId: uuid(), tappedAt: Date.now(), sending: false }
+        draft = { name: '', emoji: EMOJIS[0], n: 0, kidId: uuid(), tappedAt: Date.now(), teen: teenArmed, sending: false }
+        $('new-form').querySelector('h3').textContent = draft.teen ? 'New costume · 🧑 teen' : 'New costume'
         $('new-name').value = ''
         sheetOpen = true
         $('sheet').classList.add('on')
@@ -653,10 +684,11 @@
           const res = await post('/api/catch-up', {
             tag: { name, emoji: draft.emoji },
             n: draft.n,
-            kid: { id: draft.kidId, tappedAt: draft.tappedAt, phoneName },
+            kid: { id: draft.kidId, tappedAt: draft.tappedAt, phoneName, ...(draft.teen && { teen: true }) },
           })
           if (!res.ok) throw new Error(res.status === 403 ? 'Wrong join key' : `HTTP ${res.status}`)
           outbox.claim(draft.kidId)
+          armTeen(false)
           closeSheet()
           toast(`New: ${draft.emoji} ${name} ×${draft.n + 1}`)
           // The deltas are published before the reply, so the real number may already be here.

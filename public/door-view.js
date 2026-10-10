@@ -40,6 +40,7 @@ export function doorView(liveState, outbox, link = { connected: true }) {
       tag: tag ? { emoji: tag.emoji, name: tag.name } : null,
       phoneName: k.phoneName,
       tappedAt: k.tappedAt,
+      teen: k.teen === true,
       queued: unsent.has(k.id),
       mine: outbox.mine.has(k.id),
     }

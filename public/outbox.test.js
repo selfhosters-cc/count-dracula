@@ -73,6 +73,20 @@ describe('outbox', () => {
     expect(after.outbox.pending).toEqual([])
   })
 
+  test('a teen tap is sent as a teen, even after waiting out a reload offline', async () => {
+    const storage = fakeStorage()
+    const before = setup({ storage })
+    before.server.up = false
+    before.outbox.tap(4, { teen: true })
+    before.outbox.tap(null)
+    await settle()
+
+    const after = setup({ storage })
+    await settle()
+
+    expect(after.server.received.map((e) => [e.tagId, e.teen])).toEqual([[4, true], [null, undefined]])
+  })
+
   test('retryNow sends straight away instead of waiting for the timer', async () => {
     const { outbox, server } = setup()
     server.up = false

@@ -41,6 +41,7 @@ const SCHEMA = `
     received_at INTEGER NOT NULL,
     late INTEGER NOT NULL DEFAULT 0,
     golden INTEGER NOT NULL DEFAULT 0,
+    teen INTEGER NOT NULL DEFAULT 0,
     deleted_at INTEGER,
     source TEXT NOT NULL DEFAULT 'tap',
     backfill_batch_id INTEGER
@@ -109,6 +110,10 @@ export function openLedger(db, config) {
 
   db.exec('PRAGMA journal_mode = WAL')
   db.exec(SCHEMA)
+  // Databases from before teens (Oct 10) get the column; everyone already in them was a kid.
+  if (!db.query('PRAGMA table_info(kids)').all().some((c) => c.name === 'teen')) {
+    db.exec('ALTER TABLE kids ADD COLUMN teen INTEGER NOT NULL DEFAULT 0')
+  }
 
   const hasEvents = db.query('SELECT 1 FROM events LIMIT 1').get()
   if (!hasEvents) {
@@ -189,8 +194,8 @@ export function openLedger(db, config) {
   let seq = 0
 
   const insertKid = db.query(`
-    INSERT INTO kids (id, event_id, number, tag_id, phone_name, tapped_at, received_at, late, source, backfill_batch_id)
-    VALUES ($id, $eventId, $number, $tagId, $phoneName, $tappedAt, $receivedAt, $late, $source, $batchId)
+    INSERT INTO kids (id, event_id, number, tag_id, phone_name, tapped_at, received_at, late, teen, source, backfill_batch_id)
+    VALUES ($id, $eventId, $number, $tagId, $phoneName, $tappedAt, $receivedAt, $late, $teen, $source, $batchId)
     ON CONFLICT(id) DO NOTHING
     RETURNING *
   `)
@@ -214,7 +219,7 @@ export function openLedger(db, config) {
   const tagInEvent = db.query('SELECT 1 FROM tags WHERE id = ? AND event_id = ?')
 
   // Numbers the kid by the live count at arrival and flags it late (spec §2). Returns null for a repeat id.
-  function addKid(event, { id, tagId, tappedAt, phoneName, batchId = null }) {
+  function addKid(event, { id, tagId, tappedAt, phoneName, teen = false, batchId = null }) {
     if (typeof id !== 'string' || id === '') throw new BadCommand('A tap needs an id')
     if (!Number.isFinite(tappedAt)) throw new BadCommand('A tap needs tappedAt in ms')
     const receivedAt = now()
@@ -227,10 +232,27 @@ export function openLedger(db, config) {
       $tappedAt: tappedAt,
       $receivedAt: receivedAt,
       $late: batchId != null || receivedAt - tappedAt > LATE_AFTER_MS ? 1 : 0, // backfilled kids are always late
+      $teen: teen === true ? 1 : 0,
       $source: batchId == null ? 'tap' : 'backfill',
       $batchId: batchId,
     })
     return row && toKid(row)
+  }
+
+  // The top of the golden range: 80% of the Race-against total, or of Expected kids (spec §9).
+  function topOfRange(event) {
+    const base = ghostOf(event)?.total ?? event.expected_kids
+    return base ? Math.floor((base * 8) / 10) : 0
+  }
+
+  // A hidden ticket off a teen's number: a fresh random number above the count, never one another
+  // hidden ticket holds. With no room left in the range it rolls forward to the next kid who can win.
+  function moveTicket(event, ticketId) {
+    const taken = new Set(db.query("SELECT number FROM golden_tickets WHERE event_id = ? AND state = 'hidden'").all(event.id).map((r) => r.number))
+    const free = []
+    for (let n = liveCount.get(event.id).n + 1; n <= topOfRange(event); n++) if (!taken.has(n)) free.push(n)
+    if (free.length) db.query('UPDATE golden_tickets SET number = ? WHERE id = ?').run(free[Math.floor(random() * free.length)], ticketId)
+    else db.query("UPDATE golden_tickets SET state = 'rolled' WHERE id = ?").run(ticketId)
   }
 
   const momentState = db.query('SELECT state FROM fired_moments WHERE event_id = ? AND moment = ?')
@@ -245,7 +267,10 @@ export function openLedger(db, config) {
     const deferred = []
     if (switches.goldenTickets) {
       const own = db.query("SELECT id FROM golden_tickets WHERE event_id = ? AND state = 'hidden' AND number = ?").get(event.id, kid.number)
-      if (kid.late) {
+      if (kid.teen) {
+        // Too old to win (the user's ask, Oct 10): their number's ticket moves on, and they skip waiting ones.
+        if (own) moveTicket(event, own.id)
+      } else if (kid.late) {
         // Never left hidden below the count: it rolls forward to the next live kid, keeping its number.
         if (own) db.query("UPDATE golden_tickets SET state = 'rolled' WHERE id = ?").run(own.id)
       } else if (own) {
@@ -677,6 +702,7 @@ function toKid(row) {
     tappedAt: row.tapped_at,
     late: row.late === 1,
     golden: row.golden === 1,
+    teen: row.teen === 1,
     source: row.source,
   }
 }

@@ -168,7 +168,7 @@ describe('snapshot', () => {
         visitWindowMs: 15_000,
       },
       tags: [],
-      kids: [{ id: 'kid-a', number: 1, tagId: null, phoneName: 'Mom', tappedAt: 5_000, late: false, golden: false, source: 'tap' }],
+      kids: [{ id: 'kid-a', number: 1, tagId: null, phoneName: 'Mom', tappedAt: 5_000, late: false, golden: false, teen: false, source: 'tap' }],
       ghost: {
         eventId: expect.any(Number),
         label: '2025',
@@ -1141,5 +1141,97 @@ describe('the recap reveals the golden numbers, and only after the night', () =>
     expect(past.event).toMatchObject({ name: 'Night', live: false, frozen: true })
     expect(past.kids).toHaveLength(11)
     expect(past.recap.tickets.map((t) => t.state)).toEqual(['won', 'rolled', 'hidden'])
+  })
+})
+
+describe('teens: counted, but never win a golden ticket', () => {
+  // A night racing a 30-kid ghost (range #3–#24); random 0 puts the one ticket at #3.
+  function night({ tickets = 1, random = () => 0 } = {}) {
+    let clockMs = 1_000_000_000
+    const ledger = openLedger(new Database(':memory:'), {
+      ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] },
+      random,
+      now: () => clockMs,
+      switches: { milestones: false },
+    })
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Night' })
+    ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: ledger.snapshot().ghost.eventId, goldenCount: tickets })
+    ledger.apply({ type: 'goLive', eventId: event.id })
+    let i = 0
+    const live = () => ledger.apply(tap(`k${++i}`, { tappedAt: clockMs }))
+    const teen = () => ledger.apply(tap(`k${++i}`, { tappedAt: clockMs, teen: true }))
+    const won = (deltas) => deltas[0].moments.includes('golden')
+    return { ledger, live, teen, won, tickets: () => ledger.tickets(event.id) }
+  }
+
+  test('a teen on the golden number counts but does not win; the ticket moves to a new number further up', () => {
+    const { ledger, live, teen, won, tickets } = night() // ticket at #3
+    live()
+    live()
+
+    const three = teen()
+
+    expect(three[0].kid).toMatchObject({ number: 3, teen: true, golden: false })
+    expect(won(three)).toBe(false)
+    expect(three[0].golden).toEqual({ left: 1, nextIsGolden: true }) // random 0 → the very next number
+    expect(tickets()).toEqual([{ number: 4, state: 'hidden', kidId: null }])
+    expect(ledger.snapshot().kids.find((k) => k.number === 3).teen).toBe(true)
+    expect(won(live())).toBe(true) // #4
+  })
+
+  test('a teen never takes a released ticket; the next kid does', () => {
+    const { ledger, live, teen, won } = night() // #3, not reached
+    ledger.apply({ type: 'release' })
+
+    expect(won(teen())).toBe(false)
+    expect(ledger.snapshot().golden).toEqual({ left: 1, nextIsGolden: true })
+    expect(won(live())).toBe(true)
+  })
+
+  test('a teen on the top number of the range: the ticket rolls forward to the next kid who can win', () => {
+    const { live, teen, won, tickets } = night({ random: () => 0.999 }) // the band's last number: #24
+    for (let n = 1; n <= 23; n++) live()
+
+    expect(won(teen())).toBe(false)
+    expect(won(teen())).toBe(false) // another teen still can't take it
+    const next = live()
+
+    expect(won(next)).toBe(true)
+    expect(tickets()).toEqual([{ number: 24, state: 'rolled', kidId: next[0].kid.id }])
+  })
+
+  test('a late teen on the golden number: the ticket still moves up, not to the next kid', () => {
+    const { ledger, live, tickets } = night()
+    live()
+    live()
+
+    ledger.apply(tap('late-teen', { tappedAt: 1_000_000_000 - 60_000, teen: true }))
+
+    expect(tickets()).toEqual([{ number: 4, state: 'hidden', kidId: null }])
+    expect(live()[0].moments).toEqual(['golden'])
+  })
+
+  test('the + New kid at the door can be a teen', () => {
+    const { ledger, live, tickets } = night()
+    live()
+    live()
+
+    const deltas = ledger.apply({ type: 'catchUp', tag: { name: 'Skeleton', emoji: '💀' }, n: 0, kid: { id: 'door', tappedAt: 1_000_000_000, phoneName: 'Mom', teen: true } })
+
+    expect(deltas.find((d) => d.type === 'kid.added')).toMatchObject({ kid: { number: 3, teen: true }, moments: [] })
+    expect(tickets()[0]).toMatchObject({ number: 4, state: 'hidden' })
+  })
+
+  test('before teens: an existing database gets the column, and its kids are not teens', () => {
+    const db = new Database(':memory:')
+    db.exec(`CREATE TABLE kids (id TEXT PRIMARY KEY, event_id INTEGER NOT NULL, number INTEGER NOT NULL, tag_id INTEGER,
+      phone_name TEXT, tapped_at INTEGER NOT NULL, received_at INTEGER NOT NULL, late INTEGER NOT NULL DEFAULT 0,
+      golden INTEGER NOT NULL DEFAULT 0, deleted_at INTEGER, source TEXT NOT NULL DEFAULT 'tap', backfill_batch_id INTEGER)`)
+
+    const ledger = openLedger(db, { ghostSeed })
+    ledger.apply(tap('a'))
+    ledger.apply(tap('b', { teen: true }))
+
+    expect(ledger.snapshot().kids.map((k) => k.teen)).toEqual([false, true])
   })
 })

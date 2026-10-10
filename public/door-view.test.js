@@ -140,10 +140,10 @@ describe('recent', () => {
     }
 
     expect(doorView(live, box).recent).toEqual([
-      { id: 'q', number: null, tag: { emoji: '🧙', name: 'Witch' }, phoneName: 'Dad', tappedAt: 300, queued: true, mine: true },
-      { id: 'c', number: 3, tag: null, phoneName: 'Grandma', tappedAt: 50, queued: false, mine: false },
-      { id: 'b', number: 2, tag: null, phoneName: 'Dad', tappedAt: 200, queued: false, mine: true },
-      { id: 'a', number: 1, tag: { emoji: '🧙', name: 'Witch' }, phoneName: 'Mom', tappedAt: 100, queued: false, mine: false },
+      { id: 'q', number: null, tag: { emoji: '🧙', name: 'Witch' }, phoneName: 'Dad', tappedAt: 300, teen: false, queued: true, mine: true },
+      { id: 'c', number: 3, tag: null, phoneName: 'Grandma', tappedAt: 50, teen: false, queued: false, mine: false },
+      { id: 'b', number: 2, tag: null, phoneName: 'Dad', tappedAt: 200, teen: false, queued: false, mine: true },
+      { id: 'a', number: 1, tag: { emoji: '🧙', name: 'Witch' }, phoneName: 'Mom', tappedAt: 100, teen: false, queued: false, mine: false },
     ])
   })
 
@@ -152,6 +152,15 @@ describe('recent', () => {
     const box = { pending: [{ type: 'remove', id: 'r', kidId: 'k12', queuedAt: 0 }], unconfirmed: [], mine: new Set() }
 
     expect(doorView(live, box).recent.map((r) => r.number)).toEqual([11, 10, 9, 8, 7, 6, 5, 4, 3, 2])
+  })
+})
+
+describe('recent teens', () => {
+  test("marks teens, the server's and this phone's unsent ones", () => {
+    const live = { tags: [], kids: [{ id: 'a', number: 1, tagId: null, phoneName: 'Mom', tappedAt: 1, teen: true }, { id: 'b', number: 2, tagId: null, phoneName: 'Mom', tappedAt: 2, teen: false }] }
+    const box = { pending: [{ id: 'q', tagId: null, tappedAt: 3, phoneName: 'Dad', teen: true }], unconfirmed: [], mine: new Set(['q']) }
+
+    expect(doorView(live, box).recent.map((r) => [r.id, r.teen])).toEqual([['q', true], ['b', false], ['a', true]])
   })
 })
 

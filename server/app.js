@@ -29,8 +29,8 @@ export function startServer({ configPath, port, heartbeatMs }) {
     },
     'GET /api/stream': (req, server) => hub.attach(req, server, () => ledger.snapshot()),
     'POST /api/taps': write(async (req) => {
-      const { id, tagId, tappedAt, phoneName } = await req.json()
-      hub.publish(ledger.apply({ type: 'tap', id, tagId, tappedAt, phoneName }))
+      const { id, tagId, tappedAt, phoneName, teen } = await req.json()
+      hub.publish(ledger.apply({ type: 'tap', id, tagId, tappedAt, phoneName, teen }))
     }),
     'POST /api/remove': write(async (req) => {
       const { kidId } = await req.json()

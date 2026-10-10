@@ -399,3 +399,14 @@ describe('tailnet auto-join', () => {
     expect((await join(start(), 'count-dracula.example.com')).status).toBe(403) // not configured: never
   })
 })
+
+describe('teens', () => {
+  test("a phone's teen tap arrives as a teen", async () => {
+    const app = start()
+
+    await postTap(app, { ...aTap('a'), teen: true })
+
+    const snap = await (await fetch(`${app.url}/api/snapshot`)).json()
+    expect(snap.kids[0].teen).toBe(true)
+  })
+})

@@ -171,7 +171,7 @@ Top to bottom:
 1. **Header:** tonight's total and a small "N untagged" count.
 2. **Golden banner** (only when the next number is golden): "⭐ NEXT KID IS GOLDEN — get the prize ready", full width. It shows only on a phone that is **connected and has an empty outbox**; otherwise the phone can't know the real count.
 3. **Costume grid:** 3 columns of tiles showing emoji, name, tonight's count and a coloured bar along the bottom (the tag's TV colour). **"+ New"** is the last tile. The grid scrolls if needed.
-4. **Utility row:** "↶ Undo" and "🕘 Recent ▴".
+4. **Utility row:** "↶ Undo", "🕘 Recent ▴" and "🧑 Teen" (added Oct 10, see [§9](#9-golden-tickets)).
 5. **"+1 Kid":** a giant button filling the bottom ~30% of the screen.
 
 Behaviour:
@@ -186,6 +186,7 @@ Behaviour:
   - a − / + stepper for "How many already seen before this one?", capped at the untagged count, with a preview of which kid numbers it will re-tag
 
   **Create** applies [Catch-up](#2-domain-model): total +1, and the alert says ×(N+1).
+- **🧑 Teen** arms the **next kid only**, whether a costume tile, "+1 Kid" (which reads "+1 Teen") or "+ New". That kid counts as usual but can't win a golden ticket. It lets go by itself after the tap, or after 30 s untouched. While armed, the golden banner reads "a teen passes it on to a later kid". Recent marks teens with a "teen" badge.
 - **Offline pill:** after about 5 s of failed sends, an amber **"⏳ N waiting to send"** pill appears at the top and clears with a brief "✓ sent". After more than about 2 minutes, a line is added under it: **"Server's down — keep tapping, don't reload."** See [§11](#11-failure-handling).
 - **First open:** "Who's tapping?" asks for the phone name. Tailnet phones pick up the join key automatically; LAN phones get it from the QR code.
 
@@ -331,6 +332,7 @@ Must #4. ([Kid numbers under undo and late taps](issues/14-kid-numbers-under-und
 - **No hidden ticket ever sits below the count.** Every golden number the count passes is either won live or rolled forward by a late tap, so removing kids or a backfill batch never brings a ticket back into play.
 - **"Add a ticket"** (Setup, after Go live) draws one number between (tonight's count + 5) and the top of the range.
 - **"Release remaining"** (☰ menu, from 7:45pm event time) makes the next K kids winners, where K is the number of tickets left.
+- **Teens never win** (the user's ask, Oct 10: older teenagers shouldn't take a ticket). A teen on a hidden golden number counts, and the ticket **moves to a new random number** between the next kid and the top of the range, never one another hidden ticket holds. If there's no room left, it rolls forward to the next kid who can win. A teen also never takes a rolled-forward or released ticket. The recap shows the ticket's final number.
 - **Roll forward:** a number that lands on a late tap goes to the next live kid. The recap shows the original number as "rolled forward".
 - **End the night:** offers Release & keep going, End anyway (the tickets **expire** and the pill goes away), or Cancel. Resume brings expired tickets back as they were.
 - **Recap:** reveals every number. Unclaimed ones are greyed.
