@@ -4,7 +4,7 @@ import { fakeClock } from '../test/fake-clock.js'
 
 // Stands in for Web Audio: records every voice and every bus ramp the engine asks for.
 function fakeAudio(clock) {
-  const lengths = { bloop: 0.25, note: 0.2, tick: 0.08, sting50: 1.6, fanfare: 3 }
+  const lengths = { bloop: 0.25, note: 0.2, tick: 0.08, sting50: 1.6, fanfare: 3, golden: 4 }
   const audio = {
     state: 'suspended',
     voices: [],
@@ -217,5 +217,25 @@ describe('milestone stings', () => {
 
     expect(audio.voices).toMatchObject([{ slot, gain: 1 }])
     expect(ambienceRamps(audio)).toEqual([[0, 0.3], [ms + 300, 1]])
+  })
+})
+
+describe('golden fanfare', () => {
+  test('plays alone: it cuts what is sounding, and nothing else plays until it ends', async () => {
+    const { sound, audio, clock, sounding } = await setup()
+    sound.cue('bloop')
+    const bloop = audio.voices[0]
+
+    sound.cue('golden')
+    expect(bloop.stopped).toBe(true)
+    expect(sounding().map((v) => v.slot)).toEqual(['golden'])
+
+    await clock.advance(1_000)
+    for (const cue of ['bloop', 'scale', 'sting:50', 'fanfare', 'tick']) sound.cue(cue, { step: 1 })
+    expect(audio.voices.map((v) => v.slot)).toEqual(['bloop', 'golden'])
+
+    await clock.advance(3_100)
+    sound.cue('bloop')
+    expect(audio.voices.at(-1).slot).toBe('bloop')
   })
 })

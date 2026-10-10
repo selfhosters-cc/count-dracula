@@ -30,6 +30,10 @@
       grid-template-columns: 34fr 66fr; grid-template-rows: auto 1fr 22vh 10vh; gap: 1.6vh 2vw; }
     .top { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 1em; }
     .title { font-family: var(--f-spooky); font-size: clamp(20px, 3.4vw, 64px); color: var(--pumpkin); letter-spacing: .03em; }
+    .golden-pill { display: inline-flex; align-items: center; gap: .4em; padding: .3em .8em; border-radius: 999px;
+      border: 2px solid #ffcf3a; color: #ffcf3a; font-weight: 700; font-size: clamp(12px, 1.8vw, 30px); white-space: nowrap; }
+    .golden-pill[hidden] { display: none; }
+    .golden-pill b { font-family: var(--f-display); font-weight: 400; }
     .clock { font-family: var(--f-display); font-size: clamp(14px, 2.2vw, 36px); color: var(--ink-dim); }
     .hero { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
     .hero .big { font-family: var(--f-display); font-size: clamp(64px, 15vw, 300px); line-height: .9; }
@@ -58,6 +62,8 @@
     #takeover .k { font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); font-size: clamp(14px, 2.4vw, 44px); }
     #takeover .h { font-family: var(--f-spooky); font-size: clamp(56px, 13vw, 260px); line-height: .95; color: var(--pumpkin); text-wrap: balance; }
     #takeover .s { font-family: var(--f-display); font-size: clamp(18px, 3.2vw, 64px); margin-top: 2vh; }
+    #takeover.gold { background: radial-gradient(circle at 50% 45%, #6b4a00, #120a00 75%); }
+    #takeover.gold .h { color: #ffcf3a; }
     #confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 45; }
 
     /* Disconnected: decorative, never alarming (spec §7 States) */
@@ -78,7 +84,10 @@
   <section id="board" aria-label="Scoreboard">
     <div class="top">
       <div class="title">Count Dracula</div>
-      <span class="clock" id="clock"></span>
+      <div style="display: flex; gap: 1.5vw; align-items: center">
+        <span class="golden-pill" id="golden-pill" hidden>🎫 <b id="golden-left"></b> golden tickets left</span>
+        <span class="clock" id="clock"></span>
+      </div>
     </div>
     <div class="hero">
       <div class="eyebrow">Kids tonight</div>

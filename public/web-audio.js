@@ -13,6 +13,7 @@ const GENERATORS = {
   tick: { seconds: 0.08, draw: tick },
   sting50: { seconds: 1.6, draw: organSting },
   fanfare: { seconds: 3, draw: fanfare },
+  golden: { seconds: 4, draw: goldenFanfare },
   ambience: { seconds: 8, draw: nightLoop },
 }
 
@@ -49,7 +50,11 @@ export async function createWebAudio({ manifestUrl = '/sounds/manifest.json' } =
       source.start()
       return {
         duration: buffers[slot].duration / 2 ** (detune / 1200),
-        stop: () => source.stop(),
+        stop: () => {
+          try {
+            source.stop()
+          } catch {} // already ended
+        },
       }
     },
 
@@ -163,6 +168,23 @@ function fanfare(ctx) {
   vibrato.start(1.7)
   ghost.stop(3)
   vibrato.stop(3)
+}
+
+// The distinctive "you won": bright bell arpeggios climbing twice, a held major chord, then sparkles.
+function goldenFanfare(ctx) {
+  const bell = (at, f, length, level) => {
+    for (const [ratio, part] of [[1, 1], [2.76, 0.35], [5.4, 0.15]]) {
+      const osc = new OscillatorNode(ctx, { type: 'sine', frequency: f * ratio })
+      osc.connect(envelope(ctx, level * part, 0.004, length, at))
+      osc.start(at)
+      osc.stop(at + length + 0.05)
+    }
+  }
+  const arpeggio = [523.3, 659.3, 784, 1046.5]
+  arpeggio.forEach((f, i) => bell(i * 0.11, f, 0.5, 0.18))
+  arpeggio.forEach((f, i) => bell(0.55 + i * 0.11, f * 1.5, 0.5, 0.18))
+  for (const f of [523.3, 659.3, 784, 1046.5]) bell(1.15, f, 2.2, 0.12)
+  for (let i = 0; i < 10; i++) bell(1.4 + i * 0.13, 2093 * (1 + (i % 3) * 0.25), 0.25, 0.06)
 }
 
 // Wind, crickets and one owl, looping every `seconds` (all modulation divides the loop evenly).

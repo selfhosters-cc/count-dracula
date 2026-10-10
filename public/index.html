@@ -25,6 +25,11 @@
     #problem { color: var(--danger); text-align: center; font-size: 13px; }
     #problem:empty { display: none; }
 
+    .golden { background: #ffd23f; color: #2a1a00; font-weight: 900; text-align: center; padding: 10px; font-size: 18px;
+      animation: pulse 0.8s infinite alternate; }
+    .golden[hidden] { display: none; }
+    @keyframes pulse { to { filter: brightness(1.25); } }
+    #flash.gold { color: #ffd23f; font-size: 44px; text-align: center; padding: 0 16px; }
     .head { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px 6px; }
     .head b { font-size: 28px; font-variant-numeric: tabular-nums; }
     .dim { font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
@@ -98,6 +103,7 @@
     <div id="pill"></div>
     <div id="problem"></div>
     <div class="head"><span><b id="total">–</b> kids tonight</span><span class="dim" id="untagged"></span></div>
+    <div class="golden" id="golden" hidden>⭐ NEXT KID IS GOLDEN — get the prize ready</div>
     <div class="grid" id="grid">
       <button class="tile new" id="new">+ New</button>
     </div>
@@ -187,8 +193,9 @@
       clearTimeout: (id) => clearTimeout(id),
     }
 
-    function flash(text) {
+    function flash(text, gold = false) {
       const f = $('flash')
+      f.classList.toggle('gold', gold)
       f.textContent = text
       f.classList.remove('on')
       void f.offsetWidth
@@ -242,7 +249,8 @@
       }
 
       function render() {
-        view = doorView(live.state, outbox)
+        view = doorView(live.state, outbox, { connected: live.connected })
+        $('golden').hidden = !view.goldenBanner
         $('total').textContent = view.total ?? '–'
         $('untagged').textContent = view.untagged == null ? '' : `${view.untagged} untagged`
         $('pill').innerHTML = pillHtml(outbox.status)
@@ -325,7 +333,12 @@
       live.on((update) => {
         outbox.sync(update)
         const kid = update.delta?.type === 'kid.added' ? update.delta.kid : null
-        if (kid && lastFlash && kid.id === lastFlash.kidId && kid.number !== lastFlash.number) {
+        if (kid && update.delta.moments?.includes('golden') && outbox.mine.has(kid.id)) {
+          // The server confirmed this phone's tap won (spec §9): the strong buzz and the prize prompt.
+          lastFlash = null
+          flash('🎫 GOLDEN — hand over the prize!', true)
+          navigator.vibrate?.([80, 60, 80, 60, 300])
+        } else if (kid && lastFlash && kid.id === lastFlash.kidId && kid.number !== lastFlash.number) {
           showFlash(kid.id, kid.number, lastFlash.emoji) // another phone got there first
         }
         render()

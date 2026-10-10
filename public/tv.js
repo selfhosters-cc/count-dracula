@@ -96,6 +96,7 @@ function playMilestone({ number }) {
 
 // #100/#200/#300 and Beat last year: full screen, Creepster headline, fanfare plus a spooky flourish.
 const TAKEOVERS = {
+  golden: ({ number }) => ['🎫 Golden ticket 🎫', `KID #${number} WINS!`, 'You found a golden ticket! 🍫'],
   milestone: ({ number }) => ['Milestone', `KID #${number}!`, `${number} trick-or-treaters tonight 🎃`],
   'beat-last-year': () => {
     const g = live.state?.ghost
@@ -105,13 +106,16 @@ const TAKEOVERS = {
 
 function playTakeover(show) {
   const text = TAKEOVERS[show.moment]?.(show)
-  if (!text) return // golden tickets render in their own ticket
+  if (!text) return
+  const gold = show.moment === 'golden'
   ;[$('take-k').textContent, $('take-h').textContent, $('take-s').textContent] = text
+  $('takeover').classList.toggle('gold', gold)
   animate($('takeover'), { opacity: 1 }, { duration: 0.4 })
   animate($('take-h'), { scale: [2.2, 1], opacity: [0, 1] }, { type: 'spring', bounce: 0.45, duration: 0.7 })
-  emojiConfetti(['🎃', '👻', '🍬'], 6)
-  setTimeout(() => emojiConfetti(['🎃', '👻', '🍬'], 5), 700)
-  sound.cue('fanfare')
+  const emoji = gold ? ['🎫', '🍫', '⭐'] : ['🎃', '👻', '🍬']
+  emojiConfetti(emoji, 6)
+  setTimeout(() => emojiConfetti(emoji, 5), 700)
+  sound.cue(gold ? 'golden' : 'fanfare')
 }
 
 function emojiConfetti(emoji, power) {
@@ -143,6 +147,13 @@ function paceText(state) {
   return p.kind === 'ahead' ? `👻 ${p.by} ahead of last year's ghost` : `👻 ${p.by} behind last year's ghost`
 }
 
+// The only golden thing the TV knows before a win: how many are left (spec §9).
+function renderGoldenPill(state) {
+  const left = state.golden?.left ?? 0
+  $('golden-pill').hidden = !left
+  $('golden-left').textContent = left
+}
+
 function renderRace(state, animate = true) {
   race.update(state, Date.now(), animate)
   $('pace').textContent = paceText(state)
@@ -167,9 +178,11 @@ live.on(({ state, cause, delta }) => {
     showCount(total, wasDisconnected && shown != null ? 'roll' : 'set')
     wasDisconnected = false
     renderRace(state)
+    renderGoldenPill(state)
     return
   }
   renderRace(state)
+  renderGoldenPill(state)
   if (delta.type === 'kid.added') {
     showCount(total, delta.kid.late ? 'roll' : 'bump')
     director.push(delta.moments ?? [], delta.kid)

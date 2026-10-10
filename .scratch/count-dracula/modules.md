@@ -68,7 +68,7 @@ hub.attach(req, () => ledger.snapshot()) → Response
 hub.publish(deltas)
 ```
 
-**Hidden:** the `id: <seq>` framing, the 15 s `:` heartbeat, `server.timeout(req, 0)`, removing dead clients, and the snapshot sent first on every connection.
+**Hidden:** the `id: <seq>` framing, the 15 s heartbeat (a named `ping` event, so Live state can notice a silent dead link), `server.timeout(req, 0)`, removing dead clients, and the snapshot sent first on every connection.
 
 **Tickets:** 15.
 
@@ -103,7 +103,7 @@ live.on(({ state, cause, delta }) => …) // cause: 'snapshot' | 'delta'
 live.connected / live.disconnectedFor   // ms; drives the 🦇 chip and pauses the idle teaser
 ```
 
-**Hidden:** EventSource reconnects, applying the snapshot and then deltas, a full resync when there's a seq gap, and noticing a stale connection.
+**Hidden:** EventSource reconnects, applying the snapshot and then deltas, a full resync when there's a seq gap or an `event.switched`/`event.updated`, and noticing a stale connection (35 s without a ping).
 
 The TV's "never celebrate a snapshot" rule is one check: `cause === 'delta'`.
 

@@ -71,6 +71,8 @@
           <div><label for="s-expected">Expected kids</label><input id="s-expected" type="number" min="0"></div>
           <div><label for="s-visit">Visit window (s)</label><input id="s-visit" type="number" min="1"></div>
         </div>
+        <label for="s-golden">Golden tickets (drawn at Go live)</label>
+        <input id="s-golden" type="number" min="0">
         <p><button class="primary" type="submit">Save settings</button></p>
       </form>
 
@@ -188,6 +190,7 @@
       $('s-shift').value = editing.clockShiftMs / HOUR
       $('s-expected').value = editing.expectedKids ?? ''
       $('s-visit').value = editing.visitWindowMs / 1000
+      $('s-golden').value = editing.goldenCount
 
       $('tags').replaceChildren(...editing.tags.map(tagRow))
       $('c-copy').replaceChildren(option('', 'Nothing (start empty)', true), ...events.filter((e) => !e.countsOnly).map((e) => option(e.id, e.name)))
@@ -246,6 +249,7 @@
         clockShiftMs: Math.round(Number($('s-shift').value || 0) * HOUR),
         expectedKids: $('s-expected').value === '' ? null : Number($('s-expected').value),
         visitWindowMs: Math.round(Number($('s-visit').value || 15) * 1000),
+        goldenCount: Number($('s-golden').value || 0),
       }, 'Settings saved')
     })
 

@@ -12,8 +12,10 @@ export function createHub({ heartbeatMs = 15_000 } = {}) {
     }
   }
 
+  // A named event rather than a `:` comment: EventSource hides comments from the page, and the page
+  // needs to see something every 15 s to notice a link that died without closing (modules.md §4).
   const heartbeat = setInterval(() => {
-    for (const client of clients) send(client, ':\n\n')
+    for (const client of clients) send(client, frame('ping', {}))
   }, heartbeatMs)
 
   return {

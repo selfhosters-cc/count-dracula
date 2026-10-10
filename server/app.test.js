@@ -165,13 +165,13 @@ describe('live stream', () => {
     again.close()
   })
 
-  test('an idle stream gets heartbeat comments', async () => {
+  test('an idle stream gets heartbeat pings the page can see, so a silently dead link is noticed', async () => {
     const app = start({}, { heartbeatMs: 20 })
     const stream = await openStream(app)
     await stream.next()
 
-    expect(await stream.next()).toEqual({ comment: '' })
-    expect(await stream.next()).toEqual({ comment: '' })
+    expect(await stream.next()).toMatchObject({ event: 'ping' })
+    expect(await stream.next()).toMatchObject({ event: 'ping' })
     stream.close()
   })
 })

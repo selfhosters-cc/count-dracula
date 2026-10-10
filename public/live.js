@@ -2,12 +2,14 @@
 // The TV's "never celebrate a snapshot" rule is one check: cause === 'delta'.
 
 const RETRY_MS = 2_000
+const STALE_MS = 35_000 // the server pings every 15 s: two missed means the link is dead, even if still "open"
 const RESYNC = new Set(['event.switched', 'event.updated'])
 
 export function connectLive(url = '/api/stream') {
   const listeners = new Set()
   let source
   let disconnectedAt = Date.now()
+  let lastHeard = Date.now()
 
   const live = {
     state: null,
@@ -27,19 +29,24 @@ export function connectLive(url = '/api/stream') {
 
   function open() {
     source = new EventSource(url)
+    lastHeard = Date.now()
+    source.addEventListener('ping', () => (lastHeard = Date.now()))
 
     source.addEventListener('snapshot', (e) => {
+      lastHeard = Date.now()
       live.state = JSON.parse(e.data)
       live.connected = true
       emit('snapshot')
     })
 
     source.addEventListener('delta', (e) => {
+      lastHeard = Date.now()
       const delta = JSON.parse(e.data)
       if (!live.state || delta.seq <= live.state.seq) return
       if (delta.seq !== live.state.seq + 1) return reopen() // missed one: the new snapshot resyncs us
       if (RESYNC.has(delta.type)) return reopen() // Go live or new settings: take a fresh snapshot
       live.state = applyDelta(live.state, delta)
+      if ('golden' in delta) live.state = { ...live.state, golden: delta.golden } // just the count and the banner flag
       emit('delta', delta)
     })
 
@@ -56,6 +63,15 @@ export function connectLive(url = '/api/stream') {
     source.close()
     open()
   }
+
+  // A Wi-Fi drop can leave the socket open but silent: treat that as disconnected and dial again.
+  setInterval(() => {
+    if (!live.connected || Date.now() - lastHeard < STALE_MS) return
+    live.connected = false
+    disconnectedAt = lastHeard
+    emit('disconnected')
+    reopen()
+  }, 5_000)
 
   open()
   return live

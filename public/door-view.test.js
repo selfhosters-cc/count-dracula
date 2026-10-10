@@ -185,3 +185,23 @@ describe('undo target', () => {
     expect(doorView(live, { pending: [remove('mine-2')], unconfirmed: [remove('mine-1')], mine }).undo).toBeNull()
   })
 })
+
+describe('golden banner', () => {
+  const live = (golden) => ({ tags: [], kids: [{ id: 'a', number: 1, tagId: null }], golden })
+  const empty = { pending: [], unconfirmed: [], mine: new Set() }
+  const golden = { left: 3, nextIsGolden: true }
+
+  test('shows on a connected phone with nothing in its outbox when the next kid is golden', () => {
+    expect(doorView(live(golden), empty, { connected: true }).goldenBanner).toBe(true)
+  })
+
+  test.each([
+    ['disconnected', live(golden), empty, { connected: false }],
+    ['a tap still queued', live(golden), { ...empty, pending: [{ id: 'q', tagId: null }] }, { connected: true }],
+    ['a tap acked but not yet seen', live(golden), { ...empty, unconfirmed: [{ id: 'u', tagId: null }] }, { connected: true }],
+    ['the next kid is not golden', live({ left: 3, nextIsGolden: false }), empty, { connected: true }],
+    ['golden tickets switched off', live(null), empty, { connected: true }],
+  ])('hides when %s', (_, state, box, link) => {
+    expect(doorView(state, box, link).goldenBanner).toBe(false)
+  })
+})

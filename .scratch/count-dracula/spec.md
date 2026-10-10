@@ -109,7 +109,7 @@ Sources: map Notes, [Kid numbers under undo and late taps](issues/14-kid-numbers
 - **Taps and every other write are plain POSTs** carrying the join key.
 - **One Server-Sent Events stream per device.** Each connection opens with a full **snapshot** (live event, its tags, its kids, the ghost buckets, settings, the current `seq`), then sends numbered deltas (`id: <seq>`), e.g. `kid.added`, `kid.removed`, `kid.retagged`, `tag.added`, `event.switched`.
 - **The TV never celebrates a snapshot**, only deltas.
-- **Bun idle timeout:** call `server.timeout(req, 0)` on each SSE request and send a `:` heartbeat comment every 15 s.
+- **Bun idle timeout:** call `server.timeout(req, 0)` on each SSE request and send a heartbeat every 15 s. *(Built as a named `ping` event rather than a `:` comment, because the page can't see comments and needs the ping to notice a link that died without closing: after 35 s of silence it counts as disconnected. Changed while building golden tickets, ticket 28.)*
 - **WebSockets were rejected** (more reconnect code, and Caddy closes them on reload).
 
 ### Taps: idempotent and offline-tolerant

@@ -20,9 +20,9 @@ Secret kid numbers win a prize, behind the Must #4 feature switch (off → no dr
 
 ## Acceptance criteria
 
-- [ ] Go live stores N numbers, one per band, inside the 10–80% range (unit-tested, including the Expected-kids path)
-- [ ] The numbers never appear in any client payload, snapshot or page
-- [ ] The banner shows on a connected phone with an empty outbox and hides when the outbox has entries or it's disconnected
-- [ ] Two phones racing for the golden number: only the server's chosen tap gets the buzz, and the TV takeover names that number
-- [ ] Undoing the winner keeps the ticket won and the pill count unchanged
-- [ ] With the switch off, nothing golden appears anywhere
+- [x] Go live stores N numbers, one per band, inside the 10–80% range (unit-tested, including the Expected-kids path)
+- [x] The numbers never appear in any client payload, snapshot or page
+- [x] The banner shows on a connected phone with an empty outbox and hides when the outbox has entries or it's disconnected
+- [x] Two phones racing for the golden number: only the server's chosen tap gets the buzz, and the TV takeover names that number
+- [x] Undoing the winner keeps the ticket won and the pill count unchanged
+- [x] With the switch off, nothing golden appears anywhere

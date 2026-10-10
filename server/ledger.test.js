@@ -177,6 +177,7 @@ describe('snapshot', () => {
           { start: '19:30', end: '20:00', count: 34 },
         ],
       },
+      golden: { left: 5, nextIsGolden: false },
       settings: { switches: expect.any(Object) },
       seq: 1,
     })
@@ -622,5 +623,114 @@ describe('milestones and Beat last year (fired moments)', () => {
     expect(moments(live())).toEqual([])
     tapsUpTo(346)
     expect(moments(live())).toEqual([])
+  })
+})
+
+describe('golden tickets: the draw', () => {
+  // A deterministic `random`: hands out the given values in turn.
+  const sequence = (...values) => {
+    let i = 0
+    return () => values[i++ % values.length]
+  }
+  const goLiveWith = (config, settings = {}) => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed, ...config })
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
+    ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: ledger.snapshot().ghost.eventId, ...settings })
+    ledger.apply({ type: 'goLive', eventId: event.id })
+    return { ledger, eventId: event.id }
+  }
+
+  test('Go live draws one number per band across 10–80% of the Race-against total (#35–#276 against 346)', () => {
+    const { ledger, eventId } = goLiveWith({ random: sequence(0, 0.999, 0.5, 0.25, 0.75) })
+
+    const numbers = ledger.tickets(eventId).map((t) => t.number)
+
+    // #35–#276 is 242 numbers; band i starts at 35 + ⌊i × 242 / 5⌋: [35–82] [83–130] [131–179] [180–227] [228–276]
+    expect(numbers).toEqual([35, 130, 155, 192, 264])
+    expect(ledger.tickets(eventId).every((t) => t.state === 'hidden')).toBe(true)
+  })
+
+  test('uses Expected kids when there is no ghost, and the event\'s own ticket count', () => {
+    const { ledger, eventId } = goLiveWith({ random: sequence(0.5) }, { raceAgainstId: null, expectedKids: 200, goldenCount: 3 })
+
+    expect(ledger.tickets(eventId).map((t) => t.number)).toEqual([43, 90, 137]) // 3 bands over #20–#160
+  })
+
+  test('draws nothing with no ghost and no Expected kids, or with the switch off', () => {
+    expect(goLiveWith({}, { raceAgainstId: null }).ledger.snapshot().golden).toEqual({ left: 0, nextIsGolden: false })
+    const off = goLiveWith({ switches: { goldenTickets: false } })
+    expect(off.ledger.tickets(off.eventId)).toEqual([])
+    expect(off.ledger.snapshot().golden).toBeNull()
+  })
+
+  test('the first install draws for the live Rehearsal too (the rehearsal draws for real)', () => {
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+
+    expect(ledger.tickets(ledger.snapshot().event.id)).toHaveLength(5)
+    expect(ledger.snapshot().golden).toEqual({ left: 5, nextIsGolden: false })
+  })
+})
+
+describe('golden tickets: winning', () => {
+  // Rehearsal with one golden ticket at #3 (random 0 → the band's first number; 10% of a 30-kid ghost is #3).
+  function golden(config = {}) {
+    let clockMs = 1_000_000_000
+    const db = new Database(':memory:')
+    const ledger = openLedger(db, { ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] }, random: () => 0, now: () => clockMs, ...config })
+    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Night' })
+    ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: ledger.snapshot().ghost.eventId, goldenCount: 1 })
+    ledger.apply({ type: 'goLive', eventId: event.id })
+    let i = 0
+    const live = () => ledger.apply(tap(`k${++i}`, { tappedAt: clockMs }))
+    const late = () => ledger.apply(tap(`k${++i}`, { tappedAt: clockMs - 60_000 }))
+    return { ledger, live, late, eventId: event.id }
+  }
+
+  test('the kid who reaches the golden number live wins it; clients learn only how many are left', () => {
+    const { ledger, live, eventId } = golden()
+    live()
+    const second = live()
+    expect(second[0].golden).toEqual({ left: 1, nextIsGolden: true })
+    expect(ledger.snapshot().golden).toEqual({ left: 1, nextIsGolden: true })
+
+    const [win] = live()
+
+    expect(win.kid.number).toBe(3)
+    expect(win.moments).toEqual(['golden'])
+    expect(win.golden).toEqual({ left: 0, nextIsGolden: false })
+    expect(ledger.tickets(eventId)).toMatchObject([{ number: 3, state: 'won', kidId: win.kid.id }])
+  })
+
+  test('a win is final: undoing the winner keeps it won, and the next #3 is ordinary', () => {
+    const { ledger, live } = golden()
+    live()
+    live()
+    const [win] = live()
+
+    const [removed] = ledger.apply({ type: 'remove', kidId: win.kid.id })
+    expect(removed.golden).toEqual({ left: 0, nextIsGolden: false })
+
+    const [again] = live()
+    expect(again.kid.number).toBe(3)
+    expect(again.moments).toEqual([])
+  })
+
+  test('a golden number that lands on a late tap is not left hidden below the count', () => {
+    const { ledger, live, late, eventId } = golden()
+    live()
+    live()
+
+    const [lateWinner] = late()
+
+    expect(lateWinner.moments).toEqual([])
+    expect(ledger.tickets(eventId)[0].state).not.toBe('hidden')
+  })
+
+  test('the secret numbers never reach a client: the snapshot carries only the count and the banner flag', () => {
+    const { ledger, live } = golden()
+    live()
+
+    expect(Object.keys(ledger.snapshot().golden).sort()).toEqual(['left', 'nextIsGolden'])
+    expect(ledger.events().some((e) => 'tickets' in e)).toBe(false)
   })
 })

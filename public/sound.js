@@ -39,6 +39,7 @@ export function createSound({ audio, clock, random = Math.random }) {
   let ducked = false
   let unduckTimer = null
   let lastTick = -Infinity
+  let goldenUntil = 0 // nothing else plays during the golden fanfare (spec §10)
   let mutes = {}
 
   const ambienceLevel = () => (mutes.ambience ? 0 : 1) // muted, the loop keeps running silently: the keep-alive
@@ -91,6 +92,13 @@ export function createSound({ audio, clock, random = Math.random }) {
 
     cue(name, opts = {}) {
       if (audio.state !== 'running') return
+      if (name === 'golden') {
+        for (const v of voices.splice(0)) v.stop()
+        goldenUntil = play('golden', { gain: 1, detune: 0 })
+        duckUntil(goldenUntil)
+        return
+      }
+      if (clock.now() < goldenUntil) return
       if (name === 'tick') {
         const now = clock.now()
         if (now - lastTick >= TICK_QUIET_MS) play('tick', { gain: TICK_GAIN, detune: 0 })

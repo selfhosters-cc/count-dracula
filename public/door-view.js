@@ -4,8 +4,11 @@ import { tagColour } from '../shared/night-maths.js'
 
 const RECENT_ROWS = 10
 
-export function doorView(liveState, outbox) {
-  if (!liveState) return { total: null, untagged: null, tags: [], recent: [], undo: null, catchUp: { max: 0, preview: () => [] } }
+// link: { connected } from the live stream.
+export function doorView(liveState, outbox, link = { connected: true }) {
+  if (!liveState) {
+    return { total: null, untagged: null, tags: [], recent: [], undo: null, goldenBanner: false, catchUp: { max: 0, preview: () => [] } }
+  }
 
   const outgoing = [...outbox.pending, ...outbox.unconfirmed]
   const removed = new Set(outgoing.filter((e) => e.type === 'remove').map((e) => e.kidId))
@@ -51,6 +54,8 @@ export function doorView(liveState, outbox) {
     tags,
     recent,
     undo: latestMine ? row(latestMine) : null,
+    // Only when this phone's count is the server's: connected, and nothing of ours in flight (spec §4).
+    goldenBanner: !!(liveState.golden?.nextIsGolden && link.connected && !outbox.pending.length && !outbox.unconfirmed.length),
     catchUp: catchUpPreview(serverKids),
   }
 }

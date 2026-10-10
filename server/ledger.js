@@ -44,6 +44,13 @@ const SCHEMA = `
     source TEXT NOT NULL DEFAULT 'tap',
     backfill_batch_id INTEGER
   );
+  CREATE TABLE IF NOT EXISTS golden_tickets (
+    id INTEGER PRIMARY KEY,
+    event_id INTEGER NOT NULL REFERENCES events(id),
+    number INTEGER NOT NULL,
+    state TEXT NOT NULL,
+    kid_id TEXT
+  );
   CREATE TABLE IF NOT EXISTS fired_moments (
     event_id INTEGER NOT NULL REFERENCES events(id),
     moment TEXT NOT NULL,
@@ -74,12 +81,44 @@ const DEFAULT_SWITCHES = {
 export function openLedger(db, config) {
   const switches = { ...DEFAULT_SWITCHES, ...config.switches }
   const now = config.now ?? Date.now
+  const random = config.random ?? Math.random
 
   db.exec('PRAGMA journal_mode = WAL')
   db.exec(SCHEMA)
 
   const hasEvents = db.query('SELECT 1 FROM events LIMIT 1').get()
-  if (!hasEvents) db.transaction(() => firstInstall(db, config))()
+  if (!hasEvents) {
+    db.transaction(() => {
+      firstInstall(db, config)
+      drawGoldenTickets(eventById()) // Rehearsal is made live on install, and the rehearsal draws for real
+    })()
+  }
+
+  // Golden tickets (spec §9): drawn blind at Go live, one per band across 10–80% of the Race-against
+  // total, or of Expected kids with no ghost. Integer maths, so the bands don't drift with float error.
+  function drawGoldenTickets(event) {
+    if (!switches.goldenTickets) return
+    const base = ghostOf(event)?.total ?? event.expected_kids
+    if (!base) return
+    const lo = Math.ceil(base / 10)
+    const hi = Math.floor((base * 8) / 10)
+    const size = hi - lo + 1
+    const insert = db.query("INSERT INTO golden_tickets (event_id, number, state) VALUES (?, ?, 'hidden')")
+    for (let band = 0; band < event.golden_count; band++) {
+      const start = lo + Math.floor((band * size) / event.golden_count)
+      const end = lo + Math.floor(((band + 1) * size) / event.golden_count) - 1
+      if (end >= start) insert.run(event.id, start + Math.floor(random() * (end - start + 1)))
+    }
+  }
+
+  // All a client ever learns about the tickets: how many are left, and whether the next kid wins one.
+  function goldenSummary(event) {
+    if (!switches.goldenTickets) return null
+    const left = db.query("SELECT COUNT(*) AS n FROM golden_tickets WHERE event_id = ? AND state IN ('hidden', 'rolled')").get(event.id).n
+    const next = liveCount.get(event.id).n + 1
+    const nextIsGolden = !!db.query("SELECT 1 FROM golden_tickets WHERE event_id = ? AND state = 'hidden' AND number = ?").get(event.id, next)
+    return { left, nextIsGolden }
+  }
 
   function eventById(id) {
     return id == null
@@ -162,6 +201,16 @@ export function openLedger(db, config) {
   function referee(event, kid) {
     const moments = []
     const deferred = []
+    const ticket = switches.goldenTickets
+      ? db.query("SELECT id FROM golden_tickets WHERE event_id = ? AND state = 'hidden' AND number = ?").get(event.id, kid.number)
+      : null
+    if (ticket && kid.late) {
+      // Not left hidden below the count: ticket 29 hands a rolled ticket to the next live kid.
+      db.query("UPDATE golden_tickets SET state = 'rolled' WHERE id = ?").run(ticket.id)
+    } else if (ticket) {
+      db.query("UPDATE golden_tickets SET state = 'won', kid_id = ? WHERE id = ?").run(kid.id, ticket.id)
+      moments.push('golden')
+    }
     if (switches.milestones) {
       const fire = (moment, state = 'fired') => markMoment.run(event.id, moment, state, kid.id, now())
       const milestone = kid.number % 50 === 0 ? `milestone:${kid.number}` : null
@@ -181,7 +230,7 @@ export function openLedger(db, config) {
         moments.push('beat-last-year')
       }
     }
-    return [{ type: 'kid.added', kid, moments }, ...deferred]
+    return [{ type: 'kid.added', kid, moments, golden: goldenSummary(event) }, ...deferred]
   }
 
   const commands = {
@@ -210,9 +259,11 @@ export function openLedger(db, config) {
       ]
     },
 
+    // A won ticket stays won, even if its winner is removed (spec §9).
     remove({ kidId }) {
-      const row = softDeleteKid.get(now(), kidId, eventById().id)
-      return row ? [{ type: 'kid.removed', kidId }] : []
+      const event = eventById()
+      const row = softDeleteKid.get(now(), kidId, event.id)
+      return row ? [{ type: 'kid.removed', kidId, golden: goldenSummary(event) }] : []
     },
 
     // ---- Setup (spec §6). Creating an event doesn't make it live.
@@ -221,7 +272,7 @@ export function openLedger(db, config) {
       const source = copyTagsFrom == null ? null : eventById(copyTagsFrom)
       if (copyTagsFrom != null && !source) throw new BadCommand('No event to copy costumes from')
       const row = db
-        .query('INSERT INTO events (name, visit_window_ms) VALUES (?, ?) RETURNING *')
+        .query('INSERT INTO events (name, visit_window_ms, golden_count) VALUES (?, ?, 5) RETURNING *')
         .get(requireName(name, 'An event'), source?.visit_window_ms ?? 15_000)
       if (source) {
         db.query(`
@@ -241,6 +292,7 @@ export function openLedger(db, config) {
       const old = eventById()
       db.query('UPDATE events SET live = 0, frozen = 1 WHERE id = ?').run(old.id)
       db.query('UPDATE events SET live = 1, join_key = ? WHERE id = ?').run(old.join_key, next.id)
+      drawGoldenTickets(eventById(next.id))
       return [{ type: 'event.switched', eventId: next.id }]
     },
 
@@ -257,6 +309,7 @@ export function openLedger(db, config) {
         clockShiftMs: ['clock_shift_ms', (v) => wholeNumber(v, 'Clock shift')],
         expectedKids: ['expected_kids', (v) => (v == null ? null : wholeNumber(v, 'Expected kids', 0))],
         visitWindowMs: ['visit_window_ms', (v) => wholeNumber(v, 'Visit window', 1)],
+        goldenCount: ['golden_count', (v) => wholeNumber(v, 'Golden tickets', 0)],
       }
       const sets = Object.entries(changes).filter(([key]) => key in columns && key !== 'type')
       for (const [key, value] of sets) {
@@ -318,7 +371,7 @@ export function openLedger(db, config) {
       const racedByLive = live.race_against_id === event.id
       db.query('UPDATE events SET race_against_id = NULL WHERE race_against_id = ?').run(event.id)
       // All of it: SQLite can reuse a deleted event's id, so nothing may be left pointing at it.
-      for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
+      for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
       db.query('DELETE FROM events WHERE id = ?').run(event.id)
       return racedByLive ? [{ type: 'event.updated', eventId: live.id }] : []
     },
@@ -350,6 +403,13 @@ export function openLedger(db, config) {
       return eventById().join_key
     },
 
+    // The secret numbers: for the tests and, after the night, the recap. Never sent to a client live.
+    tickets(eventId) {
+      return db
+        .query('SELECT number, state, kid_id AS kidId FROM golden_tickets WHERE event_id = ? ORDER BY number')
+        .all(eventId)
+    },
+
     // Every event for the Setup page, newest first. Never includes the join key.
     events() {
       const tagsOf = db.query('SELECT * FROM tags WHERE event_id = ? ORDER BY sort_order')
@@ -376,6 +436,7 @@ export function openLedger(db, config) {
           .all(event.id)
           .map(toKid),
         ghost: ghostOf(event),
+        golden: goldenSummary(event),
         settings: { switches },
         seq,
       }
@@ -399,6 +460,7 @@ function toEventSummary(row) {
     raceAgainstId: row.race_against_id,
     clockShiftMs: row.clock_shift_ms,
     expectedKids: row.expected_kids,
+    goldenCount: row.golden_count,
     visitWindowMs: row.visit_window_ms,
   }
 }
@@ -433,7 +495,7 @@ function firstInstall(db, { ghostSeed }) {
     const insertBucket = db.query('INSERT INTO ghost_buckets (event_id, slot_start, slot_end, count) VALUES (?, ?, ?, ?)')
     for (const b of ghostSeed.buckets) insertBucket.run(raceAgainstId, b.start, b.end, b.count)
   }
-  db.query("INSERT INTO events (name, live, join_key, race_against_id) VALUES ('Rehearsal', 1, ?, ?)").run(
+  db.query("INSERT INTO events (name, live, join_key, race_against_id, golden_count) VALUES ('Rehearsal', 1, ?, ?, 5)").run(
     randomKey(),
     raceAgainstId,
   )
