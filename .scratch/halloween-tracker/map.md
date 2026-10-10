@@ -30,12 +30,14 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 
 <!-- one line per closed ticket: [title](issues/NN-slug.md) — gist -->
 
+- [Live-update stack](issues/02-live-update-stack.md) — Bun + bun:sqlite, POST taps + SSE with a snapshot on connect, phone-generated IDs for idempotent offline taps, no-build TV with Chart.js/Motion/confetti.
+
 ## Not yet specified
 
 - **Dress rehearsal** — what the Oct 24 rehearsal must exercise and what "pass" means.
 - **Idle / attract mode** — what the TV shows when nobody's at the door (could be most of the night).
 - **End-of-night recap** — a summary screen once the night winds down; maybe a shareable image.
-- **Failure resilience** — what happens if the laptop, server, or Wi-Fi dies mid-night; phones queuing taps offline. Depends on the stack.
+- **Failure resilience** — phone outbox + snapshot-on-reconnect covers Wi-Fi blips (see Live-update stack); still open: server/laptop crash recovery and a manual fallback if everything dies.
 - **Visit window tuning** — the actual grouping threshold; may want to be adjustable live.
 - **Tag presentation** — colour/emoji assignment per tag, how many tags fit on TV and phone.
 - **Final spec assembly** — rolling every decision into the hand-off spec.
