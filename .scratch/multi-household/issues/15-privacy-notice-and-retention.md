@@ -1,7 +1,7 @@
 # Privacy notice and retention
 
 Type: grilling (HITL)
-Status: open
+Status: claimed
 Blocked by: 11
 
 ## Question
