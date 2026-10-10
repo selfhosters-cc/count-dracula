@@ -36,6 +36,7 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 - [Laptop kiosk setup](issues/03-laptop-kiosk-setup.md) — "Start the night" click plus Chrome autoplay flag and `--kiosk`; OS-level keep-awake; 1080p60 with TV "Just Scan"; Web Audio with capped overlaps; 11-step rehearsal checklist.
 - [Phone controller prototype](issues/05-phone-controller-prototype.md) — "Thumb pad": giant +1 Kid at the bottom, 3-column costume grid above, Undo + slide-up Recent between them; "+ New" also counts the kid at the door.
 - [TV screen prototype](issues/06-tv-screen-prototype.md) — Layout A "Scoreboard": giant count + pace left, ghost-race chart right, full-width costume leaderboard, pumpkin-patch ground strip; merged burst pops, priority queue, full-screen takeovers for 100s/golden/beat-last-year.
+- [Sound design](issues/07-sound-design.md) — arcade bloops for each kid (5 variations, rising scale for bursts, quieter in the rush), cartoony-spooky stings for big moments, wind/cricket ambience bed, 6-button soundboard (3 homemade) on the TV with a 3 s cooldown, mute toggles in the phone menu.
 
 ## Not yet specified
 
@@ -46,7 +47,7 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 - **Visit window tuning** — the actual grouping threshold; may want to be adjustable live.
 - **Event setup** — creating an event before the night: name, tags set up ahead of time, golden ticket count and draw, entering ghost data, choosing which event is live. Probably a small admin view on the phone.
 - **Tag presentation** — TV side: six validated colours then grey, top 5 on the leaderboard (see TV screen prototype); open how emoji get chosen when a tag is created live. Phone side: a 3-column grid that scrolls (see Phone controller prototype); open whether rarely-used tags should sink or hide.
-- **Phone secondary controls** — where the soundboard, "release remaining tickets", mute/volume and event admin live, kept off the main counting screen (a menu? a second tab?). Depends on Sound design and Event setup.
+- **Phone secondary controls** — where the soundboard (6 buttons), "release remaining tickets", master volume and the 3 mute toggles (see Sound design) and event admin live, kept off the main counting screen (a menu? a second tab?). Still depends on Event setup.
 - **Final spec assembly** — rolling every decision into the hand-off spec.
 
 ## Out of scope
