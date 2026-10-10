@@ -1,0 +1,343 @@
+{
+  "bloop": {
+    "label": "Each kid (bloop)",
+    "options": [
+      {
+        "entry": "stock/bloop-drop.ogg",
+        "title": "Water drop",
+        "source": "Kenney — Interface Sounds",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "original": "drop_002.ogg"
+      },
+      {
+        "entry": "stock/bloop-bong.ogg",
+        "title": "Bong",
+        "source": "Kenney — Interface Sounds",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "original": "bong_001.ogg"
+      },
+      {
+        "entry": "stock/bloop-pluck.ogg",
+        "title": "Pluck",
+        "source": "Kenney — Interface Sounds",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "original": "pluck_002.ogg"
+      }
+    ]
+  },
+  "note": {
+    "label": "Merged-pop scale note (pitched up by the TV)",
+    "options": [
+      {
+        "entry": "stock/note-pluck.ogg",
+        "title": "Pluck",
+        "source": "Kenney — Interface Sounds",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "original": "pluck_001.ogg"
+      },
+      {
+        "entry": "stock/bloop-bong.ogg",
+        "title": "Bong",
+        "source": "Kenney — Interface Sounds",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "original": "bong_001.ogg"
+      },
+      {
+        "entry": "stock/note-glass.ogg",
+        "title": "Glass tap",
+        "source": "Kenney — Interface Sounds",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "original": "glass_002.ogg"
+      }
+    ]
+  },
+  "tick": {
+    "label": "Late-tap roll-up tick",
+    "options": [
+      {
+        "entry": "stock/tick-a.ogg",
+        "title": "Tick",
+        "source": "Kenney — Interface Sounds",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "original": "tick_002.ogg"
+      },
+      {
+        "entry": "stock/tick-b.ogg",
+        "title": "Tick (longer)",
+        "source": "Kenney — Interface Sounds",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "original": "tick_004.ogg"
+      },
+      {
+        "entry": "stock/tick-click.ogg",
+        "title": "Soft click",
+        "source": "Kenney — Interface Sounds",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "original": "click_001.ogg"
+      }
+    ]
+  },
+  "sting50": {
+    "label": "Every 50th (headstone)",
+    "options": [
+      {
+        "entry": "stock/jingle-pizzi02.ogg",
+        "title": "Pizzicato, rising",
+        "source": "Kenney — Music Jingles",
+        "url": "https://kenney.nl/assets/music-jingles",
+        "original": "jingles_PIZZI02.ogg"
+      },
+      {
+        "entry": "stock/jingle-nes12.ogg",
+        "title": "8-bit, rising",
+        "source": "Kenney — Music Jingles",
+        "url": "https://kenney.nl/assets/music-jingles",
+        "original": "jingles_NES12.ogg"
+      },
+      {
+        "entry": "stock/jingle-steel02.ogg",
+        "title": "Steel drum, rising",
+        "source": "Kenney — Music Jingles",
+        "url": "https://kenney.nl/assets/music-jingles",
+        "original": "jingles_STEEL02.ogg"
+      }
+    ]
+  },
+  "fanfare": {
+    "label": "#100/#200/#300 and Beat last year",
+    "options": [
+      {
+        "entry": "stock/jingle-nes00.ogg",
+        "title": "8-bit fanfare",
+        "source": "Kenney — Music Jingles",
+        "url": "https://kenney.nl/assets/music-jingles",
+        "original": "jingles_NES00.ogg"
+      },
+      {
+        "entry": "stock/jingle-sax07.ogg",
+        "title": "Sax fanfare",
+        "source": "Kenney — Music Jingles",
+        "url": "https://kenney.nl/assets/music-jingles",
+        "original": "jingles_SAX07.ogg"
+      },
+      {
+        "entry": "stock/jingle-hit15.ogg",
+        "title": "Orchestra hit fanfare",
+        "source": "Kenney — Music Jingles",
+        "url": "https://kenney.nl/assets/music-jingles",
+        "original": "jingles_HIT15.ogg"
+      }
+    ]
+  },
+  "golden": {
+    "label": "Golden ticket \"you won\"",
+    "options": [
+      {
+        "entry": "stock/jingle-steel02.ogg",
+        "title": "Steel drum, rising",
+        "source": "Kenney — Music Jingles",
+        "url": "https://kenney.nl/assets/music-jingles",
+        "original": "jingles_STEEL02.ogg"
+      },
+      {
+        "entry": "stock/jingle-pizzi02.ogg",
+        "title": "Pizzicato, rising",
+        "source": "Kenney — Music Jingles",
+        "url": "https://kenney.nl/assets/music-jingles",
+        "original": "jingles_PIZZI02.ogg"
+      },
+      {
+        "entry": "stock/jingle-nes03.ogg",
+        "title": "8-bit win",
+        "source": "Kenney — Music Jingles",
+        "url": "https://kenney.nl/assets/music-jingles",
+        "original": "jingles_NES03.ogg"
+      }
+    ]
+  },
+  "ding": {
+    "label": "New costume ding-ding",
+    "options": [
+      {
+        "entry": "stock/ding-twotone.ogg",
+        "title": "Two-tone",
+        "source": "Kenney — Digital Audio",
+        "url": "https://kenney.nl/assets/digital-audio",
+        "original": "twoTone1.ogg"
+      },
+      {
+        "entry": "stock/ding-confirm.ogg",
+        "title": "Confirmation chime",
+        "source": "Kenney — Interface Sounds",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "original": "confirmation_004.ogg"
+      },
+      {
+        "entry": "stock/ding-glass.ogg",
+        "title": "Glass chime",
+        "source": "Kenney — Interface Sounds",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "original": "glass_004.ogg"
+      }
+    ]
+  },
+  "close": {
+    "label": "End of night closing sting",
+    "options": [
+      {
+        "entry": "stock/close-sax13.ogg",
+        "title": "Sax, falling (wah-wah)",
+        "source": "Kenney — Music Jingles",
+        "url": "https://kenney.nl/assets/music-jingles",
+        "original": "jingles_SAX13.ogg"
+      },
+      {
+        "entry": "stock/close-sax11.ogg",
+        "title": "Sax, falling",
+        "source": "Kenney — Music Jingles",
+        "url": "https://kenney.nl/assets/music-jingles",
+        "original": "jingles_SAX11.ogg"
+      },
+      {
+        "entry": "stock/close-steel06.ogg",
+        "title": "Steel drum, falling",
+        "source": "Kenney — Music Jingles",
+        "url": "https://kenney.nl/assets/music-jingles",
+        "original": "jingles_STEEL06.ogg"
+      }
+    ]
+  },
+  "ambience": {
+    "label": "Night ambience (loops all night, quietly)",
+    "options": [
+      {
+        "entry": "stock/ambience-crickets.mp3",
+        "title": "Crickets (loop)",
+        "source": "OpenGameArt — \"Crickets Ambient Noise - loopable\" by Wolfgang_ (optional credit: Ted Kerr)",
+        "url": "https://opengameart.org/content/crickets-ambient-noise-loopable",
+        "original": "crickets_1.mp3"
+      }
+    ]
+  },
+  "board1": {
+    "label": "Soundboard 1: Evil laugh (homemade)",
+    "options": []
+  },
+  "board2": {
+    "label": "Soundboard 2: Happy Halloween! (homemade)",
+    "options": []
+  },
+  "board3": {
+    "label": "Soundboard 3: Wolf howl (homemade)",
+    "options": []
+  },
+  "board4": {
+    "label": "Soundboard 4: Scream",
+    "options": [
+      {
+        "entry": "stock/scream-girl-1.mp3",
+        "title": "Girl screaming #1",
+        "source": "BigSoundBank (Joseph Sardin) — Howling of a Girl #1",
+        "url": "https://bigsoundbank.com/howling-of-a-girl-1-s1662.html",
+        "original": "1662.mp3"
+      },
+      {
+        "entry": "stock/scream-girl-2.mp3",
+        "title": "Girl screaming #2",
+        "source": "BigSoundBank (Joseph Sardin) — Howling of a Girl #2",
+        "url": "https://bigsoundbank.com/howling-of-a-girl-2-s1663.html",
+        "original": "1663.mp3"
+      },
+      {
+        "entry": {
+          "file": "stock/scream-kids.mp3",
+          "start": 0.15,
+          "length": 3
+        },
+        "title": "Kids screaming",
+        "source": "BigSoundBank (Joseph Sardin) — Kids Screaming #1",
+        "url": "https://bigsoundbank.com/kids-scream-1-s1148.html",
+        "original": "1148.mp3"
+      }
+    ]
+  },
+  "board5": {
+    "label": "Soundboard 5: Creaky door",
+    "options": [
+      {
+        "entry": {
+          "file": "stock/creak-door-2.mp3",
+          "start": 0.15,
+          "length": 3
+        },
+        "title": "Creaking door",
+        "source": "BigSoundBank (Joseph Sardin) — Creaking Door #2",
+        "url": "https://bigsoundbank.com/creaking-door-2-s3205.html",
+        "original": "3205.mp3"
+      },
+      {
+        "entry": {
+          "file": "stock/creak-door-3.mp3",
+          "start": 0.1,
+          "length": 3
+        },
+        "title": "Creaking door, slower",
+        "source": "BigSoundBank (Joseph Sardin) — Creaking door #3",
+        "url": "https://bigsoundbank.com/creaking-door-3-s3206.html",
+        "original": "3206.mp3"
+      },
+      {
+        "entry": "stock/creak-closet.mp3",
+        "title": "Creaking closet door",
+        "source": "BigSoundBank (Joseph Sardin) — Creaking closet door",
+        "url": "https://bigsoundbank.com/creaking-closet-door-s0305.html",
+        "original": "0305.mp3"
+      },
+      {
+        "entry": "stock/creak-kenney.ogg",
+        "title": "Door opening",
+        "source": "Kenney — RPG Audio",
+        "url": "https://kenney.nl/assets/rpg-audio",
+        "original": "doorOpen_2.ogg"
+      }
+    ]
+  },
+  "board6": {
+    "label": "Soundboard 6: Thunder",
+    "options": [
+      {
+        "entry": {
+          "file": "stock/thunder-2.mp3",
+          "start": 0.3,
+          "length": 4
+        },
+        "title": "Thunder (short)",
+        "source": "BigSoundBank (Joseph Sardin) — Thunder #2",
+        "url": "https://bigsoundbank.com/thunder-2-s3113.html",
+        "original": "3113.mp3"
+      },
+      {
+        "entry": {
+          "file": "stock/thunder-3.mp3",
+          "start": 0.9,
+          "length": 4
+        },
+        "title": "Thunder (crack)",
+        "source": "BigSoundBank (Joseph Sardin) — Thunder #3",
+        "url": "https://bigsoundbank.com/thunder-3-s3114.html",
+        "original": "3114.mp3"
+      },
+      {
+        "entry": {
+          "file": "stock/thunder-4.mp3",
+          "start": 0.9,
+          "length": 4
+        },
+        "title": "Thunder (rolling)",
+        "source": "BigSoundBank (Joseph Sardin) — Thunder #4",
+        "url": "https://bigsoundbank.com/thunder-4-s3115.html",
+        "original": "3115.mp3"
+      }
+    ]
+  }
+}

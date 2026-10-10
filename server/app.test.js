@@ -210,6 +210,8 @@ describe('pages', () => {
     ['/tv', 'text/html'],
     ['/live.js', 'text/javascript'],
     ['/shared/night-maths.js', 'text/javascript'],
+    ['/kiosk/count-dracula-tv.sh', ''],
+    ['/kiosk/install-cachyos.sh', ''],
   ])('serves %s', async (path, type) => {
     const app = start()
 

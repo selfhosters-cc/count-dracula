@@ -55,10 +55,12 @@ export async function createWebAudio({ manifestUrl = '/sounds/manifest.json' } =
     resume: () => ctx.resume(),
 
     // Swap a slot's generated sound for a real file (the soundboard's, named in the server config).
+    // A soundboard file named in the server config, for a slot the manifest leaves to it.
     async useFile(slot, path) {
+      if (manifest[slot]) return // the manifest wins
       try {
         const res = await fetch(path)
-        if (res.ok) buffers[slot] = await ctx.decodeAudioData(await res.arrayBuffer())
+        if (res.ok) buffers[slot] = shape(await ctx.decodeAudioData(await res.arrayBuffer()), {})
       } catch {}
     },
 
@@ -97,17 +99,56 @@ export async function createWebAudio({ manifestUrl = '/sounds/manifest.json' } =
   }
 }
 
-async function loadSlot(ctx, slot, file) {
-  if (file) {
+// One slot's sound: its file from the manifest, else the generated fallback. A manifest entry is
+// "file.ogg" or { file, start, length, gain } (seconds; files live under /sounds/). Files are trimmed and
+// evened out to the same loudness unless the entry sets a gain (spec §10 "normalised loudness").
+export async function loadSlot(ctx, slot, entry) {
+  const spec = typeof entry === 'string' ? { file: entry } : entry
+  if (spec?.file) {
     try {
-      const res = await fetch(`/sounds/${file}`)
-      if (res.ok) return await ctx.decodeAudioData(await res.arrayBuffer())
+      const res = await fetch(`/sounds/${spec.file}`)
+      if (res.ok) return shape(await ctx.decodeAudioData(await res.arrayBuffer()), spec)
     } catch {}
   }
   const { seconds, draw } = GENERATORS[slot]
   const offline = new OfflineAudioContext(1, Math.ceil(seconds * RATE), RATE)
   draw(offline, seconds)
   return offline.startRendering()
+}
+
+export const SLOTS = Object.keys(GENERATORS)
+
+const TARGET_DB = -16 // RMS of the audible part, for every file
+const FADE_S = 0.04
+
+function shape(buffer, { start = 0, length, gain }) {
+  const sr = buffer.sampleRate
+  const from = Math.min(buffer.length - 1, Math.max(0, Math.round(start * sr)))
+  const to = length == null ? buffer.length : Math.min(buffer.length, from + Math.round(length * sr))
+  const out = new AudioBuffer({ length: Math.max(1, to - from), numberOfChannels: buffer.numberOfChannels, sampleRate: sr })
+  const first = buffer.getChannelData(0).subarray(from, to)
+  let sum = 0
+  let audible = 0
+  let peak = 0
+  for (const x of first) {
+    const a = Math.abs(x)
+    if (a > peak) peak = a
+    if (a > 0.01) (sum += x * x), audible++
+  }
+  const rms = Math.sqrt(sum / Math.max(1, audible))
+  const level = gain ?? Math.min(10 ** (TARGET_DB / 20) / Math.max(rms, 1e-6), 0.95 / Math.max(peak, 1e-6))
+  const fadeIn = start > 0 ? Math.round(0.005 * sr) : 0 // only where we cut into the sound
+  const fadeOut = length != null ? Math.round(FADE_S * sr) : 0
+  const n = to - from
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const src = buffer.getChannelData(c).subarray(from, to)
+    const dst = out.getChannelData(c)
+    for (let i = 0; i < n; i++) {
+      const edge = Math.min(fadeIn ? i / fadeIn : 1, fadeOut ? (n - 1 - i) / fadeOut : 1, 1)
+      dst[i] = src[i] * level * edge
+    }
+  }
+  return out
 }
 
 // ---- the generated sounds

@@ -28,11 +28,21 @@ launcher, a page reload needs that click again (the button appears whenever soun
 ## The launcher (optional)
 
 Adds Chrome's autoplay flag, so a reload comes back with sound and no click, plus kiosk mode and a
-dedicated profile (your everyday Chrome is untouched).
+dedicated profile (your everyday Chrome is untouched). The server hands it out, so nothing needs copying.
 
-- CachyOS: `kiosk/count-dracula-tv.sh` (also runs Chrome under `systemd-inhibit`, so idle, sleep and the
-  lid switch are held off while it runs). Make a desktop shortcut to it if you like.
-- Windows: double-click `kiosk/count-dracula-tv.bat`.
+**CachyOS**: one command in a terminal on the laptop:
+
+```bash
+curl -fsSL https://count-dracula.example.com/kiosk/install-cachyos.sh | bash
+# or, to also start it by itself at login:
+curl -fsSL https://count-dracula.example.com/kiosk/install-cachyos.sh | bash -s -- --autostart
+```
+
+Then pick **Count Dracula TV** from the app menu. While it runs, `systemd-inhibit` holds off idle,
+sleep and the lid switch.
+
+**Windows**: download https://count-dracula.example.com/kiosk/count-dracula-tv.bat to the
+desktop and double-click it. (To start it at login, put a shortcut to it in `shell:startup`.)
 
 Leave kiosk mode with **Alt+F4**. Check the flags are on at `chrome://version` (in a normal tab of that
 profile).

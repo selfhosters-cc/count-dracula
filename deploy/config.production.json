@@ -20,37 +20,37 @@
   "soundboard": [
     {
       "label": "Evil laugh",
-      "file": "sounds/board-1.mp3",
+      "file": null,
       "shout": "MWAHAHAHA!",
       "emoji": "🦇"
     },
     {
       "label": "Wolf howl",
-      "file": "sounds/board-2.mp3",
+      "file": null,
       "shout": "AWOOOOOO!",
       "emoji": "🐺"
     },
     {
       "label": "Happy Halloween!",
-      "file": "sounds/board-3.mp3",
+      "file": null,
       "shout": "HAPPY HALLOWEEN!",
       "emoji": "🎃"
     },
     {
       "label": "Scream",
-      "file": "sounds/board-4.mp3",
+      "file": null,
       "shout": "AAAAAAAH!",
       "emoji": "👻"
     },
     {
       "label": "Creaky door",
-      "file": "sounds/board-5.mp3",
+      "file": null,
       "shout": "CREEEEAK…",
       "emoji": "🚪"
     },
     {
       "label": "Thunder & organ",
-      "file": "sounds/board-6.mp3",
+      "file": null,
       "shout": "KRA-KOOOM!",
       "emoji": "⚡"
     }

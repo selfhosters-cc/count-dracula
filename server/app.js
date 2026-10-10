@@ -9,6 +9,7 @@ import { toCsv } from './export.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
+const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
 const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html' }
 const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch'])
 
@@ -141,7 +142,9 @@ export function startServer({ configPath, port, heartbeatMs }) {
 async function serveStatic(pathname) {
   const [dir, rest] = pathname.startsWith('/shared/')
     ? [SHARED_DIR, pathname.slice('/shared'.length)]
-    : [PUBLIC_DIR, PAGES[pathname] ?? pathname]
+    : pathname.startsWith('/kiosk/')
+      ? [KIOSK_DIR, pathname.slice('/kiosk'.length)]
+      : [PUBLIC_DIR, PAGES[pathname] ?? pathname]
   let path
   try {
     path = resolve(dir, '.' + decodeURIComponent(rest))

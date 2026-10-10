@@ -37,7 +37,7 @@ bun test >/dev/null 2>&1 || { echo "!! Tests fail: not deploying. Run bun test."
 echo "==> Packing $(git rev-parse --short HEAD)$(git diff --quiet || echo ' (+ uncommitted changes)')"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
-tar -czf "$stage/app.tgz" --exclude='*.test.js' server shared public package.json config/2025-counts.json
+tar -czf "$stage/app.tgz" --exclude='*.test.js' server shared public kiosk package.json config/2025-counts.json
 cp deploy/count-dracula.service deploy/config.production.json "$stage/"
 cp "$(readlink -f "$(command -v bun)")" "$stage/bun"
 git rev-parse HEAD >"$stage/REVISION"

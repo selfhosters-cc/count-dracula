@@ -1,1 +1,21 @@
-{}
+{
+  "bloop": "stock/bloop-drop.ogg",
+  "note": "stock/note-pluck.ogg",
+  "tick": "stock/tick-a.ogg",
+  "fanfare": "stock/jingle-nes00.ogg",
+  "golden": "stock/jingle-steel02.ogg",
+  "ding": "stock/ding-twotone.ogg",
+  "close": "stock/close-sax13.ogg",
+  "ambience": "stock/ambience-crickets.mp3",
+  "board4": "stock/scream-girl-1.mp3",
+  "board5": {
+    "file": "stock/creak-door-2.mp3",
+    "start": 0.15,
+    "length": 3
+  },
+  "board6": {
+    "file": "stock/thunder-2.mp3",
+    "start": 0.3,
+    "length": 4
+  }
+}

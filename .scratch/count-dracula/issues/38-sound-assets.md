@@ -21,9 +21,16 @@ Needs the family for the homemade recordings and someone to judge the sounds by 
 
 **Modules:** [Sound engine](../modules.md#7-sound-engine-tv) (files are mapped by slot).
 
+## Built so far (2026-10-10)
+
+- **Stock slots filled with CC0 candidates** in `public/sounds/stock/` (Kenney packs, BigSoundBank, OpenGameArt), with every source and licence in `public/sounds/SOURCES.md`. Each page was checked for CC0 before download; the Wilhelm scream was rejected because its page isn't CC0.
+- **Audition page** `/sounds/audition.html`: 2–4 options per slot plus the generated stand-in, played the way the TV plays them; the user picks by ear and copies the result into `manifest.json`.
+- **Manifest** entries can trim (`start`, `length`); every file is evened out to the same loudness on load.
+- Still to do: the family's three homemade soundboard clips (`public/sounds/homemade/`), the by-ear picks, and a level check on the real TV. The every-50th sting keeps the generated organ by default (no CC0 organ found).
+
 ## Acceptance criteria
 
 - [ ] Every sound slot has a file, or a deliberate decision to keep its fallback
-- [ ] Every downloaded file is CC0, with source and licence noted
+- [x] Every downloaded file is CC0, with source and licence noted
 - [ ] Levels sound even on the real TV (no sting much louder than the others)
 - [ ] The soundboard labels in config match the recordings
