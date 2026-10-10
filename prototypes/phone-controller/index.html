@@ -1,0 +1,410 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Not production code.
+  Question: how should the door phone's controller look and behave so a person
+  holding a candy bowl can count a crowd one-handed?
+  Verdict (2026-10-10): A — Thumb pad won; creating a costume also counts the kid at the door.
+  Plan: three structurally different variants on one page, switchable via ?variant=A|B|C.
+  Fake in-memory state only (reload = reset). "Other phone" taps are simulated.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Phone Controller Prototype</title>
+<style>
+  :root {
+    --bg: #14101c; --panel: #221a2e; --panel2: #2d2340; --text: #f5efe6; --dim: #a99cbc;
+    --orange: #ff7a1a; --orange-dk: #c85500; --gold: #ffd23f; --danger: #ff5a6e;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #07050b; color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  button { font: inherit; color: inherit; border: 0; cursor: pointer; touch-action: manipulation; }
+  button:active { transform: scale(.97); filter: brightness(1.2); }
+  #app { position: relative; height: 100dvh; background: var(--bg); overflow: hidden;
+    display: flex; flex-direction: column; user-select: none; }
+  @media (min-width: 700px) {
+    #app { width: 390px; height: min(844px, 96dvh); margin: 2dvh auto; border-radius: 36px;
+      border: 10px solid #000; box-shadow: 0 0 0 2px #333; }
+  }
+  .golden { background: var(--gold); color: #2a1a00; font-weight: 900; text-align: center;
+    padding: 10px; font-size: 18px; animation: pulse 0.8s infinite alternate; }
+  @keyframes pulse { to { filter: brightness(1.25); } }
+  .count-num { font-variant-numeric: tabular-nums; }
+  .tagcount { font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #ffffff10; }
+  .row .n { font-weight: 800; width: 48px; font-variant-numeric: tabular-nums; }
+  .row .who { flex: 1; }
+  .row .meta { font-size: 12px; color: var(--dim); }
+  .row .x { width: 44px; height: 44px; border-radius: 12px; background: #ffffff10; color: var(--danger); font-size: 20px; }
+  .badge { font-size: 11px; padding: 2px 6px; border-radius: 6px; background: #ffffff18; margin-left: 6px; }
+  .badge.me { background: var(--orange-dk); }
+  .deleted { opacity: .35; text-decoration: line-through; }
+
+  /* flash after a tap */
+  #flash { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+    font-size: 72px; font-weight: 900; opacity: 0; z-index: 30; text-shadow: 0 4px 20px #000; }
+  #flash.on { animation: flash .7s ease-out; }
+  @keyframes flash { 0% { opacity: 1; transform: scale(.7); } 60% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0; transform: scale(1.1); } }
+
+  #toast { position: absolute; left: 12px; right: 12px; bottom: 50%; z-index: 40; background: #000d;
+    border: 1px solid #ffffff30; border-radius: 14px; padding: 14px; text-align: center; font-weight: 700;
+    opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.on { opacity: 1; }
+
+  /* new-tag modal */
+  #modal { position: absolute; inset: 0; z-index: 50; background: #000b; display: none; align-items: flex-end; }
+  #modal.on { display: flex; }
+  .sheet { background: var(--panel); width: 100%; border-radius: 22px 22px 0 0; padding: 16px; }
+  .sheet h3 { margin: 4px 0 12px; }
+  .sheet input { width: 100%; font-size: 20px; padding: 12px; border-radius: 12px; border: 1px solid #ffffff30;
+    background: var(--bg); color: var(--text); }
+  .emojis { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+  .emojis button { font-size: 26px; width: 46px; height: 46px; border-radius: 12px; background: #ffffff10; }
+  .emojis button.sel { outline: 3px solid var(--orange); }
+  .stepper { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+  .stepper button { width: 60px; height: 60px; border-radius: 16px; background: var(--panel2); font-size: 30px; font-weight: 800; }
+  .stepper .v { font-size: 40px; font-weight: 900; width: 60px; text-align: center; }
+  .hint { color: var(--dim); font-size: 13px; min-height: 2.6em; }
+  .actions { display: flex; gap: 10px; margin-top: 12px; }
+  .actions button { flex: 1; height: 58px; border-radius: 14px; background: var(--panel2); font-weight: 800; font-size: 18px; }
+  .actions .primary { background: var(--orange); color: #1a0d00; }
+
+  /* ---------- Variant A: Thumb pad ---------- */
+  .A-head { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px 6px; }
+  .A-head b { font-size: 28px; }
+  .A-grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    padding: 8px 12px; align-content: start; }
+  .A-tag { height: 92px; border-radius: 16px; background: var(--panel); border-bottom: 5px solid var(--c);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  .A-tag .e { font-size: 30px; } .A-tag .nm { font-size: 14px; font-weight: 700; }
+  .A-tag.new { border: 2px dashed #ffffff40; background: transparent; color: var(--dim); font-weight: 800; }
+  .A-util { display: flex; gap: 8px; padding: 6px 12px; }
+  .A-util button { flex: 1; height: 56px; border-radius: 14px; background: var(--panel2); font-weight: 800; font-size: 17px; }
+  .A-plus { height: 30dvh; max-height: 250px; margin: 6px 12px 14px; border-radius: 28px; background: var(--orange);
+    color: #1a0d00; font-size: 44px; font-weight: 900; box-shadow: 0 6px 0 var(--orange-dk); }
+  .A-sheet { position: absolute; inset: 0; z-index: 20; background: #000a; display: flex; align-items: flex-end; }
+  .A-sheet .sheet { max-height: 75%; overflow: auto; padding: 0 0 12px; }
+  .A-sheet .grab { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; position: sticky; top: 0; background: var(--panel); }
+
+  /* ---------- Variant B: Tile wall ---------- */
+  .B-head { padding: 12px 14px 8px; display: flex; align-items: center; gap: 12px; }
+  .B-head .tot { font-size: 40px; font-weight: 900; line-height: 1; }
+  .B-head .lbl { font-size: 12px; color: var(--dim); }
+  .B-tabs { margin-left: auto; display: flex; background: var(--panel); border-radius: 12px; padding: 3px; }
+  .B-tabs button { padding: 10px 14px; border-radius: 10px; background: transparent; font-weight: 700; }
+  .B-tabs button.on { background: var(--panel2); }
+  .B-wall { flex: 1; overflow: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 4px 12px 12px; align-content: start; }
+  .B-tile { aspect-ratio: 1; border-radius: 22px; background: var(--c); color: #120c18; position: relative;
+    display: flex; flex-direction: column; justify-content: space-between; padding: 12px; text-align: left; }
+  .B-tile .e { font-size: 46px; line-height: 1; }
+  .B-tile .nm { font-weight: 900; font-size: 19px; }
+  .B-tile .ct { position: absolute; top: 10px; right: 12px; font-weight: 900; font-size: 22px; opacity: .75; }
+  .B-tile.plain { background: var(--orange); }
+  .B-tile.new { background: transparent; border: 3px dashed #ffffff40; color: var(--dim); }
+  .B-undo { margin: 0 12px 14px; height: 64px; border-radius: 16px; background: var(--panel2); font-weight: 800;
+    font-size: 17px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .B-undo[disabled] { opacity: .4; }
+  .B-recent { flex: 1; overflow: auto; }
+
+  /* ---------- Variant C: Feed + rail ---------- */
+  .C-feed { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+  .C-total { position: absolute; top: 6px; left: 0; right: 0; text-align: center; font-size: 110px; font-weight: 900;
+    opacity: .12; pointer-events: none; line-height: 1; }
+  .C-total small { display: block; font-size: 16px; opacity: 1; }
+  .C-list { overflow: auto; position: relative; }
+  .C-list .row:last-child { background: #ff7a1a22; }
+  .C-rail { display: flex; gap: 8px; overflow-x: auto; padding: 10px 12px; scroll-snap-type: x mandatory; border-top: 1px solid #ffffff15; }
+  .C-chip { flex: 0 0 auto; scroll-snap-align: start; min-width: 104px; height: 96px; border-radius: 18px;
+    background: var(--panel); border: 3px solid var(--c); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .C-chip .e { font-size: 32px; } .C-chip .nm { font-weight: 800; font-size: 14px; }
+  .C-chip.new { border-style: dashed; border-color: #ffffff40; color: var(--dim); }
+  .C-bottom { display: flex; gap: 10px; padding: 4px 12px 14px; }
+  .C-undo { width: 88px; height: 120px; border-radius: 22px; background: var(--panel2); font-size: 15px; font-weight: 800; }
+  .C-undo .i { font-size: 32px; display: block; }
+  .C-plus { flex: 1; height: 120px; border-radius: 22px; background: var(--orange); color: #1a0d00; font-size: 36px;
+    font-weight: 900; box-shadow: 0 6px 0 var(--orange-dk); }
+
+  /* ---------- prototype switcher (not part of the design) ---------- */
+  #switcher { position: fixed; z-index: 100; display: flex; align-items: center; gap: 4px; background: #fff; color: #000;
+    border-radius: 999px; padding: 4px; box-shadow: 0 4px 16px #0008; font-size: 13px; font-weight: 700;
+    top: 4px; left: 50%; transform: translateX(-50%); opacity: .92; }
+  @media (min-width: 700px) { #switcher { top: auto; bottom: 16px; font-size: 15px; } }
+  @media (max-width: 699px) { #app { padding-top: 40px; } }
+  #switcher button { white-space: nowrap; background: #eee; color: #000; border-radius: 999px; padding: 6px 10px; }
+  #switcher .lbl { padding: 0 6px; white-space: nowrap; }
+  #state { position: fixed; z-index: 99; right: 8px; top: 48px; width: 280px; max-height: 80dvh; overflow: auto;
+    background: #fff; color: #000; font: 12px/1.4 ui-monospace, monospace; padding: 10px; border-radius: 10px;
+    white-space: pre-wrap; display: none; box-shadow: 0 4px 16px #0008; }
+  #state.on { display: block; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="screen" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
+  <div id="flash"></div>
+  <div id="toast"></div>
+  <div id="modal"></div>
+</div>
+<div id="switcher">
+  <button data-sw="prev">◀</button><span class="lbl" id="swlabel"></span><button data-sw="next">▶</button>
+  <button data-sw="other" title="Simulate a tap from Sam's phone (key: o)">📱 Sam taps</button>
+  <button data-sw="state" title="Show state (key: s)">🧾</button>
+</div>
+<pre id="state"></pre>
+
+<script>
+// ---------------- fake state ----------------
+const ME = "you", OTHER = "Sam";
+const VARIANTS = { A: "Thumb pad", B: "Tile wall", C: "Feed + rail" };
+const EMOJIS = ["🐶","🦸","🧛","🧟","🦄","🤖","🐱","🦇","🧚","🏴‍☠️","🐉","🤡","🎃","❓"];
+const COLORS = ["#3b82f6","#f59e0b","#14b8a6","#a3e635","#f472b6","#60a5fa","#fb923c","#c084fc"];
+
+const state = {
+  tags: [
+    { id: "witch",    name: "Witch",      emoji: "🧙", color: "#a78bfa" },
+    { id: "spidey",   name: "Spider-Man", emoji: "🕷️", color: "#f87171" },
+    { id: "princess", name: "Princess",   emoji: "👑", color: "#f9a8d4" },
+    { id: "ghost",    name: "Ghost",      emoji: "👻", color: "#e5e7eb" },
+    { id: "dino",     name: "Dinosaur",   emoji: "🦖", color: "#4ade80" },
+  ],
+  kids: [],
+  golden: [46, 120, 200], // secret numbers; the door phone gets a heads-up
+  sheet: false, tab: "count",
+};
+let seq = 0;
+(function seed() {
+  let t = new Date(); t.setHours(17, 42, 0, 0);
+  const pick = ["witch","spidey","princess","ghost","dino",null,null,null];
+  for (let i = 0; i < 43; i++) {
+    t = new Date(t.getTime() + 20000 + Math.random() * 60000);
+    state.kids.push({ id: "k" + ++seq, t, tag: pick[Math.floor(Math.random() * pick.length)], phone: Math.random() < .6 ? ME : OTHER });
+  }
+})();
+
+const active = () => state.kids.filter(k => !k.deleted);
+const numberOf = k => active().indexOf(k) + 1;
+const tagById = id => state.tags.find(t => t.id === id);
+const countFor = id => active().filter(k => k.tag === id).length;
+const untagged = () => active().filter(k => !k.tag);
+const myLast = () => active().filter(k => k.phone === ME).at(-1);
+const recent = () => active().slice(-10);
+const fmt = d => d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const label = k => { const t = tagById(k.tag); return t ? `${t.emoji} ${t.name}` : "no costume"; };
+const nextIsGolden = () => state.golden.includes(active().length + 1);
+
+function addKid(tag, phone = ME) {
+  const golden = nextIsGolden();
+  const k = { id: "k" + ++seq, t: new Date(), tag, phone };
+  state.kids.push(k);
+  if (phone === ME) {
+    navigator.vibrate?.(golden ? [60, 40, 60] : 20);
+    flash(`${golden ? "⭐ " : ""}#${numberOf(k)}${tagById(tag) ? " " + tagById(tag).emoji : ""}`);
+  }
+  render();
+}
+function undo() {
+  const k = myLast();
+  if (!k) return toast("Nothing of yours to undo");
+  const n = numberOf(k); k.deleted = true;
+  toast(`Removed #${n} · ${label(k)}`); render();
+}
+function remove(id) {
+  const k = state.kids.find(k => k.id === id); const n = numberOf(k);
+  k.deleted = true; toast(`Removed #${n} · ${label(k)}${k.phone !== ME ? ` (${k.phone}'s)` : ""}`); render();
+}
+
+// ---------------- shared bits ----------------
+const $ = s => document.querySelector(s);
+let flashT, toastT;
+function flash(text) { const f = $("#flash"); f.textContent = text; f.classList.remove("on"); void f.offsetWidth; f.classList.add("on"); }
+function toast(text) { const t = $("#toast"); t.textContent = text; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 1800); }
+const goldenBanner = () => nextIsGolden() ? `<div class="golden">⭐ NEXT KID IS GOLDEN — get the prize ready</div>` : "";
+const recentRow = k => `
+  <div class="row">
+    <span class="n">#${numberOf(k)}</span>
+    <span class="who">${label(k)}<span class="badge ${k.phone === ME ? "me" : ""}">${k.phone}</span><div class="meta">${fmt(k.t)}</div></span>
+    <button class="x" data-act="remove" data-arg="${k.id}" aria-label="Delete">✕</button>
+  </div>`;
+
+// ---------------- Variant A: Thumb pad ----------------
+// Giant +1 Kid in the thumb zone; tag grid above; Undo + Recent sheet just over the big button.
+function VariantA() {
+  return `
+  <div class="A-head"><span><b class="count-num">${active().length}</b> kids tonight</span><span class="tagcount">${untagged().length} untagged</span></div>
+  ${goldenBanner()}
+  <div class="A-grid">
+    ${state.tags.map(t => `
+      <button class="A-tag" style="--c:${t.color}" data-act="tag" data-arg="${t.id}">
+        <span class="e">${t.emoji}</span><span class="nm">${t.name}</span><span class="tagcount">${countFor(t.id)}</span>
+      </button>`).join("")}
+    <button class="A-tag new" data-act="new">+ New</button>
+  </div>
+  <div class="A-util">
+    <button data-act="undo">↶ Undo</button>
+    <button data-act="sheet">🕘 Recent ▴</button>
+  </div>
+  <button class="A-plus" data-act="plain">+1 Kid</button>
+  ${state.sheet ? `
+  <div class="A-sheet" data-act="sheet-bg">
+    <div class="sheet">
+      <div class="grab"><b>Recent — all phones</b><button class="x" data-act="sheet" style="width:44px;height:44px;border-radius:12px;background:#ffffff10">▾</button></div>
+      ${recent().reverse().map(recentRow).join("")}
+    </div>
+  </div>` : ""}`;
+}
+
+// ---------------- Variant B: Tile wall ----------------
+// Everything is a big square tile (no-costume is just the first tile). Recent is its own tab.
+// Undo bar names exactly what it will remove.
+function VariantB() {
+  const last = myLast();
+  return `
+  <div class="B-head">
+    <div><div class="tot count-num">${active().length}</div><div class="lbl">kids tonight</div></div>
+    <div class="B-tabs">
+      <button class="${state.tab === "count" ? "on" : ""}" data-act="tab" data-arg="count">Count</button>
+      <button class="${state.tab === "recent" ? "on" : ""}" data-act="tab" data-arg="recent">Recent</button>
+    </div>
+  </div>
+  ${goldenBanner()}
+  ${state.tab === "count" ? `
+  <div class="B-wall">
+    <button class="B-tile plain" data-act="plain"><span class="ct">${untagged().length}</span><span class="e">🧒</span><span class="nm">+1 Kid<br><small style="font-weight:600">no costume tag</small></span></button>
+    ${state.tags.map(t => `
+      <button class="B-tile" style="--c:${t.color}" data-act="tag" data-arg="${t.id}">
+        <span class="ct">${countFor(t.id)}</span><span class="e">${t.emoji}</span><span class="nm">${t.name}</span>
+      </button>`).join("")}
+    <button class="B-tile new" data-act="new"><span class="e">＋</span><span class="nm">New costume</span></button>
+  </div>` : `
+  <div class="B-recent">${recent().reverse().map(recentRow).join("")}</div>`}
+  <button class="B-undo" data-act="undo" ${last ? "" : "disabled"}>↶ Undo ${last ? `#${numberOf(last)} · ${label(last)}` : ""}</button>`;
+}
+
+// ---------------- Variant C: Feed + rail ----------------
+// Live feed of recent kids (all phones) is always visible, newest at the bottom near the thumb.
+// Tags are a horizontal rail sorted by tonight's popularity; +1 Kid and Undo sit at the very bottom.
+function VariantC() {
+  const sorted = [...state.tags].sort((a, b) => countFor(b.id) - countFor(a.id));
+  return `
+  ${goldenBanner()}
+  <div class="C-feed">
+    <div class="C-total count-num">${active().length}<small>kids tonight</small></div>
+    <div class="C-list" id="clist">${recent().map(recentRow).join("")}</div>
+  </div>
+  <div class="C-rail">
+    ${sorted.map(t => `
+      <button class="C-chip" style="--c:${t.color}" data-act="tag" data-arg="${t.id}">
+        <span class="e">${t.emoji}</span><span class="nm">${t.name}</span><span class="tagcount">${countFor(t.id)}</span>
+      </button>`).join("")}
+    <button class="C-chip new" data-act="new"><span class="e">＋</span><span class="nm">New</span></button>
+  </div>
+  <div class="C-bottom">
+    <button class="C-undo" data-act="undo"><span class="i">↶</span>Undo</button>
+    <button class="C-plus" data-act="plain">+1 Kid</button>
+  </div>`;
+}
+
+// ---------------- "+ New" tag with catch-up ----------------
+let draft;
+function openNew() {
+  draft = { name: "", emoji: "🐶", n: 0 };
+  const m = $("#modal"); m.classList.add("on");
+  m.innerHTML = `
+  <div class="sheet">
+    <h3>New costume</h3>
+    <input id="nm" placeholder="e.g. Bluey" autocomplete="off">
+    <div class="emojis">${EMOJIS.map(e => `<button data-emoji="${e}" class="${e === draft.emoji ? "sel" : ""}">${e}</button>`).join("")}</div>
+    <div><b>How many already seen before this one?</b></div>
+    <div class="stepper"><button data-step="-1">−</button><span class="v" id="nv">0</span><button data-step="1">+</button></div>
+    <div class="hint" id="nhint"></div>
+    <div class="actions"><button data-m="cancel">Cancel</button><button class="primary" data-m="create">Create</button></div>
+  </div>`;
+  $("#nm").addEventListener("input", e => { draft.name = e.target.value; updateHint(); });
+  updateHint();
+  setTimeout(() => $("#nm").focus(), 50);
+}
+function updateHint() {
+  const pool = untagged(); draft.n = Math.min(draft.n, pool.length);
+  $("#nv").textContent = draft.n;
+  const hit = pool.slice(pool.length - draft.n);
+  $("#nhint").textContent = draft.n === 0
+    ? `Counts this kid as #${active().length + 1}. ${pool.length} untagged kids available to catch up.`
+    : `Counts this kid as #${active().length + 1}, and re-tags ${hit.map(k => "#" + numberOf(k)).join(", ")} as ${draft.emoji} ${draft.name || "…"}.`;
+}
+$("#modal").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) { if (e.target.id === "modal") closeNew(); return; }
+  if (b.dataset.emoji) { draft.emoji = b.dataset.emoji; document.querySelectorAll("[data-emoji]").forEach(x => x.classList.toggle("sel", x === b)); updateHint(); }
+  if (b.dataset.step) { draft.n = Math.max(0, draft.n + Number(b.dataset.step)); updateHint(); }
+  if (b.dataset.m === "cancel") closeNew();
+  if (b.dataset.m === "create") {
+    const name = draft.name.trim() || "Mystery";
+    const id = "t" + Date.now();
+    state.tags.push({ id, name, emoji: draft.emoji, color: COLORS[state.tags.length % COLORS.length] });
+    const pool = untagged(); pool.slice(pool.length - draft.n).forEach(k => k.tag = id);
+    closeNew(); toast(`New: ${draft.emoji} ${name} ×${draft.n + 1}`); addKid(id);
+  }
+});
+function closeNew() { $("#modal").classList.remove("on"); $("#modal").innerHTML = ""; }
+
+// ---------------- render + events ----------------
+const params = new URLSearchParams(location.search);
+let variant = VARIANTS[params.get("variant")] ? params.get("variant") : "A";
+function render() {
+  $("#screen").innerHTML = { A: VariantA, B: VariantB, C: VariantC }[variant]();
+  const cl = $("#clist"); if (cl) cl.scrollTop = cl.scrollHeight;
+  $("#swlabel").textContent = `${variant} — ${VARIANTS[variant]}`;
+  renderState();
+}
+function renderState() {
+  const tagCounts = Object.fromEntries(state.tags.map(t => [t.emoji + " " + t.name, countFor(t.id)]));
+  $("#state").textContent = JSON.stringify({
+    variant, total: active().length, untagged: untagged().length, tags: tagCounts,
+    nextNumber: active().length + 1, nextIsGolden: nextIsGolden(), goldenSecret: state.golden,
+    myUndoTarget: myLast() ? `#${numberOf(myLast())} ${label(myLast())}` : null,
+    recent: recent().map(k => `#${numberOf(k)} ${label(k)} (${k.phone})`).reverse(),
+    deleted: state.kids.filter(k => k.deleted).length,
+  }, null, 2);
+}
+$("#screen").addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const { act, arg } = b.dataset;
+  if (act === "plain") addKid(null);
+  if (act === "tag") addKid(arg);
+  if (act === "undo") undo();
+  if (act === "remove") remove(arg);
+  if (act === "new") openNew();
+  if (act === "sheet" || (act === "sheet-bg" && e.target === b)) { state.sheet = !state.sheet; render(); }
+  if (act === "tab") { state.tab = arg; render(); }
+});
+function otherPhoneTap() {
+  const pick = [...state.tags.map(t => t.id), null, null];
+  addKid(pick[Math.floor(Math.random() * pick.length)], OTHER);
+}
+function cycle(d) {
+  const keys = Object.keys(VARIANTS);
+  variant = keys[(keys.indexOf(variant) + d + keys.length) % keys.length];
+  params.set("variant", variant); history.replaceState(null, "", "?" + params);
+  state.sheet = false; render();
+}
+$("#switcher").addEventListener("click", e => {
+  const s = e.target.closest("[data-sw]")?.dataset.sw;
+  if (s === "prev") cycle(-1); if (s === "next") cycle(1);
+  if (s === "other") otherPhoneTap();
+  if (s === "state") $("#state").classList.toggle("on");
+});
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input, textarea, [contenteditable]")) return;
+  if (e.key === "ArrowLeft") cycle(-1);
+  if (e.key === "ArrowRight") cycle(1);
+  if (e.key === "o") otherPhoneTap();
+  if (e.key === "s") $("#state").classList.toggle("on");
+  if (e.key === "k" || e.key === " ") { e.preventDefault(); addKid(null); }
+  if (/^[1-9]$/.test(e.key) && state.tags[e.key - 1]) addKid(state.tags[e.key - 1].id);
+  if (e.key === "u") undo();
+});
+render();
+</script>
+</body>
+</html>
