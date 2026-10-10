@@ -15,3 +15,4 @@ What does the Operator see across all households, and what can they do?
 - **Privacy**: does the Operator see exact or fuzzed locations, and the Managers' Google emails?
 - **On the night**: is this also our "is the site healthy?" screen (error counts, connection totals), or is that separate?
 - **Given** ([What becomes per-household](05-what-becomes-per-household.md)): the 8 feature switches are Operator-wide kill switches in config (no UI needed before Halloween), and the Operator can fix a Household's time zone. Decide whether either is shown or editable here.
+- **Given** ([Fuzzy location](07-fuzzy-location.md)): a Household's only location data is an optional 5-char geohash cell; its Area is the 4-char parent. The Operator sees how many Households are in each Area, with no map. Decide here whether a row shows the Household's Area or cell.

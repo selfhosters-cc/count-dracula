@@ -35,3 +35,11 @@ _Avoid_: TV code, share code, join code
 **Night summary**:
 The shareable tap-through slides of one ended Event, viewable by a public share link for as long as the Household keeps sharing on.
 _Avoid_: Recap (that's the TV's end-of-night screen), wrapped, report
+
+**Location**:
+A Household's optional, approximate place: a 5-character geohash cell (about 5 × 3 km) picked on a map in `/setup`. The exact point never leaves the browser. Having a Location is what puts a Household into nearby figures.
+_Avoid_: Address, position, postal code, pin
+
+**Area**:
+The fixed region (the Location's 4-character geohash parent, about 20 × 25 km) whose rounded totals a Household adds to and sees as "near you". It shows nothing until at least 5 Households in it are active.
+_Avoid_: Neighbourhood, radius, zone (that's the Household's time zone), nearby (that's the feature)
