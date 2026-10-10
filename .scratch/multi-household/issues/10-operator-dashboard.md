@@ -1,7 +1,7 @@
 # Operator dashboard
 
 Type: grilling (HITL)
-Status: open
+Status: claimed
 Blocked by: 04, 05
 
 ## Question
