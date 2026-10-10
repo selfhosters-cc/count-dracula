@@ -15,6 +15,16 @@ The TV laptop launches into the TV page reliably and stays awake all night. See 
 
 Needs the real laptop and TV.
 
+## Built so far (2026-10-10)
+
+The laptop is CachyOS or Windows, with Tailscale (so the TV uses the HTTPS address and can hold a Wake Lock). The user asked whether settings alone would do: they would for staying awake, so `kiosk/README.md` leads with the settings-only route. The launchers are optional extras for sound-without-a-click after a reload.
+
+- `kiosk/README.md`: settings for both OSes, display and HDMI audio, what to recheck after a replug.
+- `kiosk/count-dracula-tv.sh` (CachyOS, under `systemd-inhibit`) and `kiosk/count-dracula-tv.bat` (Windows).
+- The TV page holds a screen Wake Lock on HTTPS; `/tv?border` draws the overscan test.
+
+What's left needs the real laptop and TV: the checks below.
+
 ## Acceptance criteria
 
 - [ ] The script launches into `/tv` with the flags visible at `chrome://version`
