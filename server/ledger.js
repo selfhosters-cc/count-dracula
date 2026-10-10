@@ -1,5 +1,6 @@
 // The Ledger: every write goes through apply(), every read through snapshot().
 // See .scratch/count-dracula/modules.md §1.
+import { toBuckets } from '../shared/night-maths.js'
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -78,12 +79,24 @@ export function openLedger(db, config) {
       : db.query('SELECT * FROM events WHERE id = ?').get(id)
   }
 
+  // The Race-against event as half-hour buckets: stored for a counts-only event, else from its own taps.
   function ghostOf(event) {
     if (event.race_against_id == null) return null
-    const buckets = db
-      .query('SELECT slot_start AS start, slot_end AS end, count FROM ghost_buckets WHERE event_id = ? ORDER BY slot_start')
-      .all(event.race_against_id)
-    return { eventId: event.race_against_id, buckets }
+    const against = eventById(event.race_against_id)
+    const buckets = against.counts_only
+      ? db
+          .query('SELECT slot_start AS start, slot_end AS end, count FROM ghost_buckets WHERE event_id = ? ORDER BY slot_start')
+          .all(against.id)
+      : toBuckets(
+          db.query('SELECT tapped_at FROM kids WHERE event_id = ? AND deleted_at IS NULL').all(against.id).map((r) => r.tapped_at),
+          against.clock_shift_ms,
+        )
+    return {
+      eventId: against.id,
+      label: against.name.match(/\b(?:19|20)\d\d\b/)?.[0] ?? against.name, // "2025: 346" on the chart
+      total: buckets.reduce((sum, b) => sum + b.count, 0),
+      buckets,
+    }
   }
 
   let seq = 0
@@ -182,6 +195,7 @@ export function openLedger(db, config) {
           name: event.name,
           live: event.live === 1,
           countsOnly: event.counts_only === 1,
+          clockShiftMs: event.clock_shift_ms,
         },
         tags: db.query('SELECT * FROM tags WHERE event_id = ? ORDER BY sort_order').all(event.id).map(toTag),
         kids: db

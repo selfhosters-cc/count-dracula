@@ -4,6 +4,8 @@ import { connectLive } from '/live.js'
 import { createDirector } from '/director.js'
 import { animate } from '/vendor/motion/motion.js'
 import { create as createConfetti } from '/vendor/canvas-confetti/confetti.module.js'
+import { createRaceChart } from '/race-chart.js'
+import { eventNow, ghost, minuteOfDay, pace } from '/shared/night-maths.js'
 
 const $ = (id) => document.getElementById(id)
 const CATCHING_UP_AFTER_MS = 20_000
@@ -63,6 +65,28 @@ const director = createDirector({
   play,
 })
 
+// ---- the race: chart, legend and the hero's pace line, redrawn in the same pass as the count
+const race = createRaceChart($('race'))
+
+function paceText(state) {
+  const g = state.ghost
+  if (!g) return '' // Race against None: no ghost, no pace line
+  const now = minuteOfDay(eventNow(Date.now(), state.event.clockShiftMs ?? 0))
+  const p = pace(state.kids.length, ghost(g.buckets)(now), g.total)
+  if (p.kind === 'record') return '🏆 New record!'
+  if (p.kind === 'level') return "👻 Neck and neck with last year's ghost"
+  return `👻 ${p.by} ${p.kind} of last year's ghost`
+}
+
+function renderRace(state, animate = true) {
+  race.update(state, Date.now(), animate)
+  $('pace').textContent = paceText(state)
+  $('legend').innerHTML = state.ghost
+    ? `<span><i style="border-top: 6px solid var(--pumpkin)"></i>Tonight</span>` +
+      `<span><i style="border-top: 4px dashed #c9d2ff"></i>${state.ghost.label}</span>`
+    : ''
+}
+
 // ---- live state
 const live = connectLive()
 let wasDisconnected = false
@@ -77,8 +101,10 @@ live.on(({ state, cause, delta }) => {
     // First load shows the count as is; a reconnect rolls up quietly to the new total.
     showCount(total, wasDisconnected && shown != null ? 'roll' : 'set')
     wasDisconnected = false
+    renderRace(state)
     return
   }
+  renderRace(state)
   if (delta.type === 'kid.added') {
     showCount(total, delta.kid.late ? 'roll' : 'bump')
     director.push(delta.moments ?? [], delta.kid)
@@ -92,5 +118,11 @@ live.on(({ state, cause, delta }) => {
 // ---- the 🦇 chip and the clock
 setInterval(() => {
   $('catching-up').classList.toggle('on', !live.connected && live.disconnectedFor >= CATCHING_UP_AFTER_MS)
-  $('clock').textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const shift = live.state?.event.clockShiftMs ?? 0 // the clock shows event time
+  $('clock').textContent = new Date(eventNow(Date.now(), shift)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }, 1_000)
+
+// The ghost marker and tonight's line creep along with the clock.
+setInterval(() => {
+  if (live.state && live.connected) renderRace(live.state, false)
+}, 5_000)

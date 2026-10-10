@@ -34,7 +34,12 @@
     .hero { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
     .hero .big { font-family: var(--f-display); font-size: clamp(64px, 15vw, 300px); line-height: .9; }
     .pace { margin-top: 1.2vh; font-size: clamp(14px, 2.2vw, 40px); font-weight: 600; min-height: 1.3em; }
-    .chartbox { min-width: 0; background: var(--night-2); border-radius: 14px; }
+    .chartbox { min-width: 0; min-height: 0; background: var(--night-2); border-radius: 14px; padding: 1.4vh 1vw 1vh;
+      display: flex; flex-direction: column; }
+    .chartbox .legend { display: flex; gap: 2em; color: var(--ink-dim); font-weight: 600; font-size: clamp(12px, 1.2vw, 22px); }
+    .chartbox .legend:empty { display: none; }
+    .chartbox .legend i { display: inline-block; width: 2.2em; height: 0; vertical-align: middle; margin-right: .5em; }
+    .chartbox .plot { position: relative; flex: 1; min-height: 0; }
     .boardbox { grid-column: 1 / -1; min-width: 0; }
     .patchbox { grid-column: 1 / -1; min-width: 0; border-top: 2px solid var(--grid); }
 
@@ -67,7 +72,10 @@
       <div class="big num"><span id="count">–</span></div>
       <div class="pace" id="pace"></div>
     </div>
-    <div class="chartbox" id="race"></div>
+    <div class="chartbox">
+      <div class="legend" id="legend"></div>
+      <div class="plot"><canvas id="race" role="img" aria-label="Tonight's count racing last year's ghost"></canvas></div>
+    </div>
     <div class="boardbox" id="leaderboard"></div>
     <div class="patchbox" id="patch"></div>
   </section>

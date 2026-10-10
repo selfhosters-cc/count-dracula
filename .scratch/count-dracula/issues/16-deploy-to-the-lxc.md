@@ -13,6 +13,7 @@ Get the walking skeleton running where it will run on the night, so **rehearsal 
 - The Caddy route: `/opt/docker-compose/caddy-int/host.sh add count-dracula <LXC-IP>:<port>`, giving `https://count-dracula.example.com`.
 - **Tailnet phones receive the join key automatically** on first open (for example, the HTTPS host hands it out). LAN phones still need the key from the QR code, which comes later in the ☰ door menu ticket.
 - The existing scheduled **Proxmox backup job includes the new LXC**.
+- **The LXC's timezone must be the household's** (e.g. `timedatectl set-timezone America/Toronto`, or `Environment=TZ=…` in the unit). Debian LXCs default to UTC, and the server buckets a 2026-style ghost (and later the CSV summary) by local time of day (added while building ticket 21).
 - A repeatable deploy step (script or documented commands) for pushing new builds during the next two weeks.
 
 Needs the homelab owner for Proxmox, Caddy and the backup job.

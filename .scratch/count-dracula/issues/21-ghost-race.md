@@ -19,10 +19,10 @@ Tonight's count races last year's ghost on the TV. See [spec §2 Ghost line / Cl
 
 ## Acceptance criteria
 
-- [ ] The ghost line matches the 2025 buckets (for example 86 at 6:00, 193 at 7:00, flat at 346 after 8:00)
-- [ ] With Clock shift +3h at 3pm real time, the 👻 marker and x-axis behave as if it's 6pm
-- [ ] The pace line reads right ahead of, behind and past the ghost total
-- [ ] Race against None hides the ghost and pace line without errors
-- [ ] A past 2026-style event used as Race against produces a ghost from its taps
-- [ ] Chart.js is vendored, and the chart redraws smoothly during a 5-kid burst
-- [ ] Ghost interpolation and the clock-shift maths are unit-tested
+- [x] The ghost line matches the 2025 buckets (for example 14 at 6:00, 86 at 6:30, 193 at 7:00, flat at 346 after 8:00; the original "86 at 6:00" misread the cumulative column, which counts to each bucket's end)
+- [x] With Clock shift +3h at 3pm real time, the 👻 marker and x-axis behave as if it's 6pm
+- [x] The pace line reads right ahead of, behind and past the ghost total
+- [x] Race against None hides the ghost and pace line without errors
+- [x] A past 2026-style event used as Race against produces a ghost from its taps
+- [x] Chart.js is vendored, and the chart redraws smoothly during a 5-kid burst
+- [x] Ghost interpolation and the clock-shift maths are unit-tested

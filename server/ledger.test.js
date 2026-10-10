@@ -161,11 +161,14 @@ describe('snapshot', () => {
         name: 'Rehearsal',
         live: true,
         countsOnly: false,
+        clockShiftMs: 0,
       },
       tags: [],
       kids: [{ id: 'kid-a', number: 1, tagId: null, phoneName: 'Mom', tappedAt: 5_000, late: false, source: 'tap' }],
       ghost: {
         eventId: expect.any(Number),
+        label: '2025',
+        total: 346,
         buckets: [
           { start: '17:42', end: '18:00', count: 14 },
           { start: '18:00', end: '18:30', count: 72 },
@@ -313,5 +316,32 @@ describe('tag taps', () => {
     const [delta] = ledger.apply(tap('a', { tagId: 999 }))
 
     expect(delta.kid).toMatchObject({ number: 1, tagId: null })
+  })
+})
+
+describe('ghost from a past event with taps', () => {
+  test("races against a 2026-style event's own non-deleted taps, in its event time", () => {
+    const db = new Database(':memory:')
+    const ledger = openLedger(db, { ghostSeed })
+    // Arranged with SQL until Setup (ticket 22) can create events: a past +3h rehearsal with 3 kids, one deleted.
+    const local = (hh, mm) => new Date(2026, 9, 24, hh, mm).getTime()
+    const past = db
+      .query("INSERT INTO events (name, frozen, clock_shift_ms) VALUES ('Dress rehearsal 2026', 1, ?) RETURNING id")
+      .get(3 * 3_600_000).id
+    const addKid = db.query('INSERT INTO kids (id, event_id, number, tapped_at, received_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?)')
+    addKid.run('r1', past, 1, local(14, 50), local(14, 50), null)
+    addKid.run('r2', past, 2, local(15, 10), local(15, 10), null)
+    addKid.run('r3', past, 3, local(15, 20), local(15, 20), local(15, 21))
+    db.query('UPDATE events SET race_against_id = ? WHERE live = 1').run(past)
+
+    expect(ledger.snapshot().ghost).toEqual({
+      eventId: past,
+      label: '2026',
+      total: 2,
+      buckets: [
+        { start: '17:50', end: '18:00', count: 1 },
+        { start: '18:00', end: '18:30', count: 1 },
+      ],
+    })
   })
 })
