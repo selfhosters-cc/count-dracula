@@ -31,14 +31,16 @@ A build-ready **v2 spec plus build tickets** for Count Dracula as one public, mu
 - [Geocoding and location-fuzzing options](issues/02-geocoding-and-fuzzing-options.md) — local FSA (CA, GeoNames) + ZCTA (US, Census) tables, no web geocoder; store only a 5-char geohash (~5 × 3 km), nearby = cell + 8 neighbours; ≥ 5 households before an area shows; no map before the freeze.
 - [Public exposure: abuse protection and live-connection capacity](issues/03-public-exposure-limits.md) — CPU, not memory, limits SSE (fan-out blocks the tap: 37 ms per 1,000 viewers); the global hub, global `seq` and unbounded slow-reader buffers must change first; `synchronous=NORMAL` removes multi-second stalls; app-level caps and rate limits; Turnstile + email verification for bots.
 - [Household identity and sign-up](issues/04-household-identity-and-sign-up.md) — Google sign-in only, no email sent; a Manager (Google account) belongs to one Household; more Managers join by a shared invite link (phone share sheet / copy); admin PIN gone, Helpers unchanged; Operators listed in `deploy/local.env`; delete = immediate hard delete.
+- [What becomes per-household](issues/05-what-becomes-per-household.md) — the credential carries the Household (no slugs; reads no longer open); one live Event per Household, sign-up creates a live Rehearsal with starter costumes; switches and sounds stay Operator-wide until after Halloween, TV mix per Household; one IANA zone per Household (from the browser) drives all event-time maths; new Households race None; `user_version` migration into Household #1, linked by email in `local.env`, `v1-final` tag + DB copy as rollback.
 
 ## Not yet specified
 
 - **v2 rehearsal and launch-day plan.** How the Oct 24 rehearsal changes when it's also the multi-household acceptance test: a second test household, many public TV viewers, sign-up from a stranger's phone. And what Oct 25–31 looks like with strangers' nights depending on us (support channel, status, on-call on the night). Sharpens once the features are settled.
 - **How households find it.** Nearby is only interesting with density. Whether launch is "tell the street / neighbourhood Facebook group" or broader affects the nearby design and the hosting load. Possibly out of scope (promotion isn't the build); decide once nearby is designed.
-- **Privacy notice, retention and deletion.** What we must tell households and how long nights and locations are kept. Identity is now known (Google account id, email, name, Household display name; sign-in goes through Google) and delete is an immediate hard delete; still waits on what location data we collect.
+- **Privacy notice, retention and deletion.** What we must tell households and how long nights and locations are kept. Identity is now known (Google account id, email, name, Household display name; sign-in goes through Google) and delete is an immediate hard delete; still waits on what location data we collect. Each Household also stores a time zone ([What becomes per-household](issues/05-what-becomes-per-household.md)).
 
 ## Out of scope
 
 - Native apps / app stores: web only, as in v1.
+- Per-Household feature switches, sound uploads and per-Household soundboards: after Halloween ([What becomes per-household](issues/05-what-becomes-per-household.md) kept switches and sounds Operator-wide).
 - Passkeys, email sign-in links, Apple sign-in, and any outgoing email: after Halloween ([Household identity and sign-up](issues/04-household-identity-and-sign-up.md) chose Google sign-in only).

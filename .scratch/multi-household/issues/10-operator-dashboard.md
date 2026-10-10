@@ -14,3 +14,4 @@ What does the Operator see across all households, and what can they do?
 - **Actions**: none (read-only) vs hide from nearby, disable sharing, suspend a household, help a household recover.
 - **Privacy**: does the Operator see exact or fuzzed locations, and the Managers' Google emails?
 - **On the night**: is this also our "is the site healthy?" screen (error counts, connection totals), or is that separate?
+- **Given** ([What becomes per-household](05-what-becomes-per-household.md)): the 8 feature switches are Operator-wide kill switches in config (no UI needed before Halloween), and the Operator can fix a Household's time zone. Decide whether either is shown or editable here.

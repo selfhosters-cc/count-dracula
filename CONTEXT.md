@@ -5,7 +5,7 @@ A Halloween trick-or-treater counter: helpers' phones at the door tap each kid i
 ## Language
 
 **Household**:
-One home that signs up and runs its own Halloween nights. It owns its Events, and nothing it owns is visible to another Household unless it chooses to share.
+One home that signs up and runs its own Halloween nights. It owns its Events, always has exactly one of them live, and keeps one time zone that every time of night is read in. Nothing it owns is visible to another Household unless it chooses to share.
 _Avoid_: Account, tenant, user, customer
 
 **Manager**:
