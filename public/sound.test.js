@@ -4,7 +4,7 @@ import { fakeClock } from '../test/fake-clock.js'
 
 // Stands in for Web Audio: records every voice and every bus ramp the engine asks for.
 function fakeAudio(clock) {
-  const lengths = { bloop: 0.25, note: 0.2, tick: 0.08 }
+  const lengths = { bloop: 0.25, note: 0.2, tick: 0.08, sting50: 1.6, fanfare: 3 }
   const audio = {
     state: 'suspended',
     voices: [],
@@ -198,5 +198,24 @@ describe('mix', () => {
 
     expect(lastRamp(audio, 'ambience')).toBe(0)
     expect(audio.ambienceOn).toBe(true) // still running underneath: the keep-alive
+  })
+})
+
+describe('milestone stings', () => {
+  const ambienceRamps = (audio) => audio.ramps.filter((r) => r.bus === 'ambience').map(({ level, at }) => [at, level])
+
+  test.each([
+    ['sting:50', 'sting50', 1_600],
+    ['fanfare', 'fanfare', 3_000],
+  ])('%s plays its sound at full volume and ducks the ambience until it ends', async (cue, slot, ms) => {
+    const { sound, audio, clock } = await setup()
+    sound.mix({ volume: 1, mutes: { bloops: true } }) // muting bloops doesn't touch the big moments
+    audio.ramps.length = 0
+
+    sound.cue(cue)
+    await clock.advance(10_000)
+
+    expect(audio.voices).toMatchObject([{ slot, gain: 1 }])
+    expect(ambienceRamps(audio)).toEqual([[0, 0.3], [ms + 300, 1]])
   })
 })

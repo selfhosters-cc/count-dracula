@@ -19,9 +19,9 @@ The big moments on the TV, behind the Must #3 feature switch (off → plain pops
 
 ## Acceptance criteria
 
-- [ ] Kid #50 shows the milestone chip, #100 a takeover, #347 (against 2025) the Beat-last-year takeover
-- [ ] Undoing #100 and tapping again gives an ordinary pop
-- [ ] Backfilling past #150 skips that milestone; backfilling past 346 makes the next live tap fire "WE BEAT LAST YEAR! 🏆"
-- [ ] Two takeovers due back to back play one after the other without overlapping
-- [ ] With the switch off, every kid gets a plain pop
-- [ ] The fired-moment logic (once-only, late skip, deferred beat) is unit-tested on the server
+- [x] Kid #50 shows the milestone chip, #100 a takeover, #347 (against 2025) the Beat-last-year takeover
+- [x] Undoing #100 and tapping again gives an ordinary pop
+- [x] Backfilling past #150 skips that milestone; backfilling past 346 makes the next live tap fire "WE BEAT LAST YEAR! 🏆"
+- [x] Two takeovers due back to back play one after the other without overlapping
+- [x] With the switch off, every kid gets a plain pop
+- [x] The fired-moment logic (once-only, late skip, deferred beat) is unit-tested on the server

@@ -3,7 +3,7 @@
 import { connectLive } from '/live.js'
 import { createDirector } from '/director.js'
 import { animate } from '/vendor/motion/motion.js'
-import { create as createConfetti } from '/vendor/canvas-confetti/confetti.module.js'
+import confettiLib, { create as createConfetti } from '/vendor/canvas-confetti/confetti.module.js'
 import { createRaceChart } from '/race-chart.js'
 import { eventNow, ghost, minuteOfDay, pace } from '/shared/night-maths.js'
 import { createSound } from '/sound.js'
@@ -61,12 +61,16 @@ let playing = null
 function play(show) {
   const pop = $('pop')
   const merging = show?.kind === 'pop' && playing?.kind === 'pop' && playing.from === show.from
+  const ending = playing
   playing = show
   if (!show) {
-    animate(pop, { opacity: 0, scale: 0.9 }, { duration: 0.25 })
+    if (ending?.kind === 'takeover') animate($('takeover'), { opacity: 0 }, { duration: 0.4 })
+    else animate(pop, { opacity: 0, scale: 0.9 }, { duration: 0.25 })
     return
   }
-  if (show.kind !== 'pop') return // milestones and takeovers render in their own tickets
+  if (show.kind === 'milestone') return playMilestone(show)
+  if (show.kind === 'takeover') return playTakeover(show)
+  pop.classList.remove('ms')
   const merged = show.from !== show.to
   sound.cue(merging ? 'scale' : 'bloop', { step: show.to - show.from })
   pop.innerHTML = merged ? `<small>Welcome, kids</small>#${show.from}–${show.to}!` : `<small>You're kid</small>#${show.from}!`
@@ -77,6 +81,50 @@ function play(show) {
     startVelocity: merged ? 50 : 43,
     origin: { y: 0.7 },
     colors: ['#ff7a1a', '#ffcf3a', '#9085e9', '#199e70'],
+  })
+}
+
+// Every 50th: the big white chip, emoji confetti and a cartoon organ (spec §8).
+function playMilestone({ number }) {
+  const pop = $('pop')
+  pop.classList.add('ms')
+  pop.innerHTML = `<small>Milestone</small>#${number}! 🎉`
+  animate(pop, { opacity: 1, scale: [0.3, 1] }, { type: 'spring', bounce: 0.5, duration: 0.5 })
+  emojiConfetti(['🎃', '🍬'], 3)
+  sound.cue('sting:50')
+}
+
+// #100/#200/#300 and Beat last year: full screen, Creepster headline, fanfare plus a spooky flourish.
+const TAKEOVERS = {
+  milestone: ({ number }) => ['Milestone', `KID #${number}!`, `${number} trick-or-treaters tonight 🎃`],
+  'beat-last-year': () => {
+    const g = live.state?.ghost
+    return ['New record', 'WE BEAT LAST YEAR! 🏆', g ? `${g.label}: ${g.total} kids. Tonight: ${live.state.kids.length} and counting!` : '']
+  },
+}
+
+function playTakeover(show) {
+  const text = TAKEOVERS[show.moment]?.(show)
+  if (!text) return // golden tickets render in their own ticket
+  ;[$('take-k').textContent, $('take-h').textContent, $('take-s').textContent] = text
+  animate($('takeover'), { opacity: 1 }, { duration: 0.4 })
+  animate($('take-h'), { scale: [2.2, 1], opacity: [0, 1] }, { type: 'spring', bounce: 0.45, duration: 0.7 })
+  emojiConfetti(['🎃', '👻', '🍬'], 6)
+  setTimeout(() => emojiConfetti(['🎃', '👻', '🍬'], 5), 700)
+  sound.cue('fanfare')
+}
+
+function emojiConfetti(emoji, power) {
+  let shapes
+  try {
+    shapes = emoji.map((text) => confettiLib.shapeFromText({ text, scalar: 3 }))
+  } catch {}
+  confetti({
+    particleCount: 30 * power,
+    spread: 70 + 20 * power,
+    startVelocity: 35 + 8 * power,
+    origin: { y: 0.7 },
+    ...(shapes?.length ? { shapes, scalar: 3 } : { colors: ['#ff7a1a', '#ffcf3a', '#9085e9', '#199e70'] }),
   })
 }
 

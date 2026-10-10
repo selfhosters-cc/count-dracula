@@ -44,6 +44,14 @@ const SCHEMA = `
     source TEXT NOT NULL DEFAULT 'tap',
     backfill_batch_id INTEGER
   );
+  CREATE TABLE IF NOT EXISTS fired_moments (
+    event_id INTEGER NOT NULL REFERENCES events(id),
+    moment TEXT NOT NULL,
+    state TEXT NOT NULL,
+    kid_id TEXT,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (event_id, moment)
+  );
 `
 
 // A command the Ledger refuses; the HTTP layer answers 400.
@@ -144,10 +152,43 @@ export function openLedger(db, config) {
     return row && toKid(row)
   }
 
+  const momentState = db.query('SELECT state FROM fired_moments WHERE event_id = ? AND moment = ?')
+  const markMoment = db.query('INSERT OR REPLACE INTO fired_moments (event_id, moment, state, kid_id, at) VALUES (?, ?, ?, ?, ?)')
+
+  // The server decides every celebration (modules.md §1). Each milestone and Beat last year fires at
+  // most once per event, the first time it's crossed live. A late kid skips its milestone for good and
+  // leaves Beat last year pending for the next live tap, which fires it without a kid number (spec §8).
+  // Returns the kid.added delta plus any deferred moment.
+  function referee(event, kid) {
+    const moments = []
+    const deferred = []
+    if (switches.milestones) {
+      const fire = (moment, state = 'fired') => markMoment.run(event.id, moment, state, kid.id, now())
+      const milestone = kid.number % 50 === 0 ? `milestone:${kid.number}` : null
+      const beatAt = (ghostOf(event)?.total ?? Infinity) + 1
+      const beat = momentState.get(event.id, 'beat-last-year')?.state
+      if (milestone && !momentState.get(event.id, milestone)) {
+        fire(milestone, kid.late ? 'skipped' : 'fired')
+        if (!kid.late) moments.push(milestone)
+      }
+      if (kid.late) {
+        if (!beat && kid.number >= beatAt) fire('beat-last-year', 'pending')
+      } else if (beat === 'pending') {
+        fire('beat-last-year')
+        deferred.push({ type: 'moment', moments: ['beat-last-year'] })
+      } else if (!beat && kid.number >= beatAt) {
+        fire('beat-last-year')
+        moments.push('beat-last-year')
+      }
+    }
+    return [{ type: 'kid.added', kid, moments }, ...deferred]
+  }
+
   const commands = {
     tap(command) {
-      const kid = addKid(eventById(), command)
-      return kid ? [{ type: 'kid.added', kid }] : []
+      const event = eventById()
+      const kid = addKid(event, command)
+      return kid ? referee(event, kid) : []
     },
 
     // "+ New" costume: creates the tag and counts the kid at the door with it (spec §2 Catch-up).
@@ -165,7 +206,7 @@ export function openLedger(db, config) {
       return [
         { type: 'tag.added', tag: toTag(tagRow) },
         ...(kidIds.length ? [{ type: 'kid.retagged', kidIds, tagId: tagRow.id }] : []),
-        { type: 'kid.added', kid: added },
+        ...referee(event, added),
       ]
     },
 
@@ -276,7 +317,8 @@ export function openLedger(db, config) {
       const live = eventById()
       const racedByLive = live.race_against_id === event.id
       db.query('UPDATE events SET race_against_id = NULL WHERE race_against_id = ?').run(event.id)
-      for (const table of ['kids', 'tags', 'ghost_buckets']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
+      // All of it: SQLite can reuse a deleted event's id, so nothing may be left pointing at it.
+      for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
       db.query('DELETE FROM events WHERE id = ?').run(event.id)
       return racedByLive ? [{ type: 'event.updated', eventId: live.id }] : []
     },

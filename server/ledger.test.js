@@ -531,3 +531,96 @@ describe('costume presets', () => {
     expect(ledger.snapshot().tags).toEqual([])
   })
 })
+
+describe('milestones and Beat last year (fired moments)', () => {
+  // A ledger with a movable clock; tapsUpTo(n) brings the live count to n with on-time taps.
+  function race(config = {}) {
+    let clockMs = 1_000_000_000
+    const ledger = openLedger(new Database(':memory:'), { ghostSeed, now: () => clockMs, ...config })
+    let i = 0
+    const live = (id = `k${++i}`) => ledger.apply(tap(id, { tappedAt: clockMs }))
+    const late = (id = `k${++i}`) => ledger.apply(tap(id, { tappedAt: clockMs - 60_000 }))
+    const tapsUpTo = (n) => {
+      while (ledger.snapshot().kids.length < n) live()
+    }
+    return { ledger, live, late, tapsUpTo }
+  }
+  const moments = (deltas) => deltas.find((d) => d.type === 'kid.added').moments
+
+  test('every 50th kid tapped live fires its milestone; others get a plain pop', () => {
+    const { live, tapsUpTo } = race()
+    tapsUpTo(48)
+
+    expect(moments(live())).toEqual([]) // #49
+    expect(moments(live())).toEqual(['milestone:50'])
+    tapsUpTo(99)
+    expect(moments(live())).toEqual(['milestone:100'])
+  })
+
+  test('fires once per event: after undoing #100, the next #100 is an ordinary pop', () => {
+    const { ledger, live, tapsUpTo } = race()
+    tapsUpTo(99)
+    const [hundred] = live()
+    ledger.apply({ type: 'remove', kidId: hundred.kid.id })
+
+    const again = live()
+
+    expect(again[0].kid.number).toBe(100)
+    expect(moments(again)).toEqual([])
+  })
+
+  test('a milestone crossed by a late tap is skipped for good', () => {
+    const { ledger, live, late, tapsUpTo } = race()
+    tapsUpTo(149)
+    const [lateKid] = late()
+    expect(lateKid.kid).toMatchObject({ number: 150, late: true })
+    expect(lateKid.moments).toEqual([])
+
+    ledger.apply({ type: 'remove', kidId: lateKid.kid.id })
+    expect(moments(live())).toEqual([]) // #150 again, live this time: still skipped
+  })
+
+  test('the kid who beats the Race-against total (#347 against 2025) fires Beat last year, once', () => {
+    const { ledger, live, tapsUpTo } = race()
+    tapsUpTo(346)
+
+    const [beat] = live()
+    expect(beat.kid.number).toBe(347)
+    expect(beat.moments).toEqual(['beat-last-year'])
+
+    ledger.apply({ type: 'remove', kidId: beat.kid.id })
+    expect(moments(live())).toEqual([])
+  })
+
+  test('Beat last year crossed by late taps waits for the next live tap, without a kid number', () => {
+    const { live, late, tapsUpTo } = race()
+    tapsUpTo(345)
+    late() // #346
+    const lateBeat = late() // #347
+    expect(moments(lateBeat)).toEqual([])
+
+    const next = live() // #348
+
+    expect(next.map((d) => d.type)).toEqual(['kid.added', 'moment'])
+    expect(next[0].moments).toEqual([])
+    expect(next[1]).toMatchObject({ type: 'moment', moments: ['beat-last-year'] })
+    expect(next[1].kid).toBeUndefined()
+    expect(live().map((d) => d.type)).toEqual(['kid.added']) // and only once
+  })
+
+  test('there is no Beat last year when Race against is None', () => {
+    const { ledger, live, tapsUpTo } = race()
+    ledger.apply({ type: 'settings', eventId: ledger.snapshot().event.id, raceAgainstId: null })
+    tapsUpTo(346)
+
+    expect(moments(live())).toEqual([])
+  })
+
+  test('with the milestones switch off, every kid gets a plain pop', () => {
+    const { live, tapsUpTo } = race({ switches: { milestones: false } })
+    tapsUpTo(49)
+    expect(moments(live())).toEqual([])
+    tapsUpTo(346)
+    expect(moments(live())).toEqual([])
+  })
+})

@@ -11,6 +11,8 @@ const GENERATORS = {
   bloop: { seconds: 0.25, draw: bloop },
   note: { seconds: 0.2, draw: pluck },
   tick: { seconds: 0.08, draw: tick },
+  sting50: { seconds: 1.6, draw: organSting },
+  fanfare: { seconds: 3, draw: fanfare },
   ambience: { seconds: 8, draw: nightLoop },
 }
 
@@ -118,6 +120,49 @@ function tick(ctx, seconds) {
   const noise = noiseSource(ctx, seconds)
   noise.connect(new BiquadFilterNode(ctx, { type: 'bandpass', frequency: 1800, Q: 4 })).connect(envelope(ctx, 0.8, 0.002, 0.06))
   noise.start(0)
+}
+
+// A cartoon organ "da-DAAA": two chords built from a few organ-ish harmonics.
+function organSting(ctx) {
+  const chords = [[0, 0.25, [261.6, 329.6, 392]], [0.3, 1.25, [349.2, 440, 523.3, 698.5]]]
+  for (const [at, length, freqs] of chords) {
+    for (const f of freqs) {
+      for (const [harmonic, level] of [[1, 0.09], [2, 0.05], [4, 0.025]]) {
+        const osc = new OscillatorNode(ctx, { type: 'sine', frequency: f * harmonic })
+        const g = new GainNode(ctx, { gain: 0 })
+        g.gain.setValueAtTime(0, at)
+        g.gain.linearRampToValueAtTime(level, at + 0.02)
+        g.gain.setValueAtTime(level, at + length - 0.15)
+        g.gain.linearRampToValueAtTime(0, at + length)
+        osc.connect(g).connect(ctx.destination)
+        osc.start(at)
+        osc.stop(at + length)
+      }
+    }
+  }
+}
+
+// A brassy rising fanfare, then a spooky theremin-ish flourish sliding down with vibrato.
+function fanfare(ctx) {
+  const notes = [[0, 392], [0.14, 523.3], [0.28, 659.3], [0.42, 784], [0.62, 1046.5]]
+  for (const [at, f] of notes) {
+    const osc = new OscillatorNode(ctx, { type: 'sawtooth', frequency: f })
+    const tone = new BiquadFilterNode(ctx, { type: 'lowpass', frequency: 2400 })
+    const last = at === 0.62
+    osc.connect(tone).connect(envelope(ctx, last ? 0.22 : 0.16, 0.01, last ? 1.1 : 0.16, at))
+    osc.start(at)
+    osc.stop(at + (last ? 1.2 : 0.2))
+  }
+  const ghost = new OscillatorNode(ctx, { type: 'sine', frequency: 1300 })
+  ghost.frequency.setValueAtTime(1300, 1.7)
+  ghost.frequency.exponentialRampToValueAtTime(420, 2.9)
+  const vibrato = new OscillatorNode(ctx, { frequency: 6 })
+  vibrato.connect(new GainNode(ctx, { gain: 25 })).connect(ghost.frequency)
+  ghost.connect(envelope(ctx, 0.18, 0.15, 1.1, 1.7))
+  ghost.start(1.7)
+  vibrato.start(1.7)
+  ghost.stop(3)
+  vibrato.stop(3)
 }
 
 // Wind, crickets and one owl, looping every `seconds` (all modulation divides the loop evenly).

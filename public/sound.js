@@ -20,6 +20,10 @@ const DUCK_ATTACK_S = 0.08
 const DUCK_HOLD_MS = 300
 const DUCK_RELEASE_S = 0.8
 
+// The big moments' sounds, by cue (spec §10): a cartoon organ for every 50th, a full fanfare plus a
+// spooky flourish for #100/#200/#300 and Beat last year.
+const STINGS = { 'sting:50': 'sting50', fanfare: 'fanfare' }
+
 const TICK_GAIN = 0.4 // a late-tap roll-up: one soft tick
 const TICK_QUIET_MS = 2_000 // a backlog arrives as a run of late kids: one tick for the lot
 
@@ -97,6 +101,8 @@ export function createSound({ audio, clock, random = Math.random }) {
       if (name === 'bloop') {
         const detune = BLOOP_PITCHES[Math.floor(random() * BLOOP_PITCHES.length)]
         duckUntil(play('bloop', { gain: bloopGain(arrive()), detune }))
+      } else if (STINGS[name]) {
+        duckUntil(play(STINGS[name], { gain: 1, detune: 0 }))
       } else if (name === 'scale') {
         const detune = SCALE[Math.min(Math.max(opts.step ?? 1, 1) - 1, SCALE.length - 1)] // step 1 = the 2nd kid
         duckUntil(play('note', { gain: bloopGain(arrive()), detune }))
