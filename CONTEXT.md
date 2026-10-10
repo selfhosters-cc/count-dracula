@@ -51,3 +51,11 @@ _Avoid_: Live household, online household
 **Suspended**:
 A Household the Operator has switched off without deleting anything: its Managers see a notice instead of `/setup`, its phones, TV link and Night summary links are refused, and it drops out of nearby figures. Unsuspending restores everything.
 _Avoid_: Banned, disabled, blocked, deleted
+
+**Report**:
+A stranger's flag on a public Night summary share page ("Report this page"), stored with the Household, the page, the time and an optional short reason. The Operator sees open Reports per Household on `/operator` and dismisses them; acting on one means Rename or Suspend.
+_Avoid_: Complaint, flag, ticket
+
+**Pause sign-ups**:
+The Operator's switch on `/operator` that stops new Households being created while every existing Household keeps working. The emergency move for a sign-up flood, usable without a redeploy.
+_Avoid_: Lockdown, maintenance mode, closing the site
