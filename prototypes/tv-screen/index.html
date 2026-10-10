@@ -1,0 +1,515 @@
+<meta charset="utf-8">
+<title>Porch TV Prototype</title>
+<!--
+  PROTOTYPE — throwaway. Answers ticket "TV screen prototype" (wayfinder map: halloween-tracker).
+  Three structurally different TV layouts, switchable with the bottom bar, ← / →, or #a #b #c.
+  Fake taps come from the keyboard (or the "Fake taps" panel). In-memory only; no server.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Creepster&family=Fredoka:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<style>
+/* Layout: a fixed 16:9 night "stage" seen from the porch; three layouts share one state + one celebration layer. */
+:root {
+  color-scheme: dark;
+  --night: #140f26;        /* sky / surface */
+  --night-2: #1f1838;      /* raised panels */
+  --ink: #f7efe0;          /* candlelight text */
+  --ink-dim: #b3aacb;      /* secondary text */
+  --pumpkin: #ff7a1a;      /* tonight's line, untagged pumpkins */
+  --ghost: #c9d2ff;        /* last year's ghost line */
+  --gold: #ffcf3a;         /* golden tickets */
+  --grid: #2c2449;
+  --f-display: "Bungee", "Arial Black", Impact, sans-serif;
+  --f-spooky: "Creepster", "Bungee", Impact, fantasy;
+  --f-body: "Fredoka", "Nunito", "Trebuchet MS", system-ui, sans-serif;
+}
+html, body { height: 100%; }
+body { background: var(--night); color: var(--ink); font-family: var(--f-body); overflow: hidden; }
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; }
+button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+.stage { position: fixed; inset: 0; overflow: hidden; }
+.variant { position: absolute; inset: 0; display: none; }
+.variant.on { display: block; }
+.num { font-variant-numeric: tabular-nums; }
+.eyebrow { font-family: var(--f-body); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); font-size: clamp(11px, 1.4vw, 22px); }
+.clock { font-family: var(--f-display); font-size: clamp(14px, 2.2vw, 36px); color: var(--ink-dim); }
+
+/* count bump / quiet tick-down */
+.count { display: inline-block; transition: transform .25s cubic-bezier(.3,1.8,.5,1); }
+.count.bump { transform: scale(1.12); }
+.count.tick { animation: tick .6s ease; }
+@keyframes tick { 0% { opacity: 1; transform: translateY(0); } 40% { opacity: .55; transform: translateY(.06em); } 100% { opacity: 1; transform: none; } }
+
+/* golden badge */
+.golden-badge { display: inline-flex; align-items: center; gap: .4em; padding: .3em .8em; border-radius: 999px; border: 2px solid var(--gold); color: var(--gold); font-weight: 700; font-size: clamp(12px, 1.8vw, 30px); white-space: nowrap; }
+.golden-badge .num { font-family: var(--f-display); }
+
+/* race chart */
+.race { width: 100%; height: 100%; display: block; }
+.race text { font-family: var(--f-body); fill: var(--ink-dim); }
+.race .lbl-big { font-family: var(--f-display); }
+
+/* leaderboard */
+.board { position: relative; width: 100%; }
+.board .row { position: absolute; left: 0; right: 0; display: grid; grid-template-columns: minmax(0, 13em) 1fr; align-items: center; gap: .6em; transition: top .6s cubic-bezier(.4,1.4,.5,1); }
+.board .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.board .track { position: relative; height: 70%; }
+.board .bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 6px 6px 0; transition: width .6s cubic-bezier(.4,1.4,.5,1); min-width: 6px; }
+.board .val { font-size: .9em; position: absolute; top: 50%; transform: translateY(-50%); font-family: var(--f-display); transition: left .6s cubic-bezier(.4,1.4,.5,1); padding-left: .35em; }
+.board .empty { color: var(--ink-dim); }
+
+canvas.patch { width: 100%; height: 100%; display: block; }
+
+/* ===== Variant A — Scoreboard ===== */
+#va { display: none; padding: 2.2vh 2.4vw; }
+#va.on { display: grid; grid-template-columns: 34fr 66fr; grid-template-rows: auto 1fr 26vh 11vh; gap: 1.6vh 2vw; }
+#va .top { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 1em; }
+#va .title { font-family: var(--f-spooky); font-size: clamp(20px, 3.4vw, 64px); color: var(--pumpkin); letter-spacing: .03em; }
+#va .hero { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+#va .hero .big { font-family: var(--f-display); font-size: clamp(64px, 15vw, 300px); line-height: .9; color: var(--ink); }
+#va .pace { margin-top: 1.2vh; font-size: clamp(14px, 2.2vw, 40px); font-weight: 600; }
+#va .chartbox { min-width: 0; background: var(--night-2); border-radius: 14px; padding: 1vh 1vw; }
+#va .boardbox { grid-column: 1 / -1; min-width: 0; font-size: clamp(11px, 1.45vw, 26px); }
+#va .boardbox .board { height: calc(100% - 2.6em); margin-top: .4em; }
+#va .patchbox { grid-column: 1 / -1; min-width: 0; border-top: 2px solid var(--grid); }
+
+/* ===== Variant B — Pumpkin patch world ===== */
+#vb canvas.scene { position: absolute; inset: 0; width: 100%; height: 100%; }
+#vb .moon { position: absolute; left: 3vw; top: 4vh; width: min(30vh, 26vw); aspect-ratio: 1; max-width: 100%; border-radius: 50%; background: radial-gradient(circle at 38% 35%, #fff7e0, #f3d98f 55%, #c9a54e); box-shadow: 0 0 80px 20px rgba(255, 220, 130, .25); display: grid; place-content: center; text-align: center; color: #2b1a05; }
+#vb .moon .big { font-family: var(--f-display); font-size: min(10vh, 8.6vw); line-height: 1; }
+#vb .moon .lbl { font-weight: 700; font-size: min(2.2vh, 1.9vw); letter-spacing: .1em; text-transform: uppercase; }
+#vb .sky-race { position: absolute; left: calc(3vw + min(30vh, 26vw) + 3vw); right: 3vw; top: 10vh; height: 24vh; width: auto; }
+#vb .pace { position: absolute; left: 3vw; top: calc(6vh + min(30vh, 26vw)); font-weight: 700; font-size: clamp(14px, 2.2vw, 38px); text-shadow: 0 2px 8px #000; }
+#vb .stones { position: absolute; right: 3vw; bottom: 44vh; display: flex; align-items: flex-end; gap: 1.2vw; }
+#vb .stone { width: 7.5vw; min-width: 44px; border-radius: 3.5vw 3.5vw 4px 4px; background: linear-gradient(#5b5577, #3d3758); border: 2px solid #6e6890; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: .8vh; transition: height .6s cubic-bezier(.4,1.4,.5,1); overflow: hidden; }
+#vb .stone .e { font-size: clamp(16px, 2.4vw, 44px); }
+#vb .stone .c { font-family: var(--f-display); font-size: clamp(14px, 2vw, 36px); }
+#vb .stone .n { font-size: clamp(9px, 1vw, 18px); font-weight: 600; color: var(--ink-dim); text-align: center; padding: 0 .3em; line-height: 1.1; }
+#vb .tr { position: absolute; right: 3vw; top: 2.5vh; display: flex; gap: 1.5vw; align-items: center; }
+
+/* ===== Variant C — Spotlight carousel ===== */
+#vc { display: none; padding: 2vh 2.4vw; }
+#vc.on { display: grid; grid-template-rows: auto 1fr auto; gap: 1.5vh; }
+#vc .top { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
+#vc .mini { font-family: var(--f-display); font-size: clamp(18px, 3vw, 54px); }
+#vc .mini small { font-family: var(--f-body); font-weight: 600; font-size: .45em; color: var(--ink-dim); letter-spacing: .1em; }
+#vc .spot { position: relative; min-height: 0; }
+#vc .panel { position: absolute; inset: 0; opacity: 0; transform: scale(.97); transition: opacity .8s, transform .8s; display: flex; flex-direction: column; min-width: 0; }
+#vc .panel.on { opacity: 1; transform: none; }
+#vc .panel h2 { margin: 0 0 1vh; font-family: var(--f-spooky); font-weight: 400; color: var(--pumpkin); font-size: clamp(24px, 4.5vw, 84px); letter-spacing: .03em; text-wrap: balance; }
+#vc .panel .body { flex: 1; min-height: 0; position: relative; }
+#vc .p-count .body { display: grid; place-content: center; text-align: center; }
+#vc .p-count .big { font-family: var(--f-display); font-size: clamp(90px, 26vw, 520px); line-height: .85; }
+#vc .p-count .pace { font-size: clamp(16px, 3vw, 54px); font-weight: 600; margin-top: 2vh; }
+#vc .p-board .body { font-size: clamp(16px, 3.4vw, 60px); }
+#vc .p-board .board { height: 100%; }
+#vc .tickets { display: flex; flex-wrap: wrap; gap: 2vw; justify-content: center; align-content: center; height: 100%; }
+#vc .ticket { width: 15vw; min-width: 70px; aspect-ratio: 1.6; border-radius: 12px; display: grid; place-content: center; text-align: center; font-family: var(--f-display); font-size: clamp(14px, 2.4vw, 44px); border: 3px dashed var(--gold); color: var(--gold); }
+#vc .ticket.live { background: rgba(255, 207, 58, .12); animation: glow 1.8s ease-in-out infinite; }
+#vc .ticket.won { opacity: .35; border-style: solid; text-decoration: line-through; }
+@keyframes glow { 50% { box-shadow: 0 0 40px 6px rgba(255, 207, 58, .45); } }
+#vc .dots { display: flex; justify-content: center; gap: 1vw; padding-bottom: 6vh; }
+#vc .dots span { width: 1.2vw; min-width: 8px; aspect-ratio: 1; border-radius: 50%; background: var(--grid); transition: background .4s; }
+#vc .dots span.on { background: var(--pumpkin); }
+
+/* ===== Celebration layer (shared) ===== */
+.pop { position: fixed; left: 50%; top: 56%; transform: translate(-50%, -50%) scale(.3); opacity: 0; pointer-events: none; z-index: 30; text-align: center; padding: .25em .7em; border-radius: 24px; background: var(--pumpkin); color: #1d0d00; font-family: var(--f-display); font-size: clamp(30px, 7vw, 140px); line-height: 1; white-space: nowrap; box-shadow: 0 10px 60px rgba(255, 122, 26, .55); transition: transform .35s cubic-bezier(.3,1.7,.5,1), opacity .25s; }
+.pop small { display: block; font-family: var(--f-body); font-weight: 700; font-size: .28em; letter-spacing: .14em; text-transform: uppercase; margin-bottom: .2em; }
+.pop.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.pop.ms { background: var(--ink); box-shadow: 0 10px 80px rgba(255, 255, 255, .45); font-size: clamp(36px, 9vw, 180px); }
+.banner { position: fixed; left: 0; right: 0; top: 0; z-index: 31; transform: translateY(-110%); transition: transform .5s cubic-bezier(.3,1.4,.5,1); background: var(--night-2); border-bottom: 4px solid var(--pumpkin); padding: 2vh 3vw; display: flex; align-items: center; gap: 2vw; pointer-events: none; }
+.banner.show { transform: none; }
+.banner .t1 { font-family: var(--f-spooky); color: var(--pumpkin); font-size: clamp(22px, 4vw, 76px); }
+.banner .t2 { font-family: var(--f-display); font-size: clamp(22px, 4.4vw, 84px); }
+.takeover { position: fixed; inset: 0; z-index: 40; display: grid; place-content: center; text-align: center; padding: 4vh 4vw; background: radial-gradient(circle at 50% 45%, #3a1d00, #0a0614 75%); opacity: 0; pointer-events: none; transition: opacity .4s; }
+.takeover.show { opacity: 1; }
+.takeover .k { font-family: var(--f-body); font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); font-size: clamp(14px, 2.4vw, 44px); }
+.takeover .h { font-family: var(--f-spooky); font-size: clamp(56px, 14vw, 280px); line-height: .95; color: var(--pumpkin); text-wrap: balance; }
+.takeover .s { font-family: var(--f-display); font-size: clamp(18px, 3.6vw, 70px); margin-top: 2vh; }
+.takeover.gold { background: radial-gradient(circle at 50% 45%, #6b4a00, #120a00 75%); }
+.takeover.gold .h { color: var(--gold); }
+.takeover.show .h { animation: slam .7s cubic-bezier(.3,1.6,.5,1); }
+@keyframes slam { from { transform: scale(2.2); opacity: 0; } to { transform: none; opacity: 1; } }
+.fx { position: fixed; inset: 0; pointer-events: none; z-index: 35; overflow: hidden; }
+.bat { position: absolute; font-size: clamp(30px, 6vw, 110px); animation: fly 2.4s linear forwards; }
+@keyframes fly { from { transform: translate(-15vw, 0) rotate(-10deg); } 50% { transform: translate(55vw, -18vh) rotate(8deg); } to { transform: translate(120vw, 4vh) rotate(-6deg); } }
+.shout { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-family: var(--f-spooky); font-size: clamp(40px, 9vw, 180px); color: var(--ink); text-shadow: 0 0 30px #7a3cff; animation: shout 2.4s ease forwards; white-space: nowrap; }
+@keyframes shout { 0% { opacity: 0; transform: translateX(-50%) scale(.6); } 15% { opacity: 1; transform: translateX(-50%) scale(1.1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) scale(1); } }
+
+/* ===== Prototype chrome (not part of the design) ===== */
+.proto { position: fixed; z-index: 60; font-family: system-ui, sans-serif; font-size: 13px; color: #111; }
+.switcher { left: 50%; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 4px; background: #fff; border-radius: 999px; padding: 4px; box-shadow: 0 4px 18px rgba(0,0,0,.5); white-space: nowrap; }
+.switcher button { border: 0; background: #eee; border-radius: 999px; width: 30px; height: 30px; cursor: pointer; color: #111; }
+.switcher .lbl { padding: 0 10px; font-weight: 600; }
+.taps { left: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: min(300px, calc(100vw - 20px)); background: #fff; border-radius: 12px; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
+.taps summary { cursor: pointer; padding: 8px 12px; font-weight: 600; list-style: none; }
+.taps .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 0 8px 8px; max-height: 50vh; overflow: auto; }
+.taps .grid button { border: 1px solid #ccc; background: #f6f6f6; border-radius: 6px; padding: 4px 6px; text-align: left; cursor: pointer; color: #111; }
+.taps kbd { font-family: ui-monospace, monospace; background: #222; color: #fff; border-radius: 3px; padding: 0 4px; margin-right: 4px; }
+.taps .state { grid-column: 1 / -1; font-size: 12px; color: #444; padding: 4px 2px 0; line-height: 1.4; }
+.sound { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); border: 0; border-radius: 999px; padding: 8px 14px; background: #fff; font-weight: 600; cursor: pointer; box-shadow: 0 4px 18px rgba(0,0,0,.5); color: #111; }
+@media (max-width: 700px) { .switcher { bottom: auto; top: calc(10px + env(safe-area-inset-top, 0px)); } }
+@media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+</style>
+
+<div class="stage">
+  <!-- A — Scoreboard -->
+  <section class="variant" id="va" aria-label="Scoreboard layout">
+    <div class="top">
+      <div class="title">Trick-or-Treat Tally</div>
+      <div style="display:flex;gap:1.5vw;align-items:center"><span class="golden-badge">🎫 <span class="num" data-golden></span> golden tickets left</span><span class="clock" data-clock></span></div>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Kids tonight</div>
+      <div class="big num"><span class="count" data-count></span></div>
+      <div class="pace" data-pace></div>
+    </div>
+    <div class="chartbox"><svg class="race" data-race></svg></div>
+    <div class="boardbox"><div class="eyebrow">Costume leaderboard</div><div class="board" data-board></div></div>
+    <div class="patchbox"><canvas class="patch" data-patch="strip"></canvas></div>
+  </section>
+
+  <!-- B — Pumpkin patch world -->
+  <section class="variant" id="vb" aria-label="Pumpkin patch layout">
+    <canvas class="scene" data-patch="scene"></canvas>
+    <div class="moon"><div class="big num"><span class="count" data-count></span></div><div class="lbl">kids tonight</div></div>
+    <div class="pace" data-pace></div>
+    <svg class="race sky-race" data-race="sky"></svg>
+    <div class="stones" data-stones></div>
+    <div class="tr"><span class="golden-badge">🎫 <span class="num" data-golden></span> golden tickets left</span><span class="clock" data-clock></span></div>
+  </section>
+
+  <!-- C — Spotlight carousel -->
+  <section class="variant" id="vc" aria-label="Spotlight layout">
+    <div class="top">
+      <div class="mini num"><span class="count" data-count></span> <small>KIDS</small></div>
+      <span class="golden-badge">🎫 <span class="num" data-golden></span> golden tickets left</span>
+      <span class="clock" data-clock></span>
+    </div>
+    <div class="spot">
+      <div class="panel p-count"><h2>Trick-or-treaters tonight</h2><div class="body"><div><div class="big num"><span class="count" data-count></span></div><div class="pace" data-pace></div></div></div></div>
+      <div class="panel p-race"><h2>Racing last year's ghost</h2><div class="body"><svg class="race" data-race="big"></svg></div></div>
+      <div class="panel p-board"><h2>Top costumes</h2><div class="body"><div class="board" data-board></div></div></div>
+      <div class="panel p-patch"><h2>The pumpkin patch</h2><div class="body"><canvas class="patch" data-patch="panel"></canvas></div></div>
+      <div class="panel p-gold"><h2>Golden tickets hidden tonight</h2><div class="body"><div class="tickets" data-tickets></div></div></div>
+    </div>
+    <div class="dots" data-dots></div>
+  </section>
+</div>
+
+<div class="pop" id="pop" aria-live="polite"></div>
+<div class="banner" id="banner"><span class="t1" id="bt1"></span><span class="t2" id="bt2"></span></div>
+<div class="takeover" id="takeover"><div><div class="k" id="tk"></div><div class="h" id="th"></div><div class="s" id="ts"></div></div></div>
+<div class="fx" id="fx"></div>
+<canvas id="confetti" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:45"></canvas>
+
+<div class="proto switcher" role="toolbar" aria-label="Prototype variant switcher">
+  <button id="prev" aria-label="Previous variant">←</button><span class="lbl" id="vlabel"></span><button id="next" aria-label="Next variant">→</button>
+</div>
+<details class="proto taps">
+  <summary>Fake taps (prototype)</summary>
+  <div class="grid" id="tapgrid"></div>
+</details>
+<button class="proto sound" id="sound">🔇 Start the night (sound)</button>
+
+<script>
+(() => {
+// ---------- data ----------
+const GHOST = [[1062, 0], [1080, 14], [1110, 86], [1140, 193], [1170, 312], [1200, 346]]; // minutes since midnight, cumulative 2025
+const GHOST_TOTAL = 346;
+const TAG_COLORS = ['#3987e5', '#199e70', '#c98500', '#d55181', '#9085e9', '#e66767']; // validated order (dark, adjacent pairs)
+const FOLD = '#8a84a8';
+const UNTAGGED = '#ff7a1a';
+const NEW_TAGS = [['Wednesday', '🖤'], ['Bluey', '🐶'], ['Mario', '🍄'], ['Elsa', '❄️']];
+const SIM_RATE = 6; // sim seconds per real second
+const ghostAt = t => { if (t <= GHOST[0][0]) return 0; for (let i = 1; i < GHOST.length; i++) { const [t1, c1] = GHOST[i], [t0, c0] = GHOST[i - 1]; if (t <= t1) return c0 + (c1 - c0) * (t - t0) / (t1 - t0); } return GHOST_TOTAL; };
+const ghostRate = t => { for (let i = 1; i < GHOST.length; i++) { const [t1, c1] = GHOST[i], [t0, c0] = GHOST[i - 1]; if (t >= t0 && t < t1) return (c1 - c0) / (t1 - t0); } return 0; };
+
+const S = { now: 1100, kids: [], tags: [], golden: [], won: new Set(), nextNew: 0, auto: false, seq: 0 };
+[['Spider-Man', '🕷️'], ['Witch', '🧙'], ['Princess', '👸'], ['Ghost', '👻'], ['Dino', '🦖']].forEach(([name, emoji]) => addTag(name, emoji));
+function addTag(name, emoji) { const i = S.tags.length; const t = { id: i, name, emoji, color: TAG_COLORS[i] || FOLD }; S.tags.push(t); return t; }
+// 5 secret golden numbers, stratified across 10..280
+for (let i = 0; i < 5; i++) S.golden.push(10 + i * 54 + Math.floor(Math.random() * 54));
+// pre-seed a realistic evening up to 18:20 (slightly ahead of last year)
+{ const n = Math.floor(ghostAt(S.now) * 1.08); for (let i = 1; i <= n; i++) { let lo = 1062, hi = S.now; const target = i / n * ghostAt(S.now); for (let k = 0; k < 30; k++) { const m = (lo + hi) / 2; ghostAt(m) < target ? lo = m : hi = m; } S.kids.push({ id: ++S.seq, t: lo, tag: Math.random() < .55 ? Math.floor(Math.random() * 5) : null, born: 0 }); } S.golden.forEach(g => { if (g <= n) S.won.add(g); }); }
+
+// ---------- helpers ----------
+const $$ = sel => [...document.querySelectorAll(sel)];
+const fmt = t => { const h = Math.floor(t / 60), m = Math.floor(t % 60); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`; };
+const count = () => S.kids.length;
+const tagCounts = () => S.tags.map(t => ({ t, c: S.kids.filter(k => k.tag === t.id).length })).filter(x => x.c > 0).sort((a, b) => b.c - a.c);
+const goldenLeft = () => S.golden.filter(g => !S.won.has(g)).length;
+const nextGolden = () => S.golden.filter(g => !S.won.has(g) && g > count()).sort((a, b) => a - b)[0];
+
+// ---------- rendering ----------
+function renderText() {
+  const n = count(), d = Math.round(n - ghostAt(S.now));
+  $$('[data-count]').forEach(e => e.textContent = n);
+  $$('[data-golden]').forEach(e => e.textContent = goldenLeft());
+  $$('[data-clock]').forEach(e => e.textContent = fmt(S.now));
+  const pace = n > GHOST_TOTAL ? `🏆 New record! Last year: ${GHOST_TOTAL}` : d >= 0 ? `👻 ${d} ahead of last year's ghost` : `👻 ${-d} behind last year's ghost`;
+  $$('[data-pace]').forEach(e => e.textContent = pace);
+}
+function bump(quiet) { $$('[data-count]').forEach(e => { e.classList.remove('bump', 'tick'); void e.offsetWidth; e.classList.add(quiet ? 'tick' : 'bump'); if (!quiet) setTimeout(() => e.classList.remove('bump'), 220); }); }
+
+function renderBoards() {
+  const rows = tagCounts().slice(0, 5); const max = rows[0]?.c || 1;
+  $$('[data-board]').forEach(el => {
+    if (!rows.length) { el.innerHTML = '<div class="empty">No costumes tagged yet</div>'; return; }
+    el.querySelector('.empty')?.remove();
+    const h = el.clientHeight / 5;
+    const seen = new Set();
+    rows.forEach((r, i) => {
+      let row = el.querySelector(`[data-tag="${r.t.id}"]`);
+      if (!row) { row = document.createElement('div'); row.className = 'row'; row.dataset.tag = r.t.id; row.innerHTML = `<div class="name"></div><div class="track"><div class="bar"></div><div class="val num"></div></div>`; row.style.top = `${5 * h}px`; el.appendChild(row); void row.offsetWidth; }
+      seen.add(String(r.t.id));
+      row.style.height = `${h}px`; row.style.top = `${i * h}px`;
+      row.querySelector('.name').textContent = `${r.t.emoji} ${r.t.name}`;
+      const pct = 100 * r.c / max * .86;
+      const bar = row.querySelector('.bar'); bar.style.width = `${pct}%`; bar.style.background = r.t.color;
+      const v = row.querySelector('.val'); v.textContent = r.c; v.style.left = `${pct}%`;
+    });
+    [...el.querySelectorAll('.row')].forEach(r => { if (!seen.has(r.dataset.tag)) r.remove(); });
+  });
+  const st = document.querySelector('[data-stones]');
+  if (st) { const maxH = window.innerHeight * .2; st.innerHTML = rows.map(r => `<div class="stone" style="height:${Math.max(window.innerHeight * .13, maxH * r.c / max)}px;border-color:${r.t.color}"><span class="e">${r.t.emoji}</span><span class="c num">${r.c}</span><span class="n">${r.t.name}</span></div>`).join(''); }
+  const tk = document.querySelector('[data-tickets]');
+  if (tk) tk.innerHTML = S.golden.slice().sort((a, b) => a - b).map(g => S.won.has(g) ? `<div class="ticket won">#${g}<br>WON</div>` : `<div class="ticket live">🎫<br>?</div>`).join('');
+}
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+function renderRaces() {
+  $$('[data-race]').forEach(svg => {
+    const mode = svg.dataset.race || 'box';
+    const w = svg.clientWidth, h = svg.clientHeight; if (!w || !h) return;
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    const fs = mode === 'sky' ? Math.max(11, h / 11) : Math.max(11, Math.min(w, h * 1.8) / 34);
+    const m = { l: mode === 'sky' ? 8 : fs * 3, r: fs * 5.2, t: fs * 1.2, b: mode === 'sky' ? 8 : fs * 2.2 };
+    const t0 = 1050, t1 = 1230, n = count();
+    const ymax = Math.max(400, Math.ceil((n + 30) / 100) * 100);
+    const X = t => m.l + (t - t0) / (t1 - t0) * (w - m.l - m.r), Y = c => h - m.b - c / ymax * (h - m.t - m.b);
+    let s = '';
+    if (mode !== 'sky') {
+      for (let c = 0; c <= ymax; c += 100) s += `<line x1="${m.l}" x2="${w - m.r}" y1="${Y(c)}" y2="${Y(c)}" stroke="var(--grid)" stroke-width="1"/><text x="${m.l - fs * .5}" y="${Y(c) + fs * .35}" text-anchor="end" font-size="${fs}">${c}</text>`;
+      [1080, 1140, 1200].forEach(t => s += `<text x="${X(t)}" y="${h - m.b + fs * 1.5}" text-anchor="middle" font-size="${fs}">${fmt(t).replace(':00', '').replace(' PM', 'pm')}</text>`);
+    }
+    // ghost line
+    const gp = GHOST.map(([t, c]) => `${X(t)},${Y(c)}`).join(' ') + ` ${X(t1)},${Y(GHOST_TOTAL)}`;
+    s += `<polyline points="${gp}" fill="none" stroke="var(--ghost)" stroke-opacity=".55" stroke-width="${Math.max(2, fs * .2)}" stroke-dasharray="${fs * .5} ${fs * .4}" stroke-linecap="round"/>`;
+    const gNow = ghostAt(S.now);
+    s += `<text x="${X(S.now)}" y="${Y(gNow) + (gNow > n ? -fs * .9 : fs * 2)}" text-anchor="middle" font-size="${fs * 1.6}">👻</text>`;
+    s += `<text x="${X(t1) + fs * .4}" y="${Y(GHOST_TOTAL) + fs * .35}" font-size="${fs}" style="fill:var(--ghost)">2025: ${GHOST_TOTAL}</text>`;
+    // tonight
+    const ks = S.kids.slice().sort((a, b) => a.t - b.t);
+    let tp = `${X(1062)},${Y(0)}`; ks.forEach((k, i) => tp += ` ${X(k.t)},${Y(i + 1)}`); tp += ` ${X(S.now)},${Y(n)}`;
+    const glow = mode === 'sky' ? ` style="filter:drop-shadow(0 0 ${fs * .5}px var(--pumpkin))"` : '';
+    s += `<polyline points="${tp}" fill="none" stroke="var(--pumpkin)" stroke-width="${Math.max(3, fs * .32)}" stroke-linejoin="round" stroke-linecap="round"${glow}/>`;
+    s += `<circle cx="${X(S.now)}" cy="${Y(n)}" r="${fs * .55}" fill="var(--pumpkin)" stroke="var(--night)" stroke-width="2"/>`;
+    s += `<text class="lbl-big" x="${X(S.now) + fs * .9}" y="${Y(n) + fs * .45}" font-size="${fs * 1.3}" style="fill:var(--ink)">${n}</text>`;
+    svg.innerHTML = s;
+  });
+}
+
+// pumpkin sprites
+function drawPumpkin(ctx, x, y, r, color, gold) {
+  ctx.fillStyle = gold ? '#ffcf3a' : color;
+  for (const dx of [-.45, .45, 0]) { ctx.beginPath(); ctx.ellipse(x + dx * r, y, r * .62, r * .82, 0, 0, Math.PI * 2); ctx.fill(); }
+  ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = Math.max(1, r * .08);
+  for (const dx of [-.3, .3]) { ctx.beginPath(); ctx.ellipse(x + dx * r, y, r * .32, r * .78, 0, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.fillStyle = '#3f6b2a'; ctx.fillRect(x - r * .1, y - r * 1.05, r * .2, r * .32);
+  if (gold) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x + r * .5, y - r * .5, r * .14, 0, Math.PI * 2); ctx.fill(); }
+}
+function patchCells(n, W, H) {
+  const cap = Math.max(n, 160); let cols = Math.ceil(Math.sqrt(cap * W / H)); let rows = Math.ceil(cap / cols);
+  return { cols, rows, cw: W / cols, ch: H / rows };
+}
+function drawPatches(ts) {
+  const now = performance.now();
+  $$('canvas[data-patch]').forEach(cv => {
+    const W = cv.clientWidth, H = cv.clientHeight; if (!W || !H) return;
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    const mode = cv.dataset.patch;
+    let area = { x: 0, y: 0, w: W, h: H };
+    if (mode === 'scene') {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0b0820'); g.addColorStop(.5, '#1d1440'); g.addColorStop(1, '#120c24');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(255,255,255,.7)'; for (let i = 0; i < 90; i++) { const sx = (i * 977) % W, sy = (i * 571) % (H * .5); ctx.globalAlpha = .3 + .7 * Math.abs(Math.sin(ts / 900 + i)); ctx.fillRect(sx, sy, 2, 2); } ctx.globalAlpha = 1;
+      ctx.fillStyle = '#1a1230'; ctx.beginPath(); ctx.moveTo(0, H * .55); for (let x = 0; x <= W; x += W / 12) ctx.lineTo(x, H * .52 + Math.sin(x / W * 7) * H * .025); ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
+      ctx.fillStyle = '#241a3d'; ctx.fillRect(0, H * .56, W, H * .44);
+      area = { x: W * .02, y: H * .58, w: W * .96, h: H * .4 };
+    }
+    const ks = S.kids; const { cols, rows, cw, ch } = patchCells(ks.length, area.w, area.h);
+    ks.forEach((k, i) => {
+      const c = i % cols, r = Math.floor(i / cols);
+      const depth = mode === 'scene' ? .7 + .3 * (r / Math.max(1, rows - 1)) : 1;
+      let rad = Math.min(cw, ch) * .4 * depth;
+      const age = k.born ? (now - k.born) / 500 : 9;
+      if (age < 1) rad *= Math.max(0, 1 + Math.sin(age * Math.PI) * .6 - (1 - age) * .9);
+      const color = k.tag == null ? UNTAGGED : S.tags[k.tag].color;
+      drawPumpkin(ctx, area.x + (c + .5) * cw, area.y + (r + .55) * ch, Math.max(0, rad), color, S.golden.includes(k.n));
+    });
+  });
+}
+
+// ---------- sound (prototype synth) ----------
+let AC = null, voices = 0;
+function tone(f0, f1, dur, type = 'triangle', vol = .18, delay = 0) {
+  if (!AC || voices >= 4) return; voices++;
+  const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .02); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+  o.connect(g).connect(AC.destination); o.start(t); o.stop(t + dur + .05); o.onended = () => voices--;
+}
+const SFX = {
+  pop: () => tone(420, 900, .16),
+  multi: () => [0, .08, .16].forEach((d, i) => tone(500 + i * 160, 900 + i * 200, .14, 'triangle', .15, d)),
+  milestone: () => [523, 659, 784, 1046].forEach((f, i) => tone(f, f * 1.01, .22, 'square', .09, i * .11)),
+  fanfare: () => [392, 523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, f, .35, 'sawtooth', .07, i * .12)),
+  trend: () => { tone(880, 880, .25, 'sine', .2); tone(1320, 1320, .35, 'sine', .2, .18); },
+  cackle: () => [0, .16, .32, .48, .64].forEach((d, i) => tone(700 - i * 60, 380 - i * 30, .13, 'sawtooth', .1, d)),
+  howl: () => { tone(300, 900, .9, 'sine', .2); tone(900, 420, .9, 'sine', .16, .9); },
+};
+const sfx = k => { try { SFX[k](); } catch (e) {} };
+
+// ---------- celebrations ----------
+const pop = document.getElementById('pop'), banner = document.getElementById('banner'), take = document.getElementById('takeover');
+const queue = []; let active = null, timer = 0;
+const confettiFn = window.confetti ? window.confetti.create(document.getElementById('confetti'), { resize: true }) : () => {};
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function burst(power, emoji) {
+  if (reduce) return;
+  let shapes; try { if (emoji && window.confetti.shapeFromText) shapes = emoji.map(text => window.confetti.shapeFromText({ text, scalar: 3 })); } catch (e) {}
+  confettiFn({ particleCount: 30 * power, spread: 70 + 20 * power, startVelocity: 35 + 8 * power, origin: { y: .7 }, colors: ['#ff7a1a', '#ffcf3a', '#9085e9', '#199e70'], ...(shapes ? { shapes, scalar: 3 } : {}) });
+}
+function classify(n) {
+  if (S.golden.includes(n) && !S.won.has(n)) return 'golden';
+  if (n === GHOST_TOTAL + 1) return 'beat';
+  if (n % 100 === 0) return 'hundred';
+  if (n % 50 === 0) return 'fifty';
+  return 'pop';
+}
+function celebrate(n) {
+  const type = classify(n);
+  if (type === 'golden') S.won.add(n);
+  if (type === 'pop') {
+    if (active && active.type === 'pop' && performance.now() - active.start < 3200) { active.to = n; showPop(active, true); clearTimeout(timer); timer = setTimeout(finish, 1100); return; }
+    const last = queue[queue.length - 1]; if (last && last.type === 'pop') { last.to = n; return; }
+    queue.push({ type, from: n, to: n });
+  } else queue.push({ type, from: n, to: n });
+  if (!active) next();
+}
+function next() {
+  active = queue.shift(); if (!active) return;
+  active.start = performance.now();
+  const a = active;
+  if (a.type === 'pop') { showPop(a, false); timer = setTimeout(finish, 1500); }
+  else if (a.type === 'fifty') { pop.className = 'pop ms'; pop.innerHTML = `<small>Milestone</small>#${a.from}! 🎉`; pop.classList.add('show'); burst(3, ['🎃', '🍬']); sfx('milestone'); timer = setTimeout(finish, 2800); }
+  else if (a.type === 'trend') { document.getElementById('bt1').textContent = 'New costume spotted!'; document.getElementById('bt2').textContent = a.text; banner.classList.add('show'); sfx('trend'); timer = setTimeout(finish, 3800); }
+  else {
+    const T = { hundred: ['Milestone', `KID #${a.from}!`, `${a.from} trick-or-treaters tonight 🎃`, ''],
+      beat: ['New record', 'WE BEAT LAST YEAR!', `Last year: ${GHOST_TOTAL} kids. Tonight: ${a.from} and counting!`, ''],
+      golden: ['🎫 Golden ticket 🎫', `KID #${a.from} WINS!`, 'You found a golden ticket! 🍫', 'gold'] }[a.type];
+    document.getElementById('tk').textContent = T[0]; document.getElementById('th').textContent = T[1]; document.getElementById('ts').textContent = T[2];
+    take.className = 'takeover show ' + T[3]; burst(6, a.type === 'golden' ? ['🎫', '🍫', '⭐'] : ['🎃', '👻', '🍬']); setTimeout(() => burst(5), 700); sfx('fanfare');
+    renderBoards(); renderText();
+    timer = setTimeout(finish, a.type === 'golden' ? 6000 : 5000);
+  }
+}
+function showPop(a, merged) {
+  pop.className = 'pop';
+  pop.innerHTML = a.from === a.to ? `<small>You're kid</small>#${a.from}!` : `<small>Welcome, kids</small>#${a.from}–${a.to}!`;
+  void pop.offsetWidth; pop.classList.add('show');
+  burst(a.from === a.to ? 1 : 2); sfx(merged ? 'multi' : 'pop');
+}
+function finish() { pop.classList.remove('show'); banner.classList.remove('show'); take.classList.remove('show'); active = null; setTimeout(next, 350); }
+
+// ---------- actions ----------
+function addKid(tag = null, opts = {}) {
+  const k = { id: ++S.seq, t: S.now, tag, born: performance.now() }; S.kids.push(k); k.n = count();
+  if (!opts.quiet) { celebrate(k.n); bump(false); }
+  renderText(); renderBoards(); renderRaces();
+}
+function removeLast() { const k = S.kids.pop(); if (!k) return; if (S.won.has(k.n) && !S.kids.some(x => x.n === k.n)) {} bump(true); renderText(); renderBoards(); renderRaces(); }
+function burstKids(n = 8) { for (let i = 0; i < n; i++) setTimeout(() => addKid(Math.random() < .6 ? Math.floor(Math.random() * S.tags.length) : null), i * 260); }
+function newTag() {
+  const spec = NEW_TAGS[S.nextNew++ % NEW_TAGS.length]; const t = addTag(spec[0] + (S.nextNew > NEW_TAGS.length ? ' ' + S.nextNew : ''), spec[1]);
+  let caught = 0; for (let i = S.kids.length - 1; i >= 0 && caught < 3; i--) if (S.kids[i].tag == null) { S.kids[i].tag = t.id; S.kids[i].born = performance.now(); caught++; }
+  queue.push({ type: 'trend', text: `${t.emoji} ${t.name} ×${caught}` }); if (!active) next();
+  renderBoards(); renderGrid();
+}
+function jump() {
+  const n = count(); const targets = [nextGolden(), Math.ceil((n + 1) / 50) * 50, n < GHOST_TOTAL + 1 ? GHOST_TOTAL + 1 : Infinity].filter(x => x && x > n + 2);
+  const goal = Math.min(...targets) - 2; while (count() < goal) { S.now += .02; addKid(Math.random() < .5 ? Math.floor(Math.random() * S.tags.length) : null, { quiet: true }); }
+  S.kids.forEach((k, i) => k.n = i + 1); renderText(); renderBoards(); renderRaces();
+}
+function soundboard(kind) {
+  const fx = document.getElementById('fx');
+  const el = document.createElement('div'); el.className = 'shout'; el.textContent = kind === 'cackle' ? 'MWAHAHAHA!' : 'AWOOOOOO!'; fx.appendChild(el);
+  for (let i = 0; i < 5; i++) { const b = document.createElement('div'); b.className = 'bat'; b.textContent = kind === 'cackle' ? '🦇' : '🐺'; b.style.top = `${10 + i * 12}vh`; b.style.animationDelay = `${i * .15}s`; fx.appendChild(b); setTimeout(() => b.remove(), 3000); }
+  setTimeout(() => el.remove(), 2600); sfx(kind);
+}
+
+// ---------- prototype chrome ----------
+const VARIANTS = [['a', 'A — Scoreboard'], ['b', 'B — Pumpkin patch world'], ['c', 'C — Spotlight carousel']];
+let vi = 0;
+function setVariant(key) { vi = Math.max(0, VARIANTS.findIndex(v => v[0] === key)); $$('.variant').forEach(v => v.classList.toggle('on', v.id === 'v' + VARIANTS[vi][0])); document.getElementById('vlabel').textContent = VARIANTS[vi][1]; requestAnimationFrame(() => { renderBoards(); renderRaces(); }); }
+function go(d) { const k = VARIANTS[(vi + d + VARIANTS.length) % VARIANTS.length][0]; try { history.replaceState(null, '', '#' + k); } catch (e) {} setVariant(k); }
+document.getElementById('prev').onclick = () => go(-1); document.getElementById('next').onclick = () => go(1);
+addEventListener('hashchange', () => setVariant(location.hash.slice(1)));
+
+const ACTIONS = () => [
+  ['Space', '+1 kid (untagged)', () => addKid(null)],
+  ...S.tags.slice(0, 9).map((t, i) => [String(i + 1), `+1 ${t.emoji} ${t.name}`, () => addKid(t.id)]),
+  ['B', 'Burst of 8 kids', () => burstKids(8)],
+  ['N', 'New tag, catch up 3', newTag],
+  ['X', 'Undo last kid', removeLast],
+  ['J', 'Jump to next moment', jump],
+  ['C', 'Soundboard: cackle', () => soundboard('cackle')],
+  ['H', 'Soundboard: howl', () => soundboard('howl')],
+  ['P', 'Autopilot on/off', () => { S.auto = !S.auto; renderGrid(); }],
+];
+function renderGrid() {
+  const g = document.getElementById('tapgrid'); g.innerHTML = '';
+  ACTIONS().forEach(([k, label, fn]) => { const b = document.createElement('button'); b.innerHTML = `<kbd>${k}</kbd>${label}`; b.onclick = fn; g.appendChild(b); });
+  const st = document.createElement('div'); st.className = 'state'; st.id = 'pstate'; g.appendChild(st); renderState();
+}
+function renderState() { const el = document.getElementById('pstate'); if (el) el.textContent = `Autopilot: ${S.auto ? 'ON (last year’s pace)' : 'off'} · clock ×${SIM_RATE} · phone heads-up: next golden is #${nextGolden() ?? '—'}`; }
+addEventListener('keydown', e => {
+  if (e.target.closest('input,textarea,[contenteditable]')) return;
+  const k = e.key;
+  if (k === 'ArrowLeft') return go(-1); if (k === 'ArrowRight') return go(1);
+  if (k === ' ') { e.preventDefault(); return addKid(null); }
+  if (/^[1-9]$/.test(k) && S.tags[+k - 1]) return addKid(+k - 1);
+  const m = { b: () => burstKids(8), n: newTag, x: removeLast, backspace: removeLast, j: jump, c: () => soundboard('cackle'), h: () => soundboard('howl'), p: () => { S.auto = !S.auto; renderGrid(); } }[k.toLowerCase()];
+  if (m) m();
+});
+document.getElementById('sound').onclick = e => { try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume(); e.currentTarget.textContent = '🔊 Sound on'; sfx('pop'); } catch (err) { e.currentTarget.textContent = 'Sound unavailable'; } };
+
+// carousel for C
+let ci = 0; const panels = $$('#vc .panel');
+document.querySelector('[data-dots]').innerHTML = panels.map(() => '<span></span>').join('');
+function carousel() { panels.forEach((p, i) => p.classList.toggle('on', i === ci)); $$('[data-dots] span').forEach((d, i) => d.classList.toggle('on', i === ci)); requestAnimationFrame(() => { renderBoards(); renderRaces(); }); }
+setInterval(() => { if (!active) { ci = (ci + 1) % panels.length; carousel(); } }, 8000);
+
+// sim clock + autopilot
+let last = performance.now(), acc = 0, nextGroup = 1 + Math.floor(Math.random() * 4), lastSlow = 0;
+function frame(ts) {
+  const dt = (ts - last) / 1000; last = ts;
+  S.now = Math.min(1230, S.now + dt * SIM_RATE / 60);
+  if (S.auto) { acc += ghostRate(S.now) * dt * SIM_RATE / 60 * 1.08; if (acc >= nextGroup) { acc -= nextGroup; burstKids(nextGroup); nextGroup = 1 + Math.floor(Math.random() * 4); } }
+  if (ts - lastSlow > 1000) { lastSlow = ts; renderText(); renderRaces(); renderState(); }
+  drawPatches(ts);
+  requestAnimationFrame(frame);
+}
+addEventListener('resize', () => { renderBoards(); renderRaces(); });
+S.kids.forEach((k, i) => k.n = i + 1);
+setVariant(location.hash.slice(1) || 'a'); carousel(); renderGrid(); renderText();
+requestAnimationFrame(t => { last = t; frame(t); });
+})();
+</script>
