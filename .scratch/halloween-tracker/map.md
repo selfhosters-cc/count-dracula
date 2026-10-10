@@ -50,4 +50,5 @@ A build-ready v1 spec for a Halloween trick-or-treater tracker: door phones tap 
 
 - Multi-household / neighbourhood leaderboard — scoped to one household (charting decision); a separate effort for another year.
 - Accounts / sign-up — single household, trusted devices.
+- Saved/shareable recap image — ruled out in [Quiet stretches and end of night](issues/10-quiet-stretches-and-end-of-night.md): a photo of the TV does the job; the recap stays viewable per event instead.
 - Candy meter, photo booth/camera, kid self-tap tablet, weather — cut in [Fun-features shortlist](issues/04-fun-features-shortlist.md): no candy shortage last year, privacy with a street-facing TV, accuracy, low value.
