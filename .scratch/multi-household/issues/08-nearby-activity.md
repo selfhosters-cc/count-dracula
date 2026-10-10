@@ -1,7 +1,7 @@
 # Nearby activity indicator
 
 Type: prototype (HITL)
-Status: open
+Status: claimed
 Blocked by: 07
 
 ## Question
