@@ -1,7 +1,7 @@
 # Assemble the v2 spec and build tickets
 
 Type: task (AFK)
-Status: open
+Status: claimed
 Blocked by: 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 15, 16
 
 ## Question
