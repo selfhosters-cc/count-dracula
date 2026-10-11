@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Opening day, runbook step 2.4: switches the public host on. Puts deploy/caddy-site.caddy, with $PUBLIC_HOST for the
 # example host, into the shared Caddy's Caddyfile as its own site, just before the wildcard site it falls under, then
-# runs caddy-int's deploy.sh (it shows the diff and asks; a bad config is refused and the live one stays).
-#   deploy/caddy-add-site.sh
+# runs caddy-int's deploy.sh (it shows the diff and asks; a bad config is refused and the live one stays). Run it again
+# after changing deploy/caddy-site.caddy: it replaces the site already there.
+#   deploy/caddy-add-site.sh [-y]      (-y: deploy without asking, after looking at the diff some other way)
 # Not host-public.sh add: that puts the host inside the wildcard site, whose shared log would keep the tokens.
 set -euo pipefail
 
@@ -13,25 +14,33 @@ CADDY_LAN=${CADDY_LAN:-192.168.5.20}
 [[ -n ${PUBLIC_HOST:-} ]] || { echo "!! No PUBLIC_HOST in deploy/local.env" >&2; exit 1; }
 
 caddyfile=$CADDY_INT/Caddyfile
-if grep -qxF "$PUBLIC_HOST {" "$caddyfile"; then
-  echo "==> $caddyfile already has the Count Dracula site"
-else
-  cp -p "$caddyfile" "$caddyfile.bak-count-dracula"
-  python3 - "$PUBLIC_HOST" "$caddyfile" <<'EOF'
+cp -p "$caddyfile" "$caddyfile.bak-count-dracula"
+# Adds the site just before the wildcard it falls under, or replaces the one already there (its "host {" line to the
+# next "}" at the start of a line).
+python3 - "$PUBLIC_HOST" "$caddyfile" <<'EOF'
 import sys
 host, path = sys.argv[1], sys.argv[2]
 block = open('deploy/caddy-site.caddy').read()
-block = block[block.index('count-dracula.example.com {'):].replace('count-dracula.example.com', host)
+block = block[block.index('count-dracula.example.com {'):].replace('count-dracula.example.com', host).rstrip('\n') + '\n'
 caddyfile = open(path).read()
-wildcard = '*.' + host.split('.', 1)[1] + ' {\n'
-if '\n' + wildcard not in caddyfile:
-    sys.exit(f'!! No wildcard site {wildcard.strip()} in {path}')
-open(path, 'w').write(caddyfile.replace('\n' + wildcard, '\n' + block + '\n' + wildcard, 1))
+opening = '\n' + host + ' {\n'
+if opening in caddyfile:
+    start = caddyfile.index(opening) + 1
+    end = caddyfile.index('\n}\n', start) + 3
+    if caddyfile[start:end] == block:
+        print('==> The Count Dracula site is already up to date')
+    else:
+        open(path, 'w').write(caddyfile[:start] + block + caddyfile[end:])
+        print(f'==> Updated the Count Dracula site in {path} (the old one is Caddyfile.bak-count-dracula)')
+else:
+    wildcard = '*.' + host.split('.', 1)[1] + ' {\n'
+    if '\n' + wildcard not in caddyfile:
+        sys.exit(f'!! No wildcard site {wildcard.strip()} in {path}')
+    open(path, 'w').write(caddyfile.replace('\n' + wildcard, '\n' + block + '\n' + wildcard, 1))
+    print(f'==> Added the Count Dracula site to {path} (the old one is Caddyfile.bak-count-dracula)')
 EOF
-  echo "==> Added the Count Dracula site to $caddyfile (the old one is Caddyfile.bak-count-dracula)"
-fi
 
-if ! (cd "$CADDY_INT" && ./deploy.sh --no-verify); then
+if ! (cd "$CADDY_INT" && ./deploy.sh "$@" --no-verify); then
   # Cancelled or refused: put the local copy back so it matches the live config again.
   [[ -f $caddyfile.bak-count-dracula ]] && mv -f "$caddyfile.bak-count-dracula" "$caddyfile"
   echo "!! Not deployed; $caddyfile is back as it was" >&2

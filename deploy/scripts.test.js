@@ -171,4 +171,13 @@ describe('deploy/caddy-site.caddy log masking', () => {
     expect(mask('/?key=s3cret-key')).toBe('/?key=REDACTED')
     expect(mask('/api/stream?key=s3cret&x=1')).toBe('/api/stream?key=REDACTED&x=1')
   })
+
+  test("the /?key= redirect's Location header is masked too", () => {
+    const block = caddy.slice(caddy.indexOf('resp_headers>Location multi_regexp'), caddy.indexOf('request>headers>X-Join-Key'))
+    const own = [...block.matchAll(/regexp "((?:[^"\\]|\\.)*)" "([^"]*)"/g)].map(([, find, put]) => [new RegExp(find, 'g'), put.replaceAll('${1}', '$1')])
+    expect(own.length).toBe(2)
+    const maskLocation = (uri) => own.reduce((out, [find, put]) => out.replace(find, put), uri)
+    expect(maskLocation('/door?key=s3cret-key')).toBe('/door?key=REDACTED')
+    expect(maskLocation('/tv/k/s3cret')).toBe('/tv/k/REDACTED')
+  })
 })

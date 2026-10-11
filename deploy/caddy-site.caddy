@@ -37,6 +37,11 @@ count-dracula.example.com {
 				regexp "/tv/k/[^/?#]+" "/tv/k/REDACTED"
 				regexp "([?&](?:key|device)=)[^&#]*" "${1}REDACTED"
 			}
+			# The /?key= redirect carries the key on to /door?key= (spec v2.1 §4) in its Location header.
+			resp_headers>Location multi_regexp {
+				regexp "/tv/k/[^/?#]+" "/tv/k/REDACTED"
+				regexp "([?&](?:key|device)=)[^&#]*" "${1}REDACTED"
+			}
 			# Phones send their join key as a header.
 			request>headers>X-Join-Key delete
 		}
