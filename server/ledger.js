@@ -2,6 +2,7 @@
 // See .scratch/count-dracula/modules.md §1 and .scratch/multi-household/spec.md §4.
 import { toBuckets } from '../shared/night-maths.js'
 import { migrate, randomToken } from './migrations.js'
+import { isCell } from '../shared/geohash.js'
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -193,7 +194,7 @@ export function openLedger(db, config) {
 
     households() {
       return db
-        .query('SELECT id, display_name AS displayName, time_zone AS timeZone FROM households ORDER BY id')
+        .query('SELECT id, display_name AS displayName, time_zone AS timeZone, location_cell AS location FROM households ORDER BY id')
         .all()
     },
   }
@@ -619,6 +620,14 @@ export function openLedger(db, config) {
       // The Household's display name (Setup, and sign-up's one field): at most 40 characters.
       rename({ displayName }) {
         db.query('UPDATE households SET display_name = ? WHERE id = ?').run(displayNameOf(displayName), householdId)
+        return []
+      },
+
+      // The Location (spec §10): a 5-character geohash cell picked in the browser, or null to remove it.
+      // Only the cell is kept; changing it keeps no history.
+      setLocation({ cell }) {
+        if (cell !== null && !isCell(cell)) throw new BadCommand('A Location is a 5-character geohash cell')
+        db.query('UPDATE households SET location_cell = ? WHERE id = ?').run(cell, householdId)
         return []
       },
 

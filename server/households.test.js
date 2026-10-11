@@ -92,7 +92,7 @@ describe('create Household (sign-up)', () => {
     expect(snap.golden).toEqual({ left: 0, nextIsGolden: false })
     expect(house.joinKey()).toMatch(/^[A-Za-z0-9]{8,}$/)
     expect(ledger.householdByJoinKey(house.joinKey())).toBe(id)
-    expect(ledger.households()).toEqual([{ id, displayName: 'The Smiths', timeZone: 'America/Vancouver' }])
+    expect(ledger.households()).toEqual([{ id, displayName: 'The Smiths', timeZone: 'America/Vancouver', location: null }])
   })
 
   test('needs a name of at most 40 characters and a real time zone', () => {
@@ -176,5 +176,38 @@ describe("the Household's time zone", () => {
       { start: '18:00', end: '18:30', count: 1 },
     ])
     expect(house.exportEvent(last.id)).toMatchObject({ name: 'Halloween 2025', timeZone: 'America/Vancouver' })
+  })
+})
+
+describe('Location', () => {
+  function house() {
+    const db = new Database(':memory:')
+    const ledger = openLedger(db, {})
+    return { db, ledger, house: ledger.household(ledger.createHousehold({ displayName: 'The Smiths', timeZone: 'America/Toronto' })) }
+  }
+
+  test('is a 5-character geohash cell, and only that', () => {
+    const { ledger, house: h } = house()
+
+    h.apply({ type: 'setLocation', cell: 'dpz83' })
+
+    expect(ledger.households()[0].location).toBe('dpz83')
+    for (const bad of ['43.65,-79.38', { lat: 43.65, lon: -79.38 }, 'dpz8', 'dpz83d', 'DPZ83', 'dpzi3', '', 4365]) {
+      expect(() => h.apply({ type: 'setLocation', cell: bad })).toThrow(BadCommand)
+    }
+    expect(ledger.households()[0].location).toBe('dpz83')
+  })
+
+  test('Change replaces it and Remove clears it, keeping no history', () => {
+    const { db, ledger, house: h } = house()
+    h.apply({ type: 'setLocation', cell: 'dpz83' })
+
+    h.apply({ type: 'setLocation', cell: 'dpz2r' })
+    expect(ledger.households()[0].location).toBe('dpz2r')
+    expect(JSON.stringify(db.query('SELECT * FROM households').all())).not.toContain('dpz83')
+
+    h.apply({ type: 'setLocation', cell: null })
+    expect(ledger.households()[0].location).toBeNull()
+    expect(JSON.stringify(db.query('SELECT * FROM households').all())).not.toContain('dpz2r')
   })
 })

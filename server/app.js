@@ -15,7 +15,7 @@ const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
 const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html' }
-const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink'])
+const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink', 'setLocation'])
 
 // What a TV-link holder gets (spec §9): what the TV draws, without each kid's phone name.
 const withoutPhone = ({ phoneName, ...kid }) => kid
@@ -118,8 +118,8 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // The print tally sheet, opened from /setup.
     'GET /tally': managerPage('/tally'),
     'GET /api/household': manager((req, house, session) => {
-      const { displayName, timeZone } = ledger.households().find((h) => h.id === house.id)
-      return Response.json({ id: house.id, displayName, timeZone, joinKey: house.joinKey(), tvToken: house.tvToken(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
+      const { displayName, timeZone, location } = ledger.households().find((h) => h.id === house.id)
+      return Response.json({ id: house.id, displayName, timeZone, location, joinKey: house.joinKey(), tvToken: house.tvToken(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
     }),
     // Delete my Household: typed name to confirm; everything goes at once, and its streams close.
     'POST /api/household/delete': manager(async (req, house) => {

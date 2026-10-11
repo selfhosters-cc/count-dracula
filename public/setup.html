@@ -38,6 +38,8 @@
     .backfill input { width: 5em; padding: 6px; }
     .backfill input:disabled { opacity: .35; }
     .helper { margin-top: 10px; }
+    .picker-map { height: 340px; border-radius: 12px; margin: 10px 0; background: var(--bg); }
+    .picker-panel .row button { flex: 1 1 auto; }
     code.link { display: block; word-break: break-all; font-size: 13px; }
     #qr-full { position: fixed; inset: 0; z-index: 10; background: #fff; display: grid; place-content: center; justify-items: center; color: #333; }
     #qr-full svg { width: min(90vw, 90vh); height: auto; display: block; }
@@ -144,6 +146,11 @@
     </section>
 
     <section>
+      <h2>📍 Location (optional)</h2>
+      <div id="location"></div>
+    </section>
+
+    <section>
       <h2>Your household</h2>
       <form id="name-form">
         <label for="h-name">Household name</label>
@@ -162,6 +169,7 @@
   <script type="module">
     import { atEventTime, clockTime as zoneClock, eventNow, minuteOfDay, slots } from '/shared/night-maths.js'
     import qrcode from '/vendor/qrcode/qrcode.js'
+    import { createLocationPicker } from '/location-picker.js'
 
     const $ = (id) => document.getElementById(id)
     const HOUR = 3_600_000
@@ -520,6 +528,12 @@
 
     await load()
     $('admin').hidden = false
+    createLocationPicker($('location'), {
+      cell: house.location,
+      async save(cell) {
+        if (!(await admin({ type: 'setLocation', cell }, cell ? 'Location saved' : 'Location removed'))) throw new Error("Couldn't save the Location")
+      },
+    })
 
     // Arrived from a TV's scan-to-pair QR: the code is filled in, and one confirm pairs it.
     const pairParam = new URLSearchParams(location.search).get('pair')

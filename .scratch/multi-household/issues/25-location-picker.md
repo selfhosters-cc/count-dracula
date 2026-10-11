@@ -1,7 +1,7 @@
 # Location picker
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 21
 
 ## What to build
@@ -22,9 +22,18 @@ A Household can give an approximate Location, picked on a map, with only a ~5 km
 
 ## Acceptance criteria
 
-- [ ] Opening `/setup` makes no request to `tile.openstreetmap.org` until "Pick on a map" is tapped (checked in the network panel)
-- [ ] Use my location and hand-panning both give a shaded cell; the request body holds only the 5-character cell
-- [ ] The server refuses coordinates, longer or shorter geohashes, and non-geohash text
-- [ ] Change and Remove leave only the new cell, or nothing, in the DB
-- [ ] Leaflet's licence notice is in `public/vendor/`
-- [ ] `bun test` passes
+- [x] Opening `/setup` makes no request to `tile.openstreetmap.org` until "Pick on a map" is tapped (checked in the network panel)
+- [x] Use my location and hand-panning both give a shaded cell; the request body holds only the 5-character cell
+- [x] The server refuses coordinates, longer or shorter geohashes, and non-geohash text
+- [x] Change and Remove leave only the new cell, or nothing, in the DB
+- [x] Leaflet's licence notice is in `public/vendor/`
+- [x] `bun test` passes
+
+## Notes from the build
+
+- Leaflet 1.9.4 from npm (integrity checked against the registry) in `public/vendor/leaflet/`: the UMD build plus an ES-module face, `leaflet.css`, `images/` and the BSD-2 `LICENSE`. It's loaded with a dynamic `import()` only when "Pick on a map" is tapped.
+- `shared/geohash.js`: `encodeGeohash`, `cellBounds`, `isCell`. The server's `setLocation` Setup command takes `{ cell }` (a cell, or `null` to remove) and refuses anything else.
+- `public/location-picker.js` is the picker as a module (`createLocationPicker(container, { cell, save, onSkip })`), so first-run screen 2 (ticket 27) can reuse it with a Skip button.
+- Choosing: tap the map, or Use my location; either snaps to the cell and shades it. No pins.
+- Checked in the browser: no OSM or Leaflet request on opening `/setup`; after the tap, tiles load with the credit; Use my location (Toronto) sent only `{"type":"setLocation","cell":"dpz83"}`; tapping the map sent only its cell.
+- The "Privacy" in the picker's line becomes a link with ticket 33.
