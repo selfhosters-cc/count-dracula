@@ -131,6 +131,14 @@ its Event, a TV follows one Event). If it fails, lower the caps, redeploy, run i
   ssh root@192.168.5.20 "grep -c runbook-secret-1 /var/log/caddy/count-dracula.log"                          # 0
   ```
 
+- So is the key in the `/?key=` redirect's `Location` header (masked since Oct 11's step 4 found it in the clear):
+
+  ```bash
+  curl -s -o /dev/null "https://$PUBLIC_HOST/?key=runbook-secret-2"
+  ssh root@192.168.5.20 "grep -o '\"Location\":\[\"[^\"]*' /var/log/caddy/count-dracula.log | tail -1"   # /door?key=REDACTED
+  ssh root@192.168.5.20 "grep -c runbook-secret-2 /var/log/caddy/count-dracula.log"                         # 0
+  ```
+
 - OSM tiles load only after the tap: checked in step 2's first-run. To check again: `/setup` → **Household** →
   Location, network panel filtered on `openstreetmap`: nothing until **Pick on a map** (or **Change on a map**).
 - Standing as done on Oct 11: `/privacy` shows the real `OPERATOR_CONTACT` and a test email arrived; the TV link's
