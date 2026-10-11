@@ -1,5 +1,5 @@
 @echo off
-rem Count Dracula TV launcher for Windows: kiosk Chrome on the TV page.
+rem Count Dracula TV launcher for Windows: kiosk Chrome on the TV page (a bare /tv, which remembers its pairing).
 rem Optional: plain Chrome full-screen (F11) on the TV page works too; this adds sound-without-a-click
 rem after a reload (the autoplay flag). Keep-awake comes from the power settings in kiosk/README.md.
 rem The server fills in the address this was downloaded from.

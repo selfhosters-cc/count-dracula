@@ -15,38 +15,75 @@
     ol, ul { padding-left: 1.3em; margin: 0; }
     li + li { margin-top: 6px; }
     a { color: var(--orange); }
+    code { background: #ffffff14; padding: 1px 5px; border-radius: 5px; }
+    summary { cursor: pointer; }
     .muted { color: var(--dim); }
   </style>
 </head>
 <body>
   <h1>📺 Putting Count Dracula on your TV</h1>
-  <p class="muted">The TV faces the street and cheers every kid your phones count. Here's the setup that works best.</p>
+  <p class="muted">The TV faces the street and cheers every kid your phones count. Here's the setup that works best, and what to do if something's off.</p>
 
   <section>
     <h2>What works best</h2>
-    <p>A <b>computer</b> (any laptop or mini PC) plugged into the TV by <b>HDMI</b>, running <b>Chrome or Edge</b> full-screen.</p>
+    <p>A <b>computer</b> (any laptop or mini PC) plugged into the TV by <b>HDMI</b>, running <b>Chrome or Edge</b> full-screen. Plug the computer in to power for the night.</p>
   </section>
 
   <section>
-    <h2>Set it up</h2>
+    <h2>1. Put it on the TV</h2>
     <ol>
       <li>On the TV's computer, open Chrome or Edge and go to <b><span class="host"></span>/tv</b>.</li>
       <li>The TV shows a short code and a QR. On your phone, open <b><span class="host"></span>/setup</b> → <b>Pair a TV</b> and type the code, or scan the QR with your phone's camera.</li>
-      <li>Press <b>F11</b> (or the browser's full-screen) so the board fills the TV.</li>
-      <li>Turn off <b>sleep and screen blanking</b> on the computer for the night, and keep it plugged in.</li>
-      <li>Click once or press any key so the sound starts. <b>A reload needs a click or key press for sound again</b>: the board shows a 🔇 reminder until then.</li>
+      <li>Make it full-screen: press <b>F11</b> on Windows or Linux, or <b>Ctrl+Cmd+F</b> on a Mac.</li>
     </ol>
     <p>The TV remembers its pairing, so next time <b>/tv</b> goes straight to your board.</p>
   </section>
 
   <section>
-    <h2>Other devices</h2>
-    <p>Smart-TV browsers, a tablet in landscape or a cast browser tab may work: open the browser, go to <b>/tv</b>, and pair. They're best effort, so <b>test it on your Rehearsal</b>. If the sound or the screen misbehaves, use a laptop.</p>
+    <h2>2. Keep it awake all night</h2>
+    <p>The computer must not sleep, dim, lock or blank the screen while it's showing the board.</p>
+    <ul>
+      <li><b>Windows:</b> Settings → System → Power: Screen and sleep (when plugged in) → <b>Never</b> for both. Control Panel → Power Options → Choose what closing the lid does (plugged in) → <b>Do nothing</b>. Pause Windows Update for a week before Oct 31.</li>
+      <li><b>macOS:</b> System Settings → Lock Screen: "Turn display off when inactive" (on power adapter) → <b>Never</b>; "Start Screen Saver when inactive" → <b>Never</b>. System Settings → Battery → Options: turn on <b>Prevent automatic sleeping when the display is off</b>. Keep the lid open.</li>
+      <li><b>Linux:</b> in your desktop's power settings (on AC power): suspend → <b>never</b>, screen off and dimming → <b>never</b>, lid closed → <b>do nothing</b>; screen locking → <b>never</b>. Hold off updates that afternoon.</li>
+    </ul>
   </section>
 
   <section>
-    <h2>Test it</h2>
-    <p>Your household starts with a <b>🎭 Rehearsal</b>: count a test kid on your phone and watch the TV pop and hear it. Then <b>Reset the Rehearsal</b> in <a href="/setup">Setup</a> so the TV starts at 0. "Halloween 2026" goes live by itself on Oct 31 at 4:00 pm.</p>
+    <h2>3. Sound through the TV</h2>
+    <ul>
+      <li>Choose the TV (HDMI) as the computer's sound output: the speaker icon on Windows and Linux, or System Settings → Sound → Output on a Mac.</li>
+      <li>Set the computer's volume at your Rehearsal: it's the ceiling. The ☰ menu on any phone turns the TV down from there, or mutes it.</li>
+      <li><b>A reload needs a click or a key press for sound.</b> Browsers only play sound after someone touches the page, so after a reload the board shows a 🔇 reminder until you click, tap or press a key (a TV remote's OK button works).</li>
+      <li>If you unplug and replug the HDMI cable: check the picture size, choose the TV as the sound output again, and reload the page.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>4. Check the picture fits</h2>
+    <p>Open <b><span class="host"></span>/tv?border</b>. You should see all four red edges and the white corner frame. If they're cut off, set the TV's picture size to <b>Just Scan</b>, <b>Screen Fit</b> or <b>Full Pixel</b> (the name depends on the TV), and use 1920×1080 on the computer.</p>
+  </section>
+
+  <section>
+    <h2>Smart TVs and other devices</h2>
+    <p>A smart TV's browser, a tablet in landscape, or a browser tab cast to the TV may work too. They're <b>best effort</b>: open the browser, go to <b>/tv</b>, pair it like above, and <b>test it on your Rehearsal</b>. If the sound or the screen misbehaves, use a laptop instead.</p>
+  </section>
+
+  <section>
+    <h2>Test it on your Rehearsal</h2>
+    <p>Your household starts with a <b>🎭 Rehearsal</b>. Count a test kid on your phone and watch the TV pop and hear it. Then <b>Reset the Rehearsal</b> in <a href="/setup">Setup</a> so the TV starts at 0. "Halloween 2026" goes live by itself on Oct 31 at 4:00 pm.</p>
+  </section>
+
+  <section>
+    <details>
+      <summary><b>Advanced: a launcher for the TV computer</b></summary>
+      <p class="muted" style="margin-top: 8px">Optional. A launcher opens <b>/tv</b> in its own Chrome window, full-screen, and lets the page play sound after a reload without a click. Pair the TV once as above; the launcher then goes straight to your board.</p>
+      <ul>
+        <li><b>Windows:</b> download <a href="/kiosk/count-dracula-tv.bat" download>count-dracula-tv.bat</a> to the desktop and double-click it. To start it at sign-in, put a shortcut to it in <code>shell:startup</code>.</li>
+        <li><b>Linux:</b> download <a href="/kiosk/count-dracula-tv.sh" download>count-dracula-tv.sh</a>, then run <code>bash count-dracula-tv.sh</code>. It needs Chrome or Chromium, and keeps the computer from idling or sleeping while it runs.</li>
+      </ul>
+      <p class="muted">Leave the full-screen window with <b>Alt+F4</b>. There's no Mac launcher yet: use Chrome full-screen.</p>
+    </details>
   </section>
 
   <p class="muted">Stuck? Help: <a href="mailto:__CONTACT__">email us</a></p>

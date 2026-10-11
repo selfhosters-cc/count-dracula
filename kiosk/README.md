@@ -1,10 +1,13 @@
-# The TV laptop
+# The TV laptop (our porch)
 
 The laptop only displays `/tv` (display-only: a crash there loses nothing). It needs to stay awake, show
-the whole picture on the TV, and play sound through the TV. Spec §14.
+the whole picture on the TV, and play sound through the TV. v1 spec §14; for v2 every household's version of
+this is the public `/help/tv` page, which this file is the long form of.
 
-**TV address:** `https://<tailnet host>/tv`, e.g. https://count-dracula.example.com/tv (the laptop has Tailscale; that also
-lets the page hold a screen Wake Lock). Fallback: http://192.168.5.31:3131/tv
+**TV address:** the public host, `https://<PUBLIC_HOST>/tv` (in the repo: https://count-dracula.example.com/tv).
+A bare `/tv` shows a pairing code the first time: pair it from `/setup` → **Pair a TV**, and it remembers our TV
+link from then on. HTTPS also lets the page hold a screen Wake Lock. There's no LAN or tailnet address any
+more: if the home internet drops, the TV freezes and the phones keep their taps until it's back.
 
 ## The simple way: settings only
 
@@ -22,15 +25,16 @@ The launcher scripts are optional. These settings plus Chrome full-screen are en
 - Settings → Windows Update → **Pause updates** for a week before Oct 31.
 - Lock screen: no screensaver; sign-in after sleep → never.
 
-Then open the TV address in Chrome, press **F11**, and click **Start the night** once. Without the
-launcher, a page reload needs that click again (the button appears whenever sound isn't running).
+Then open the TV address in Chrome, press **F11**, and click once (or press any key) for sound. Without the
+launcher, a page reload needs that click again: the board shows a 🔇 reminder until then.
 
 ## The launcher (optional)
 
 Adds Chrome's autoplay flag, so a reload comes back with sound and no click, plus kiosk mode and a
 dedicated profile (your everyday Chrome is untouched). The server hands it out, so nothing needs copying,
-and fills in its own address: use whichever address the laptop reaches it on (the tailnet name or
-`http://192.168.5.31:3131`) in place of `https://count-dracula.example.com` below.
+and fills in its own address: use the public host in place of `https://count-dracula.example.com` below.
+The launchers open a bare `/tv` and never carry a secret; `/help/tv` offers the Windows and Linux ones to
+every household. `install-cachyos.sh` is ours only.
 
 **CachyOS**: one command in a terminal on the laptop:
 
@@ -58,6 +62,6 @@ profile).
   - CachyOS: the speaker icon in the panel → choose the HDMI / TV device.
   - Windows: the speaker icon → the arrow beside the volume → choose the TV.
 - **After an HDMI unplug and replug:** check the resolution is back at 1920×1080, re-select the TV as the
-  sound output, then reload the TV page (with the launcher, sound returns by itself; without it, click
-  Start the night).
+  sound output, then reload the TV page (with the launcher, sound returns by itself; without it, click or
+  press a key).
 - Set the laptop's system volume at the rehearsal: it's the hard ceiling (the ☰ menu's slider works below it).

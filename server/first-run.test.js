@@ -119,6 +119,26 @@ describe('/help/tv', () => {
     const res = await fetch(`${app.url}/help/tv`)
 
     expect(res.status).toBe(200)
-    expect(await res.text()).toContain('Chrome')
+    const html = await res.text()
+    for (const point of ['Chrome or Edge', 'Windows:', 'macOS:', 'Linux:', 'F11', 'sound output', '/tv?border', 'A reload needs a click or a key press for sound', 'Smart TVs and other devices', 'test it on your Rehearsal', 'count-dracula-tv.bat', 'count-dracula-tv.sh', 'email us']) {
+      expect({ point, there: html.includes(point) }).toEqual({ point, there: true })
+    }
+    expect(html).not.toContain('install-cachyos')
+  })
+
+  test('the launchers open a bare /tv on the address they came from, and carry no secret', async () => {
+    const { app, info } = await newManager()
+    const fromPublic = { headers: { Host: 'count-dracula.example.com', 'X-Forwarded-Proto': 'https' } }
+
+    const bat = await (await fetch(`${app.url}/kiosk/count-dracula-tv.bat`, fromPublic)).text()
+    const sh = await (await fetch(`${app.url}/kiosk/count-dracula-tv.sh`, fromPublic)).text()
+
+    expect(bat).toContain('set URL=https://count-dracula.example.com/tv')
+    expect(sh).toContain('URL=${1:-https://count-dracula.example.com/tv}')
+    for (const script of [bat, sh]) {
+      expect(script).not.toContain(info.joinKey)
+      expect(script).not.toContain(info.tvToken)
+      expect(script).not.toMatch(/key=|\/tv\/k\//)
+    }
   })
 })
