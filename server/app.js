@@ -4,13 +4,14 @@
 import { Database } from 'bun:sqlite'
 import { resolve, sep } from 'node:path'
 import { loadConfig } from './config.js'
-import { BadCommand, openLedger } from './ledger.js'
+import { BadCommand, DEFAULT_SWITCHES, openLedger } from './ledger.js'
 import { openAccounts } from './accounts.js'
 import { googleClient } from './google.js'
 import { createHub } from './hub.js'
 import { createPairing } from './pairing.js'
 import { LIMITS, createGuard } from './guard.js'
 import { createBackups } from './backups.js'
+import { healthTiles, householdStatus } from './operator.js'
 import { toCsv } from './export.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
@@ -38,6 +39,22 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   const config = loadConfig(configPath)
   const guard = createGuard({ now, limits, log })
   const contact = env.OPERATOR_CONTACT || DEFAULT_CONTACT // the one contact address (spec §5)
+  const startedAt = now()
+  // /operator's Errors tile: 5xx answers and uncaught exceptions since start. Only the error's type and the
+  // route are kept, never its message, which could carry something from a request.
+  const errors = { total: 0, lastAt: null, last: null }
+  function recordError(what, req) {
+    errors.total++
+    errors.lastAt = now()
+    errors.last = req ? `${what} in ${req.method} ${new URL(req.url).pathname}` : what
+  }
+  const onUncaught = (err) => {
+    recordError(err?.name ?? 'Error')
+    console.error('uncaught:', err)
+  }
+  process.on('uncaughtException', onUncaught)
+  process.on('unhandledRejection', onUncaught)
+  let failNext = null // tests: the next request throws, to check what the Errors tile keeps
   const db = new Database(config.dbPath, { create: true })
   const ledger = openLedger(db, { ...config, now })
   const accounts = openAccounts(db, {
@@ -135,13 +152,66 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       if (!session.operator) return page('Not here', '<p>This page is for the Operator.</p>', 403)
       return renew(await serveStatic('/operator', req), session, req)
     },
-    'GET /api/operator/households': operator((req) => {
-      const q = (new URL(req.url).searchParams.get('q') ?? '').trim().toLowerCase()
-      const households = ledger
-        .households()
-        .filter((h) => h.displayName.toLowerCase().includes(q))
-        .map(({ id, displayName, timeZone, suspendedSince, signedUpAt }) => ({ id, displayName, timeZone, suspendedSince, signedUpAt, managers: accounts.managerEmails(id) }))
-      return Response.json({ pauseSignUps: ledger.siteSwitch(PAUSE_SIGN_UPS), households })
+    // The whole dashboard in one answer, polled every 30 s (spec §13). No emails and no Location cells here.
+    'GET /api/operator': operator(() => {
+      const at = now()
+      const nights = new Map(ledger.liveNights().map((n) => [n.householdId, n]))
+      const streams = hub.counts()
+      const households = ledger.households().map((h) => {
+        const night = nights.get(h.id) ?? { rehearsal: false, kids: 0, lastKidAt: null }
+        const s = streams.households[h.id] ?? { phone: 0, paired: 0, tvLink: 0 }
+        return {
+          id: h.id,
+          displayName: h.displayName,
+          status: householdStatus(night, at),
+          area: h.location ? h.location.slice(0, 4) : '—',
+          kids: night.kids,
+          lastKidAt: night.lastKidAt,
+          phones: s.phone,
+          tvScreens: s.paired + s.tvLink, // the porch TV and remote viewers share the link: one number
+          managers: accounts.managers(h.id).length,
+          reports: 0,
+          signedUpAt: h.signedUpAt,
+          suspendedSince: h.suspendedSince,
+        }
+      })
+      const statusCounts = Object.fromEntries(['Counting', 'Stale', 'Waiting', 'Rehearsal'].map((st) => [st, households.filter((h) => h.status === st).length]))
+      const phones = households.reduce((n, h) => n + h.phones, 0)
+      const health = healthTiles(
+        {
+          statusCounts,
+          connections: { phones, tvScreens: streams.total - phones, total: streams.total },
+          cap: limits.siteStreams,
+          refusals: guard.refusals(),
+          errors,
+          lastTapAt: ledger.lastTapAt(),
+          backups: !!backups,
+          backupAt: backups?.lastAt() ?? null,
+          rssBytes: process.memoryUsage().rss,
+          startedAt,
+          switches: { ...DEFAULT_SWITCHES, ...config.switches }, // as the Ledger runs them
+        },
+        at,
+      )
+      return Response.json({ now: at, pauseSignUps: ledger.siteSwitch(PAUSE_SIGN_UPS), health, households })
+    }),
+    // One Household's detail: the only place Managers' emails appear (recovery needs them), and still the Area, not the cell.
+    'GET /api/operator/household': operator((req) => {
+      const id = Number(new URL(req.url).searchParams.get('id'))
+      const h = ledger.households().find((x) => x.id === id)
+      if (!h) return notFound()
+      const night = ledger.liveNights().find((n) => n.householdId === id) ?? { rehearsal: false, kids: 0, lastKidAt: null }
+      return Response.json({
+        id,
+        displayName: h.displayName,
+        timeZone: h.timeZone,
+        area: h.location ? h.location.slice(0, 4) : '—',
+        status: householdStatus(night, now()),
+        signedUpAt: h.signedUpAt,
+        suspendedSince: h.suspendedSince,
+        managers: accounts.managerEmails(id),
+        reports: [],
+      })
     }),
     'POST /api/operator/action': operator(async (req, session) => {
       const { householdId, action, value } = await req.json()
@@ -427,7 +497,21 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   const server = Bun.serve({
     port: port ?? config.port,
     async fetch(req, server) {
-      return withSecurityHeaders(await route(req, server))
+      let res
+      try {
+        if (failNext) {
+          const message = failNext
+          failNext = null
+          throw new Error(message)
+        }
+        res = await route(req, server)
+        if (res.status >= 500 && res.status !== 503) recordError(`HTTP ${res.status}`, req) // 503 is a refusal (a full TV, paused sign-ups)
+      } catch (err) {
+        recordError(err?.name ?? 'Error', req)
+        console.error(`error in ${req.method} ${new URL(req.url).pathname}:`, err)
+        res = new Response('Something went wrong', { status: 500 })
+      }
+      return withSecurityHeaders(res)
     },
   })
 
@@ -437,7 +521,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     hub,
     guard,
     backups,
+    failNextRequest(message) {
+      failNext = message
+    },
     stop() {
+      process.off('uncaughtException', onUncaught)
+      process.off('unhandledRejection', onUncaught)
       clearInterval(ticker)
       stopBackups()
       hub.shutdown()

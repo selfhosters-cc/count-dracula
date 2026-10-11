@@ -26,11 +26,31 @@
     #status { position: sticky; top: 0; min-height: 1.4em; color: var(--ok); font-weight: 700; }
     #status.err { color: var(--danger); }
     [hidden] { display: none !important; }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+    .tile { background: var(--panel); border-radius: 12px; padding: 10px; border-left: 5px solid var(--ok); }
+    .tile.amber { border-left-color: #ffb020; }
+    .tile.red { border-left-color: var(--danger); background: #3a1e2a; }
+    .tile .k { color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    .tile .v { font-weight: 700; font-size: 14px; margin-top: 2px; }
+    .tile .d { color: var(--dim); font-size: 12px; margin-top: 2px; word-break: break-word; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .chips button { padding: 6px 10px; font-size: 13px; border-radius: 999px; }
+    .chips button[aria-pressed="true"] { background: var(--orange); color: #1a0d00; }
+    .house { flex-direction: column; align-items: stretch; gap: 2px; }
+    .house .top { display: flex; gap: 8px; align-items: center; }
+    .house .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .house .meta { color: var(--dim); font-size: 12px; font-weight: 400; }
+    .status { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #ffffff18; white-space: nowrap; }
+    .status.Counting { background: #6c64; color: #9e9; }
+    .status.Stale { background: #ffb02033; color: #ffcf70; }
+    .flag { color: var(--danger); }
   </style>
 </head>
 <body>
   <h1>🧛 Operator</h1>
   <div id="status" role="status"></div>
+
+  <div class="tiles" id="health"></div>
 
   <section>
     <div class="row"><b style="flex: 1">Sign-ups: <span id="pause-state"></span></b><button id="pause"></button></div>
@@ -38,6 +58,7 @@
 
   <section id="list-view">
     <input id="search" type="search" placeholder="Find a household by name" autocomplete="off">
+    <div class="chips" id="chips"></div>
     <div id="households"></div>
   </section>
 
@@ -46,6 +67,7 @@
     <h2 id="d-name" style="margin-top: 12px"></h2>
     <p class="muted" id="d-state"></p>
     <p class="muted">Managers: <span id="d-managers"></span></p>
+    <div id="d-reports"></div>
     <form id="rename-form">
       <label for="d-rename">Rename</label>
       <div class="row"><input id="d-rename" maxlength="40" autocomplete="off"><button type="submit">Rename</button></div>
@@ -54,6 +76,8 @@
       <label for="d-zone">Fix time zone</label>
       <div class="row"><select id="d-zone"></select><button type="submit">Save</button></div>
     </form>
+    <p style="margin-top: 16px"><button id="d-invite">Make an Invite link</button></p>
+    <p class="muted" id="d-invite-url" style="word-break: break-all"></p>
     <p style="margin-top: 16px"><button id="d-suspend" class="danger"></button></p>
   </section>
 

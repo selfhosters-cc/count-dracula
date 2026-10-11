@@ -109,7 +109,7 @@ const DEFAULT_MIX = { volume: 1, mutes: { ambience: false, bloops: false, everyt
 const LATE_AFTER_MS = 10_000
 
 // Must 3–9 (spec §12). Each later feature honours its own switch.
-const DEFAULT_SWITCHES = {
+export const DEFAULT_SWITCHES = {
   milestones: true,
   goldenTickets: true,
   costumeLeaderboard: true,
@@ -230,6 +230,25 @@ export function openLedger(db, config) {
 
     setSiteSwitch(key, on) {
       db.query('INSERT OR REPLACE INTO site_switches (key, value) VALUES (?, ?)').run(key, on ? 'on' : 'off')
+    },
+
+    // Every Household's live night, for /operator and nearby: [{ householdId, eventId, rehearsal, ended,
+    // kids, lastKidAt }]. lastKidAt is the latest tap time; only a counted kid is activity.
+    liveNights() {
+      return db
+        .query(`
+          SELECT e.household_id AS householdId, e.id AS eventId, e.rehearsal, e.ended,
+            COUNT(k.id) AS kids, MAX(k.tapped_at) AS lastKidAt
+          FROM events e LEFT JOIN kids k ON k.event_id = e.id AND k.deleted_at IS NULL
+          WHERE e.live = 1 GROUP BY e.id
+        `)
+        .all()
+        .map((n) => ({ ...n, rehearsal: n.rehearsal === 1, ended: n.ended === 1 }))
+    },
+
+    // When the last kid was counted anywhere, for /operator's Last tap tile.
+    lastTapAt() {
+      return db.query('SELECT MAX(received_at) AS at FROM kids WHERE deleted_at IS NULL').get().at
     },
 
     // Whether a device token is a TV this Household paired by code (and hasn't rotated away since).

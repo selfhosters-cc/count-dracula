@@ -55,22 +55,23 @@ describe('who gets in', () => {
     expect((await get(app, '/operator', manager)).status).toBe(403)
     expect((await get(app, '/operator')).headers.get('Location')).toBe('/signup')
     for (const cookie of [manager, null]) {
-      expect((await get(app, '/api/operator/households', cookie)).status).toBeGreaterThanOrEqual(401)
+      expect((await get(app, '/api/operator', cookie)).status).toBeGreaterThanOrEqual(401)
+      expect((await get(app, `/api/operator/household?id=${info.id}`, cookie)).status).toBeGreaterThanOrEqual(401)
       expect((await act(app, cookie ?? '', { householdId: info.id, action: 'suspend' })).status).toBeGreaterThanOrEqual(401)
     }
   })
 })
 
 describe('finding a Household', () => {
-  test('lists every Household, searchable by name', async () => {
-    const { app, op } = await setUp()
+  test('lists every Household, with its detail one tap away', async () => {
+    const { app, op, info } = await setUp()
 
-    const all = await (await get(app, '/api/operator/households', op)).json()
-    const found = await (await get(app, '/api/operator/households?q=smi', op)).json()
+    const all = await (await get(app, '/api/operator', op)).json()
+    const detail = await (await get(app, `/api/operator/household?id=${info.id}`, op)).json()
 
     expect(all.households.map((h) => h.displayName).sort()).toEqual(['Ops House', 'The Smiths'])
-    expect(found.households).toMatchObject([{ displayName: 'The Smiths', timeZone: 'America/Vancouver', suspendedSince: null, managers: ['m@example.com'] }])
-    expect(found.pauseSignUps).toBe(false)
+    expect(all.pauseSignUps).toBe(false)
+    expect(detail).toMatchObject({ displayName: 'The Smiths', timeZone: 'America/Vancouver', suspendedSince: null, managers: ['m@example.com'] })
   })
 })
 
@@ -117,7 +118,7 @@ describe('Suspend', () => {
     expect(text).toContain('This Household is suspended by the Operator')
     expect(text).toContain('help@count-dracula.example.com')
     expect((await get(app, '/api/events', manager)).status).toBe(403)
-    const [listed] = (await (await get(app, '/api/operator/households?q=smi', op)).json()).households
+    const listed = await (await get(app, `/api/operator/household?id=${info.id}`, op)).json()
     expect(listed.suspendedSince).toBeGreaterThan(0)
   })
 
