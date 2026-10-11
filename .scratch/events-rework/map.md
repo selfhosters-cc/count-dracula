@@ -31,6 +31,8 @@ A build-ready **v2.1 addendum** to the [v2 spec](../multi-household/spec.md) plu
 
 <!-- one line per closed ticket: [title](issues/NN-slug.md) — gist -->
 
+- [Where the code assumes one live Event or the Rehearsal flag](issues/01-one-live-event-assumptions.md) — four seams carry it: `eventById()` defaulting to the live Event, `frozen` set only by Go live, join key / TV token resolving to a Household, one SSE channel and `seq` per Household; the Rehearsal flag is confined to nearby, Operator, auto-end, nudge, checklist, Reset and wording; three latent bugs once two are live, and zero live Events would 500.
+
 ## Not yet specified
 
 - **Build order and cut rule for 50+:** how the build tickets split, and which can be switched off, once the event model's size is known from [Where the code assumes one live Event](issues/01-one-live-event-assumptions.md) and the decisions. Lands in [Assemble the v2.1 addendum](issues/14-assemble-the-addendum.md).
