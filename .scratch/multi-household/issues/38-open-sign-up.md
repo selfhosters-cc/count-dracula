@@ -2,7 +2,9 @@
 
 Type: task (HITL)
 Status: in-progress
-Blocked by: 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37
+Blocked by: 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 62
+
+> **v2.1:** sign-up stays paused until the event rework and the homepage are deployed. Steps 1–4 below were done on v2; [ticket 62](62-rebuild-production.md) redoes them on a fresh database. Steps 5–7 follow it, through `/`, with the test Household's check from [v2.1 §12](../spec-v2.1.md#12-household-1-and-the-opening-line). The `v1-final` retirement item is moot.
 
 ## What to build
 

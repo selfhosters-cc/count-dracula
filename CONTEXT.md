@@ -12,6 +12,10 @@ _Avoid_: Account, tenant, user, customer
 One night a Household counts, such as "Halloween 2026" or a test night. It moves through four states: **Upcoming**, then **Live** after Go live, **Ended** after End the night (late kids still count, and Resume makes it Live again), and **Past** (read-only) from noon the next day, local time, or earlier if a Manager closes it. Any Event still Live at 3:00 am, local time, the morning after it went live is ended by itself (the auto-end), so none stays Live past one night. Going live never changes another Event, except that Goes live at may close an Ended one to make room.
 _Avoid_: Night (in definitions), session, party, Rehearsal (a practice night is just an Event: reset it or make another)
 
+**Door's Event**:
+A Household's open Event that went live most recently. Its TV link and door phones show it, the 8:30 pm nudge watches it, and nearby figures and the Operator judge the Household by it. Nobody picks it; it moves when another Event goes live or it stops being open.
+_Avoid_: Current event, active event, the live Event (there may be several)
+
 **Reset**:
 Puts a Live or Ended Event back to Upcoming with no kids, golden tickets, Night summary or share links; its setup (name, Race against, costume tags, and Goes live at if it's still ahead) stays. Managers do it from `/setup`; it goes live again by Go live or at its Goes live at.
 _Avoid_: Clear, wipe, restart, Reset the Rehearsal

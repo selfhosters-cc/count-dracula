@@ -7,6 +7,7 @@ v2 runs Count Dracula as **one public deployment for many households**. Each hou
 - **Glossary:** [CONTEXT.md](../../CONTEXT.md) defines every new term. §2 summarises them.
 - **Build tickets:** [issues/17–49](#17-build-order-and-the-opening-line), in build order. Sign-up opens after ticket 38.
 - **Open questions:** none.
+- **Amended by the [v2.1 addendum](spec-v2.1.md)** (2026-10-11): several open Events and Reset (the Rehearsal is retired), a homepage on `/` with the door on `/door`, nearby across Area edges with no minimum, and a `/setup` help column. Build tickets 50–64; where they differ, v2.1 wins.
 
 ## Contents
 
@@ -672,6 +673,8 @@ X-Content-Type-Options: nosniff
 ## 17. Build order and the opening line
 
 ([v2 rehearsal and launch-day plan](issues/16-v2-rehearsal-and-launch-day.md), [Multi-household extras shortlist](issues/13-multi-household-extras.md), and every ticket above)
+
+> **v2.1:** tickets 50–64 and the redone opening line are in the [v2.1 addendum's §13](spec-v2.1.md#13-build-order-and-the-opening-line). Ticket 38's steps 5–7 now follow ticket 62.
 
 The tickets live in `issues/` beside this spec, in v1's shape: `Type:`, `Status:`, `Blocked by:`, acceptance boxes. **Build in number order** unless a ticket is blocked. Tickets marked HITL need the user.
 

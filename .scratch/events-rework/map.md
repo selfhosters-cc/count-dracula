@@ -44,11 +44,11 @@ A build-ready **v2.1 addendum** to the [v2 spec](../multi-household/spec.md) plu
 - [The homepage](issues/11-homepage.md) — one phone-width scroll: pitch, the site-wide line ("Counting now" while a night is Live, "Last night" until noon, hidden below 5), a compact Start counting / Sign in row, then a large How it works (three steps, a screenshot each), then the full forms; a sticky Start / Sign in bar on phones; a signed-in Manager gets a Welcome back card with Go to Setup; own title and `og-home.png`.
 - [Nearby across Area edges](issues/12-nearby-across-area-edges.md) — no minimum crowd: "near you" shows once one other house nearby is counting; the window is the Household's cell and its 8 neighbours rounded out to whole Areas (1, 2 at an edge, 4 at a corner), so a town across an edge sees the same figures; rounding, the 10-minute refresh and the 3-house top costume stay; a lone neighbour's rounded count is an accepted risk.
 - [The /setup help column's content](issues/13-setup-help-column.md) — one `public/setup-help.js` keyed by each section's `data-help` (a test keeps them in step); at ≥ 900 px a sticky column lists the screen's topics with the one in view open; on phones a "?" per heading opens help in place; 23 topics across Tonight, Nights, a night's screen (help by state) and Household; the text ships from `prototype/setup-help`.
+- [Assemble the v2.1 addendum and build tickets 50+](issues/14-assemble-the-addendum.md) — [spec-v2.1.md](../multi-household/spec-v2.1.md) and build tickets 50–64: 50–61 then the HITL rebuild (62) before the opening line, ticket 38's steps 5–7 after it, then nearby across edges (63, switch-off-able) and the help column (64, cut whole); v2's cut rule; the SSE shape is the builder's.
 
 ## Not yet specified
 
-- **Build order and cut rule for 50+:** how the build tickets split, and which can be switched off, once the event model's size is known from [Where the code assumes one live Event](issues/01-one-live-event-assumptions.md) and the decisions. Lands in [Assemble the v2.1 addendum](issues/14-assemble-the-addendum.md).
-- **Knock-on effects on the Operator dashboard's detail view and actions, and on Reports**, beyond what tickets 06 and 07 ask: likely small, not yet sharp. (Night summary share links are settled by [Ghost, estimated ghost, golden tickets and summaries](issues/07-ghost-golden-summaries.md): one per Ended or Past Event.)
+Nothing: the way is clear. The destination is [spec-v2.1.md](../multi-household/spec-v2.1.md) and build tickets 50–64.
 
 ## Out of scope
 
