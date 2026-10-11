@@ -3,7 +3,7 @@
 import { zonedTime, clockTime as zoneClock } from '../shared/night-maths.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
 import { showFirstRun } from '/first-run.js'
-import { helperLink, helperWording, joinCodeLine } from './door-view.js'
+import { helperLink, helperWording, joinCodeLine, tvQrButton, tvQrSays } from './door-view.js'
 import { $, h, option } from './setup-dom.js'
 import {
   checklist, closeConfirm, deleteConfirm, doorEvent, endConfirm, goLiveConfirm, goLiveOffer, nightGroups, nightsTabLabel,
@@ -19,7 +19,7 @@ let shares = [] // the nights shared by a public link: [{ eventId, url, hideName
 let batches = [] // the shown night's Add missed kids batches
 let screen = screenFrom(location.search) // { tab: 'tonight' | 'nights' | 'household', event: id or null }
 // What's open on screen: End's choices (an Event id), Add missed kids (an Event id), a helper's QR (by place).
-const ui = { ending: null, missed: null, helper: { tonight: false, house: false, checklist: false } }
+const ui = { ending: null, missed: null, helper: { tonight: false, house: false, checklist: false }, tvQr: { until: 0, says: '', saidAt: 0 } }
 const timeZone = () => house.timeZone // the Household's: every time of night in Setup reads in it
 
 let sayTimer
@@ -41,6 +41,7 @@ async function get(path) {
 
 async function load() {
   house = await get('/api/household')
+  ui.tvQr.until = Date.now() + house.joinQrMsLeft
   ;[events, shares] = await Promise.all([get('/api/events'), get('/api/shares')])
   const shown = shownNight()
   batches = shown?.open ? await get(`/api/batches?event=${shown.id}`) : []
@@ -269,8 +270,45 @@ function helperBox(place) {
       } })),
     open ? [qr(), h('p', { className: 'muted', textContent: helperWording(house.displayName) }),
       h('p', { className: 'muted', textContent: joinCodeLine(house.joinKey, location.origin) }),
-      h('div', { className: 'row' }, h('button', { className: 'primary', textContent: 'Share join link', onclick: () => share(joinUrl(), `Help count trick-or-treaters at ${house.displayName}`) }))] : null,
+      h('div', { className: 'row' },
+        h('button', { className: 'primary', textContent: 'Share join link', onclick: () => share(joinUrl(), `Help count trick-or-treaters at ${house.displayName}`) }),
+        h('button', { data: { tvQr: '' }, textContent: tvQrButton(tvQrLeft()).label, onclick: toggleTvQr })),
+      h('p', { className: 'muted', data: { tvQrSays: '' }, textContent: ui.tvQr.says, hidden: !ui.tvQr.says })] : null,
   ]
+}
+
+// "📺 Show on the TV" (spec v2.1 §4): the helper QR on the paired TVs for 2 minutes, sent like the door phone's
+// night commands, with the join key. The buttons and the line under them update in place, not by a redraw.
+const SAYS_MS = 10_000 // how long the line under the buttons stays
+const tvQrLeft = () => Math.max(0, ui.tvQr.until - Date.now())
+function renderTvQr() {
+  if (ui.tvQr.says && Date.now() - ui.tvQr.saidAt > SAYS_MS) ui.tvQr.says = ''
+  const { showing, label } = tvQrButton(tvQrLeft())
+  for (const b of document.querySelectorAll('[data-tv-qr]')) {
+    b.textContent = label
+    b.setAttribute('aria-pressed', String(showing))
+  }
+  for (const p of document.querySelectorAll('[data-tv-qr-says]')) {
+    p.textContent = ui.tvQr.says
+    p.hidden = !ui.tvQr.says
+  }
+}
+setInterval(renderTvQr, 1_000)
+async function toggleTvQr() {
+  const res = await fetch('/api/tv/join-qr', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Join-Key': house.joinKey },
+    body: JSON.stringify({ show: !tvQrButton(tvQrLeft()).showing }),
+  }).catch(() => null)
+  if (!res?.ok) {
+    ui.tvQr.says = res?.status === 429 ? 'Too many tries: wait a minute' : res ? await res.text() : "Couldn't reach the server"
+  } else {
+    const answer = await res.json()
+    ui.tvQr.until = Date.now() + answer.msLeft
+    ui.tvQr.says = tvQrSays(answer)
+  }
+  ui.tvQr.saidAt = Date.now()
+  renderTvQr()
 }
 function countHere() {
   localStorage.setItem('cd.joinKey', house.joinKey)
@@ -429,6 +467,7 @@ setInterval(async () => {
   const res = await fetch('/api/household').catch(() => null)
   if (!res?.ok) return
   house = await res.json()
+  ui.tvQr.until = Date.now() + house.joinQrMsLeft // shown or hidden from a door phone meanwhile
   renderChecklist()
   help.update(screenKey()) // the checklist may have come or gone
   firstRun?.update(house)

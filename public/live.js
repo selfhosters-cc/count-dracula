@@ -55,6 +55,7 @@ export function connectLive(url = '/api/stream') {
     source.addEventListener('snapshot', (e) => {
       lastHeard = Date.now()
       live.state = JSON.parse(e.data)
+      if (live.state.joinQr) live.state.joinQr = untilFrom(live.state.joinQr)
       live.connected = true
       busyTries = 0
       emit('snapshot')
@@ -66,6 +67,14 @@ export function connectLive(url = '/api/stream') {
       if (!live.state) return
       live.state = { ...live.state, nearby: JSON.parse(e.data) }
       emit('nearby')
+    })
+
+    // The helper join QR on the TV (spec v2.1 §4): shown with the time left, or null when it's taken down. No seq.
+    source.addEventListener('joinQr', (e) => {
+      lastHeard = Date.now()
+      if (!live.state) return
+      live.state = { ...live.state, joinQr: untilFrom(JSON.parse(e.data)) }
+      emit('joinQr')
     })
 
     source.addEventListener('delta', (e) => {
@@ -128,6 +137,9 @@ export function connectLive(url = '/api/stream') {
   open()
   return live
 }
+
+// The server says how long is left, not when: this device's clock may differ. `until` is on this device's clock.
+const untilFrom = (joinQr) => joinQr && { ...joinQr, until: Date.now() + joinQr.msLeft }
 
 // One delta against the state on screen: { action, state }. 'apply' (state updated), 'skip' (another Event's:
 // only seq moves on), 'stale' (already had it) or 'reopen' (missed one, the door moved, or its settings changed).

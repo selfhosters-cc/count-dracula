@@ -13,6 +13,7 @@ import { createSound } from '/sound.js'
 import { createWebAudio } from '/web-audio.js'
 import { createTeaser, teaserLines } from '/teaser.js'
 import { noNightLines } from '/no-night.js'
+import { helperLink, tvQrCodeLine } from '/door-view.js'
 
 const $ = (id) => document.getElementById(id)
 const CATCHING_UP_AFTER_MS = 20_000
@@ -105,6 +106,7 @@ function play(show) {
   const merging = show?.kind === 'pop' && playing?.kind === 'pop' && playing.from === show.from
   const ending = playing
   playing = show
+  if (show?.kind === 'takeover' || ending?.kind === 'takeover') renderJoinQr() // the takeover wins; the card comes back after
   if (!show) {
     if (ending?.kind === 'takeover') animate($('takeover'), { opacity: 0 }, { duration: 0.4 })
     if (ending?.kind === 'milestone' || ending?.moment === 'milestone') sinkTomb()
@@ -551,6 +553,29 @@ if (pairingMode) {
 }
 let wasDisconnected = false
 
+// ---- the helper join QR (spec v2.1 §4): only a paired TV is ever sent it, for 2 minutes from a door phone or
+// /setup. No sound. It steps aside for a takeover and comes back after.
+const JOIN_QR_MS = 2 * 60_000
+let qrDrawnFor = null // the key and Household the card was drawn for
+function renderJoinQr() {
+  const q = live?.state?.joinQr
+  const left = q ? q.until - Date.now() : 0
+  const on = left > 0 && playing?.kind !== 'takeover'
+  $('join-qr').hidden = !on
+  if (!on) return
+  if (qrDrawnFor !== `${q.key}|${q.household}`) {
+    qrDrawnFor = `${q.key}|${q.household}`
+    const qr = qrcode(0, 'M')
+    qr.addData(helperLink(location.origin, q.key))
+    qr.make()
+    $('jq-code').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true })
+    $('jq-for').textContent = `Scan to count kids for ${q.household}`
+    const line = tvQrCodeLine(q.key, location.origin)
+    $('jq-line').replaceChildren(line.slice(0, line.lastIndexOf(q.key)), Object.assign(document.createElement('b'), { textContent: q.key }))
+  }
+  $('jq-fill').style.transform = `scaleX(${Math.min(1, left / JOIN_QR_MS)})`
+}
+
 // The nearby box (spec §11, v2.1 §10): only with an Area's figures; nothing without another house counting nearby or without a Location.
 function renderNearby(state) {
   const text = tvNearby(state.nearby)
@@ -586,6 +611,7 @@ live?.on(({ state, cause, delta }) => {
     return // stay frozen: no error screen, spinner or red
   }
   if (cause === 'nearby') return renderNearby(state)
+  if (cause === 'joinQr') return renderJoinQr()
   teaser.pause(quietOrAway(state))
   kidsCounted = state.event.id == null ? null : state.kids.length // no night on: no "Start the night"
   showStart()
@@ -593,6 +619,7 @@ live?.on(({ state, cause, delta }) => {
     if (onScreen !== undefined && state.event.id !== onScreen) cutOff()
     onScreen = state.event.id
     teaser.activity() // (re)connected: the 45 s count from now
+    renderJoinQr() // a TV that reconnects mid-way shows the card with the time left
     return renderSnapshot(state, cause)
   }
   if (delta.type === 'next.changed') return renderNoNight(state)
@@ -643,6 +670,7 @@ setInterval(() => {
   const shift = live.state?.event.clockShiftMs ?? 0 // the clock shows event time, in the Household's zone
   $('clock').textContent = clockTime(eventNow(Date.now(), shift), live.state?.timeZone)
   if (live.state && live.state.event.id == null) renderNoNight(live.state)
+  renderJoinQr() // the countdown bar, and gone when time's up
 }, 1_000)
 
 // The ghost marker and tonight's line creep along with the clock.

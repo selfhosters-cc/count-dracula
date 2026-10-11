@@ -29,6 +29,7 @@ const tvSnapshot = (snap) => ({ ...snap, kids: snap.kids.map(withoutPhone) })
 const tvDelta = (delta) => (delta.kid ? { ...delta, kid: withoutPhone(delta.kid) } : delta)
 
 const PAUSE_SIGN_UPS = 'pauseSignUps'
+const JOIN_QR_MS = 2 * 60_000 // how long the helper QR stays on the TV
 // Where "go sign in" lands (spec v2.1 §11): the homepage's Sign in form. The hash keeps the homepage even on a
 // phone that remembers a door's key (doorRedirect in public/door-view.js).
 const SIGN_IN = '/#sign-in'
@@ -120,7 +121,25 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   }
   // A phone's (or a Manager's) read also names the Household, for Add a helper's wording. A TV's never does:
   // the TV link is watched by remote viewers.
-  const phoneSnapshot = (house) => ({ ...doorSnapshot(house), household: house.displayName() })
+  const phoneSnapshot = (house) => ({ ...doorSnapshot(house), household: house.displayName(), joinQr: joinQrFor(house, 'phone') })
+
+  // The helper join QR on the porch TV (spec v2.1 §4): a door phone or /setup shows it for 2 minutes, or until
+  // either hides it. Kept in memory per Household (a restart drops it). The join key goes to paired TVs only:
+  // the TV link is read-only and watched by remote family. A phone gets only the time left, for its button.
+  const joinQrUntil = new Map() // household id → ms
+  const joinQrLeft = (house) => Math.max(0, (joinQrUntil.get(house.id) ?? 0) - now())
+  // What a stream of this kind gets: null when it's not showing, undefined for nothing at all (a TV-link viewer).
+  function joinQrFor(house, kind) {
+    if (kind === 'tvLink') return undefined
+    const msLeft = joinQrLeft(house)
+    if (!msLeft) return null
+    return kind === 'paired' ? { key: house.joinKey(), household: house.displayName(), msLeft } : { msLeft }
+  }
+  const tvSnapshotFor = (house, kind) => {
+    const snap = withNearby(tvSnapshot(doorSnapshot(house)), house)
+    return kind === 'paired' ? { ...snap, joinQr: joinQrFor(house, kind) } : snap
+  }
+  const publishJoinQr = (house) => hub.sendByKind(house.id, 'joinQr', (kind) => joinQrFor(house, kind))
 
   // The first tick runs now, with nearby ready for any night it ends.
   tick()
@@ -158,7 +177,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // night's recap on /tv?event=<id>), for a Manager only.
     'GET /api/snapshot': async (req, server) => {
       const id = new URL(req.url).searchParams.get('event')
-      if (id == null) return read((req, house, credential) => Response.json(withNearby(credential.kind === 'tv' ? tvSnapshot(doorSnapshot(house)) : phoneSnapshot(house), house)))(req, server)
+      if (id == null) return read((req, house, credential) => Response.json(credential.kind === 'tv' ? tvSnapshotFor(house, credential.paired ? 'paired' : 'tvLink') : withNearby(phoneSnapshot(house), house)))(req, server)
       return manager((req, house) => {
         const snap = house.snapshot(Number(id))
         return snap ? Response.json(snap) : notFound()
@@ -175,7 +194,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       if (refusal) return new Response(refusal === 'tvFull' ? 'This TV is full, try again soon' : 'Too many connections', { status: refusal === 'tvFull' ? 503 : 429 })
       return kind === 'phone'
         ? hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(phoneSnapshot(house), house) })
-        : hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(tvSnapshot(doorSnapshot(house)), house), shape: tvDelta })
+        : hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => tvSnapshotFor(house, kind), shape: tvDelta })
     }),
 
     // ---- Pairing a TV (spec §9): the bare /tv asks for a code and waits; a Manager redeems it in /setup.
@@ -380,13 +399,14 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const checklist = { tvWatching: (streams?.tvLink ?? 0) + (streams?.paired ?? 0) > 0, anyKids: house.anyKids() }
       // The door's Event is what the TV shows: first-run's tick names it (spec v2.1 §8).
       const door = house.doorEvent()
-      return Response.json({ id: house.id, displayName, timeZone, location, firstRunPassed, checklist, testNightEventId: house.testNightId(), door: door && { id: door.id, name: door.name }, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), joinKey: house.joinKey(), tvToken: house.tvToken(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
+      return Response.json({ id: house.id, displayName, timeZone, location, firstRunPassed, checklist, testNightEventId: house.testNightId(), door: door && { id: door.id, name: door.name }, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), joinKey: house.joinKey(), joinQrMsLeft: joinQrLeft(house), tvToken: house.tvToken(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
     }),
     // Delete my Household: typed name to confirm; everything goes at once, and its streams close.
     'POST /api/household/delete': manager(async (req, house) => {
       const { confirm } = await req.json()
       accounts.deleteHousehold(house.id, confirm)
       hub.close({ householdId: house.id })
+      joinQrUntil.delete(house.id)
       log(`household deleted household=${house.id}`) // with the deletions table, what a restore re-deletes
       return new Response('Deleted', { headers: { 'Set-Cookie': sessionCookie('', 0) } })
     }),
@@ -450,7 +470,11 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const deltas = house.apply(command)
       hub.publish(house.id, deltas)
       // Change join key and Rotate TV link cut off the old credential's streams at once.
-      if (house.joinKey() !== oldKey) hub.close({ householdId: house.id, credential: oldKey })
+      if (house.joinKey() !== oldKey) {
+        hub.close({ householdId: house.id, credential: oldKey })
+        // A QR on the TV now shows a dead key: take it down.
+        if (joinQrUntil.delete(house.id)) publishJoinQr(house)
+      }
       if (house.tvToken() !== oldTv) hub.close({ householdId: house.id, credential: oldTv })
       return Response.json({ deltas, joinKey: house.joinKey() })
     }),
@@ -479,6 +503,18 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     'POST /api/mix': write(async (req, house) => {
       const { volume, mutes } = await req.json()
       hub.publish(house.id, house.apply({ type: 'mix', volume, mutes }))
+    }),
+    // ☰ Add a helper's "📺 Show on the TV", and /setup's: the helper QR on the paired TVs for 2 minutes, or
+    // { show: false } to take it down. The answer counts the paired TVs on now, so 0 is said, not pretended.
+    'POST /api/tv/join-qr': write(async (req, house) => {
+      const { show } = await req.json()
+      if (show && !guard.take('joinQr', house.id)) return tooMany()
+      const tvs = hub.counts().households[house.id]?.paired ?? 0
+      // With no paired TV on, nothing is held: the phone says so rather than offer to hide it from no TV.
+      if (show && tvs) joinQrUntil.set(house.id, now() + JOIN_QR_MS)
+      else joinQrUntil.delete(house.id)
+      publishJoinQr(house)
+      return Response.json({ shown: joinQrLeft(house) > 0, msLeft: joinQrLeft(house), tvs })
     }),
     'POST /api/catch-up': write(async (req, house) => {
       if (!guard.take('taps', house.id)) return tooMany()

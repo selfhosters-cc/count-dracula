@@ -112,6 +112,7 @@ About this addendum:
 - The door phone lives on **`/door`**. `/` with a remembered key redirects to `/door`, and `/?key=…` redirects to `/door?key=…`. The homepage never checks the key.
 - A key only dies by Change join key, or by the Household going. `/door` with a refused key **forgets it** and says *"This phone's link no longer works. Ask your host for a new link or QR code."*, with one button to the homepage.
 - **Add a helper** (door ☰ and `/setup`) builds `/door?key=<key>`, and its wording names the Household, never an Event. **Count on this device** stores the key and opens `/door`.
+- **Show on the TV** (under Add a helper, door ☰ and `/setup`, keyed by the join key: `POST /api/tv/join-qr`) puts the same QR on the porch TV for 2 minutes, or until either side hides it: a card on the right, under any takeover. The key goes only to paired TVs, never to TV-link viewers (phones get only the time left); the answer counts the paired TVs on, and with none it holds nothing and says so. In memory only.
 - **`/door?key=`** joins the Caddy log-masking shapes.
 - **The TV link** stays live-only: open Events only, including an Ended Event's recap. Past recaps are Manager-only (`/tv?event=`). Pairing, paired devices, the kiosk scripts and Rotate TV link don't change.
 

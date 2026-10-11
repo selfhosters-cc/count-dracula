@@ -43,7 +43,7 @@ export const HELP = {
     title: 'Helpers',
     p: [
       'Count on this device turns this phone into a door phone.',
-      'Add a helper shows a QR code a helper scans with their camera, or Share join link sends it. It works on every night, so a phone set up for a test still works on Halloween.',
+      'Add a helper shows a QR code a helper scans with their camera, or Share join link sends it. It works on every night, so a phone set up for a test still works on Halloween. Show on the TV puts the same QR on your porch TV for 2 minutes, so a helper can scan it there. It only shows on a TV you paired with its code, never on a TV link.',
     ],
   },
 
@@ -132,7 +132,7 @@ export const HELP = {
     title: 'Helpers and the join key',
     p: [
       'The join key lets a phone count at your door, on every night, test or real. Anyone holding it can add kids, so share it with your helpers only.',
-      "Change join key cuts off every other phone that has it: they'll need the new QR or link. This phone keeps counting.",
+      "Change join key cuts off every other phone that has it: they'll need the new QR or link. This phone keeps counting. Show on the TV (under Add a helper) puts the join QR on your paired porch TV for 2 minutes; a TV link never gets the key, so family watching from afar never sees it.",
     ],
   },
   tv: {

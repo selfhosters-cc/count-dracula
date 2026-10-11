@@ -104,6 +104,9 @@
     #helper-qr svg { width: min(72vw, 280px); height: auto; }
     #helper-qr p { color: #333; font-size: 12px; word-break: break-all; margin: 8px 0 0; }
     #helper-qr p.says { color: #111; font-size: 15px; font-weight: 700; word-break: normal; }
+    #tv-qr[aria-pressed=true] { background: var(--orange); color: #1a0d00; }
+    #tv-qr-says { color: var(--dim); font-size: 14px; margin: 8px 2px 0; }
+    #tv-qr-says:empty { display: none; }
     .unjoined { color: var(--amber); font-weight: 700; margin: 12px 0 0; }
 
     #recent { position: absolute; inset: 0; z-index: 20; background: #000a; display: none; align-items: flex-end; }
@@ -221,6 +224,10 @@
         <h4>Helpers</h4>
         <button class="wide" id="helper-show">📱 Add a helper</button>
         <div id="helper-qr" hidden></div>
+        <div id="helper-tv" hidden>
+          <button class="wide" id="tv-qr">📺 Show on the TV</button>
+          <p id="tv-qr-says" aria-live="polite"></p>
+        </div>
         <a class="wide" href="/setup">⚙️ Setup</a>
       </div>
     </div>

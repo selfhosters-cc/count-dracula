@@ -101,6 +101,25 @@ export function joinCodeLine(key, origin) {
   return `No camera? On their phone, go to ${new URL(origin).host} and enter ${key}`
 }
 
+// The same line on the porch TV's card, where nobody's phone is "their" phone.
+export function tvQrCodeLine(key, origin) {
+  return `No camera? Go to ${new URL(origin).host} and enter ${key}`
+}
+
+// "📺 Show on the TV" under a helper's QR (spec v2.1 §4), or, while the TV shows it, Hide with the time left.
+export function tvQrButton(msLeft) {
+  if (!(msLeft > 0)) return { showing: false, label: '📺 Show on the TV' }
+  const s = Math.ceil(msLeft / 1000)
+  return { showing: true, label: `Hide from the TV (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} left)` }
+}
+
+// What the phone or /setup says after a press: the answer counts the paired TVs on now (never TV-link viewers).
+export function tvQrSays({ shown, tvs }) {
+  if (!tvs) return 'No paired TV is on right now. Pair your porch TV with the code on its screen to show the QR there.'
+  if (!shown) return 'Taken off the TV'
+  return `📺 On ${tvs === 1 ? 'the TV' : `${tvs} TVs`} for 2 minutes`
+}
+
 export function helperWording(householdName) {
   return `A helper scans this, or opens the link, to count at ${householdName || 'this door'} on any night.`
 }

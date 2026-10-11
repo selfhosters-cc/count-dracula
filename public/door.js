@@ -1,7 +1,7 @@
 // The door phone on /door (v1 spec §4–5, v2.1 §4): counting, the ☰ door menu, the soundboard.
 import { connectLive } from '/live.js'
 import { createOutbox, uuid } from '/outbox.js'
-import { doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, joinCodeLine, quietNudge, refusedKey } from '/door-view.js'
+import { doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, joinCodeLine, quietNudge, refusedKey, tvQrButton, tvQrSays } from '/door-view.js'
 import { noNightLines } from '/no-night.js'
 import { phoneNearby } from '/nearby-text.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
@@ -304,6 +304,7 @@ function start(phoneName) {
     renderMenu()
     renderGoLiveNow()
     $('helper-qr').hidden = true
+    $('helper-tv').hidden = true
     $('menu').classList.add('on')
   })
   $('menu-close').addEventListener('click', () => $('menu').classList.remove('on'))
@@ -478,6 +479,39 @@ function start(phoneName) {
       Object.assign(document.createElement('p'), { textContent: url }),
     )
     $('helper-qr').hidden = false
+    $('tv-qr-says').textContent = ''
+    $('helper-tv').hidden = false
+    renderTvQr()
+  })
+
+  // "📺 Show on the TV" (spec v2.1 §4): the same QR on the Household's paired TVs for 2 minutes. The stream
+  // says while it's showing (from /setup too), with the time left but never the key.
+  const tvQrLeft = () => Math.max(0, (live.state?.joinQr?.until ?? 0) - Date.now())
+  function renderTvQr() {
+    const { showing, label } = tvQrButton(tvQrLeft())
+    $('tv-qr').textContent = label
+    $('tv-qr').setAttribute('aria-pressed', String(showing))
+    $('tv-qr').disabled = !joinKey
+  }
+  live.on(({ cause }) => {
+    if (cause === 'joinQr' || cause === 'snapshot') renderTvQr()
+  })
+  let saidAt = 0
+  setInterval(() => {
+    if ($('helper-tv').hidden) return
+    if (Date.now() - saidAt > 10_000) $('tv-qr-says').textContent = '' // the answer fades; the button keeps the state
+    renderTvQr()
+  }, 1_000)
+  $('tv-qr').addEventListener('click', async () => {
+    const show = !tvQrButton(tvQrLeft()).showing
+    const res = await post('/api/tv/join-qr', { show }).catch(() => null)
+    saidAt = Date.now()
+    if (!res?.ok) {
+      $('tv-qr-says').textContent = res?.status === 429 ? 'Too many tries: wait a minute' : res?.status === 403 ? 'Wrong join key: scan a helper code' : "Couldn't reach the TV"
+      return
+    }
+    $('tv-qr-says').textContent = tvQrSays(await res.json())
+    renderTvQr()
   })
 
   // ---- "+ New" costume with Catch-up. Online only: one direct POST, safe to retry with the same kid id.

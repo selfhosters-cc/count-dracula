@@ -99,6 +99,20 @@ export function createHub({ heartbeatMs = 15_000, random = Math.random } = {}) {
       }
     },
 
+    // A named event to one Household's streams, shaped by credential kind: dataFor(kind) is what that kind gets,
+    // or undefined for nothing at all (the join QR: the key goes to paired TVs only). No seq, like `nearby`.
+    sendByKind(householdId, event, dataFor) {
+      const encoded = new Map() // kind → bytes, or null for none
+      for (const client of [...(channels.get(householdId) ?? [])]) {
+        if (!encoded.has(client.kind)) {
+          const data = dataFor(client.kind)
+          encoded.set(client.kind, data === undefined ? null : encoder.encode(frame(event, data)))
+        }
+        const bytes = encoded.get(client.kind)
+        if (bytes) send(client, bytes)
+      }
+    },
+
     // Closes a Household's streams: all of them (Suspend), or only those holding one credential.
     close({ householdId, credential }) {
       for (const client of [...(channels.get(householdId) ?? [])]) {
