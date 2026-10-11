@@ -1,7 +1,7 @@
 // The door phone on /door (v1 spec §4–5, v2.1 §4): counting, the ☰ door menu, the soundboard.
 import { connectLive } from '/live.js'
 import { createOutbox, uuid } from '/outbox.js'
-import { doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, quietNudge, refusedKey } from '/door-view.js'
+import { doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, joinCodeLine, quietNudge, refusedKey } from '/door-view.js'
 import { noNightLines } from '/no-night.js'
 import { phoneNearby } from '/nearby-text.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
@@ -474,6 +474,7 @@ function start(phoneName) {
     $('helper-qr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true })
     $('helper-qr').append(
       Object.assign(document.createElement('p'), { className: 'says', textContent: helperWording(live.state?.household) }),
+      Object.assign(document.createElement('p'), { textContent: joinCodeLine(joinKey, location.origin) }),
       Object.assign(document.createElement('p'), { textContent: url }),
     )
     $('helper-qr').hidden = false

@@ -95,6 +95,20 @@ export function helperLink(origin, key) {
   return `${origin}/door?key=${encodeURIComponent(key)}`
 }
 
+// Join a night on the homepage (spec v2.1 §11): the join code as typed (spaces dropped), or the key out of a pasted
+// join link (/door?key= or an old /?key=). Null when it can't be a code: letters and digits, 6 to 40 of them.
+export function joinKeyFrom(text) {
+  const raw = String(text ?? '').trim()
+  const fromLink = raw.match(/[?&]key=([^&#\s]+)/)
+  const key = fromLink ? decodeURIComponent(fromLink[1]) : raw.replace(/\s+/g, '')
+  return /^[A-Za-z0-9]{6,40}$/.test(key) ? key : null
+}
+
+// Under a helper's QR: the code spelled out, for a phone that can't scan.
+export function joinCodeLine(key, origin) {
+  return `Or go to ${new URL(origin).host}, tap Join a night and type ${key}`
+}
+
 export function helperWording(householdName) {
   return `A helper scans this, or opens the link, to count at ${householdName || 'this door'} on any night.`
 }

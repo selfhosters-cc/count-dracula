@@ -63,6 +63,11 @@
     .sticky-space { height: 72px; }
     @media (min-width: 700px) { .sticky-cta, .sticky-space { display: none; } }
     [hidden] { display: none !important; }
+      .join-line { text-align: center; margin: 4px 0 14px; }
+    .join-line a { color: var(--text); text-decoration: none; }
+    .join-line b { color: var(--orange); }
+    #join-code { font-family: ui-monospace, Menlo, monospace; letter-spacing: 0.04em; }
+    .error { color: #ff8a8a; margin: 8px 0 0; }
   </style>
 </head>
 <body>
@@ -87,6 +92,7 @@
     <a class="button primary" href="#start">Start counting</a>
     <a class="button" href="#sign-in">Sign in</a>
   </div>
+  <p class="join-line"><a href="#join">Helping at someone's door? <b>Join a night ›</b></a></p>
 
   <section class="how" id="how">
     <h2>How it works</h2>
@@ -130,7 +136,19 @@
       <input type="hidden" name="timeZone">
       <button type="submit">Sign in with Google</button>
     </form>
-    <p class="muted after">Helping at someone's door? Scan the QR on their phone, or open the link they sent you.</p>
+  </section>
+
+  <!-- Join a night (spec v2.1 §11): a helper with a join code or link, but no QR to scan. -->
+  <section id="join">
+    <h2>Join a night</h2>
+    <p class="muted">Helping at someone's door? Scan the QR on their phone with your camera, or type the join code
+      under it here. A join link they sent works pasted in too.</p>
+    <form id="join-form" autocomplete="off">
+      <label for="join-code">Join code or link</label>
+      <input id="join-code" name="code" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. Ab3dEf7hJk">
+      <button type="submit">Join and start counting</button>
+      <p class="error" id="join-error" role="alert" hidden>That doesn't look like a join code. It's 10 letters and numbers, under their QR.</p>
+    </form>
   </section>
 
   <footer class="muted"><a href="/privacy">Privacy and House rules</a> · <a href="/help/tv">TV setup help</a> · Help: <a href="mailto:__CONTACT__">email us</a></footer>

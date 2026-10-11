@@ -1,5 +1,5 @@
 // The homepage on / (spec v2.1 §11): the pitch, the site-wide line, How it works, Start and Sign in.
-import { doorRedirect } from '/door-view.js'
+import { doorRedirect, joinKeyFrom } from '/door-view.js'
 import { homeSiteLine } from '/nearby-text.js'
 
 const $ = (id) => document.getElementById(id)
@@ -29,7 +29,7 @@ const watch = new IntersectionObserver((entries) => {
   for (const e of entries) inView.set(e.target.id, e.isIntersecting)
   sticky.classList.toggle('show', ![...inView.values()].some(Boolean))
 })
-for (const id of ['cta-top', 'start', 'sign-in']) watch.observe($(id))
+for (const id of ['cta-top', 'start', 'sign-in', 'join']) watch.observe($(id))
 
 const getJson = (path) => fetch(path).then((r) => (r.ok ? r.json() : null)).catch(() => null)
 
@@ -66,3 +66,12 @@ $('count-here').addEventListener('click', async () => {
   } catch {}
   location.href = '/door'
 })
+
+// Join a night: the code typed or the link pasted opens the door phone with that key, as a helper's QR would.
+$('join-form').addEventListener('submit', (e) => {
+  e.preventDefault()
+  const key = joinKeyFrom($('join-code').value)
+  $('join-error').hidden = key != null
+  if (key) location.href = `/door?key=${encodeURIComponent(key)}`
+})
+

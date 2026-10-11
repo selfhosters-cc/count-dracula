@@ -3,7 +3,7 @@
 import { zonedTime, clockTime as zoneClock } from '../shared/night-maths.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
 import { showFirstRun } from '/first-run.js'
-import { helperLink, helperWording } from './door-view.js'
+import { helperLink, helperWording, joinCodeLine } from './door-view.js'
 import { $, h, option } from './setup-dom.js'
 import {
   checklist, closeConfirm, deleteConfirm, doorEvent, endConfirm, goLiveConfirm, goLiveOffer, nightGroups, nightsTabLabel,
@@ -268,6 +268,7 @@ function helperBox(place) {
         render()
       } })),
     open ? [qr(), h('p', { className: 'muted', textContent: helperWording(house.displayName) }),
+      h('p', { className: 'muted', textContent: joinCodeLine(house.joinKey, location.origin) }),
       h('div', { className: 'row' }, h('button', { className: 'primary', textContent: 'Share join link', onclick: () => share(joinUrl(), `Help count trick-or-treaters at ${house.displayName}`) }))] : null,
   ]
 }
