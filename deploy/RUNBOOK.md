@@ -194,23 +194,25 @@ kill %1 && rm -rf /tmp/restore-drill
 
 The counts match what `/operator` showed at the copy's time.
 
-### Nearby's ≥ 5 view (ticket 42)
+### Nearby's view (tickets 42, 56)
 
-On the dev box, `deploy/seed-nearby.js` makes 6 fake Households in one Area (dpz8), live on "Halloween 2026" with
-recent taps: Witch everywhere, Bluey (the most kids, but only 2 Households) and a blocklisted name (3 Households).
-It refuses the production database, and refuses to run with `PUBLIC_HOST` set.
+On the dev box, `deploy/seed-nearby.js` makes fake Households in one Area (dpz8), live on "Halloween 2026" (over
+their Test night) with recent taps: Witch everywhere, Bluey (the most kids, but only 2 Households) and a blocklisted
+name (3 Households). 6 by default; pass `2` for the smallest "near you" (no minimum crowd since v2.1). It refuses the
+production database, and refuses to run with `PUBLIC_HOST` set.
 
 ```bash
 mkdir -p /tmp/nearby-check
-bun deploy/seed-nearby.js /tmp/nearby-check/db.sqlite                      # prints each house's TV and phone links
+bun deploy/seed-nearby.js /tmp/nearby-check/db.sqlite                      # or … db.sqlite 2; prints each house's links
 echo '{ "port": 3193, "dbPath": "/tmp/nearby-check/db.sqlite" }' > /tmp/nearby-check/config.json
 bun server/main.js /tmp/nearby-check/config.json                           # nearby refreshes as it starts
 ```
 
-Open one house's TV link (`http://localhost:3193/tv/k/…`) and its phone (`/?key=…`). The TV shows **🏘️ Near you
+Open one house's TV link (`http://<dev box>:3193/tv/k/…`) and its phone (`/door?key=…`). The TV shows **🏘️ Near you
 tonight** under the rush meter with 6 houses and **Witch on top**; the phone shows **🏘️ Near you: … · 6 houses**.
-Neither Bluey nor the blocklisted name is ever the top costume. Then `rm -rf /tmp/nearby-check`.
-**There are no fake Households on production**, which only ever shows the below-minimum view.
+Neither Bluey nor the blocklisted name is ever the top costume. With 2 houses, both show "2 houses" and no top
+costume. Then `rm -rf /tmp/nearby-check`.
+**There are no fake Households on production.**
 
 ---
 
@@ -262,7 +264,7 @@ Decided in advance:
 
 ## 9. Nov 1
 
-1. Every live, non-Rehearsal night ended at 3:00 am by itself: `/operator` shows no Counting or Stale Households,
+1. Every Live night ended at 3:00 am by itself: `/operator` shows no Counting, Stale or Waiting Households,
    and `lxc "journalctl -u count-dracula --since '03:00' | head"` shows no errors around then.
 2. If our night ran on paper, **➕ Add missed kids** from the tally sheet first.
 3. **⬇ Export** "Halloween 2026" in `/setup`, and commit the CSV to `.scratch/count-dracula/data/`.

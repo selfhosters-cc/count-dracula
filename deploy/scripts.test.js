@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openLedger } from '../server/ledger.js'
 import { openAccounts } from '../server/accounts.js'
+import { computeNearby, nearYou } from '../server/nearby.js'
 
 // Two Households with a Manager each, the way sign-up leaves them.
 function database() {
@@ -59,6 +60,7 @@ describe('deploy/access-request.js', () => {
     expect(held.household).not.toHaveProperty('join_key')
     expect(held.events.map((e) => e.name).sort()).toEqual(['Halloween 2026', 'Test night'])
     expect(held.events.find((e) => e.name === 'Test night')).toMatchObject({ state: 'live', kids: 1 })
+    expect(out.toLowerCase()).not.toContain('rehearsal')
   })
 
   test('says so when nobody has that email', async () => {
@@ -68,6 +70,23 @@ describe('deploy/access-request.js', () => {
 
     expect(code).toBe(1)
     expect(out).toContain('No Manager with that email')
+  })
+})
+
+describe('deploy/seed-nearby.js', () => {
+  test("seeds 2 houses in one Area, each counted once through its door's Event, and each sees the other", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'count-dracula-seed-')), 'db.sqlite')
+
+    const { out, code } = await run('seed-nearby.js', path, '2')
+
+    expect(code).toBe(0)
+    expect(out).toContain('/door?key=')
+    const ledger = openLedger(new Database(path), {})
+    const nights = ledger.nearbyNights(Date.now())
+    expect(nights).toHaveLength(2)
+    for (const n of nights) expect(ledger.household(n.householdId).events().find((e) => e.id === n.eventId).name).toBe('Halloween 2026')
+    const figures = computeNearby(nights, { isBlocked: () => false })
+    for (const n of nights) expect(nearYou(figures, n.householdId, n.cell)).toMatchObject({ houses: 2 })
   })
 })
 

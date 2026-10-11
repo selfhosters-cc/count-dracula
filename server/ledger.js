@@ -284,23 +284,23 @@ export function openLedger(db, config) {
       db.query('INSERT OR REPLACE INTO site_switches (key, value) VALUES (?, ?)').run(key, on ? 'on' : 'off')
     },
 
-    // Every Household's door's Event, for /operator and nearby: [{ householdId, eventId, ended, kids,
+    // Every Household's door's Event, for /operator: [{ householdId, eventId, state ('live' | 'ended'), kids,
     // lastKidAt }], one per Household with an open Event. lastKidAt is the latest tap time; only a counted
     // kid is activity.
-    liveNights() {
+    doorNights() {
       return db
         .query(`
-          SELECT e.household_id AS householdId, e.id AS eventId, e.state = 'ended' AS ended,
+          SELECT e.household_id AS householdId, e.id AS eventId, e.state AS state,
             COUNT(k.id) AS kids, MAX(k.tapped_at) AS lastKidAt
           FROM events e LEFT JOIN kids k ON k.event_id = e.id AND k.deleted_at IS NULL
           WHERE ${DOOR_ROW} GROUP BY e.id
         `)
         .all()
-        .map((n) => ({ ...n, ended: n.ended === 1 }))
     },
 
-    // Every Household's door's Event with what Nearby needs (spec §11): its Household's cell, whether it's
-    // Suspended, its kids, its kids in the 30 minutes before `at`, and its costumes' counts.
+    // Every Household's door's Event with what Nearby needs (spec §11, v2.1 §10): its Household's cell, whether
+    // it's Suspended, whether the Event is Live (not Ended), its kids, its kids in the 30 minutes before `at`, and
+    // its costumes' counts. One row per Household with an open Event; its other open Events add nothing.
     nearbyNights(at) {
       const costumes = db.query(`
         SELECT t.name, t.emoji, COUNT(*) AS count FROM kids k JOIN tags t ON t.id = k.tag_id
@@ -309,13 +309,13 @@ export function openLedger(db, config) {
       return db
         .query(`
           SELECT e.id AS eventId, e.household_id AS householdId, h.location_cell AS cell,
-            h.suspended_since IS NOT NULL AS suspended,
+            h.suspended_since IS NOT NULL AS suspended, e.state = 'live' AS live,
             (SELECT COUNT(*) FROM kids k WHERE k.event_id = e.id AND k.deleted_at IS NULL) AS kids,
             (SELECT COUNT(*) FROM kids k WHERE k.event_id = e.id AND k.deleted_at IS NULL AND k.tapped_at > ?) AS kids30
           FROM events e JOIN households h ON h.id = e.household_id WHERE ${DOOR_ROW}
         `)
         .all(at - 30 * 60_000)
-        .map((n) => ({ ...n, suspended: n.suspended === 1, costumes: costumes.all(n.eventId) }))
+        .map((n) => ({ ...n, suspended: n.suspended === 1, live: n.live === 1, costumes: costumes.all(n.eventId) }))
     },
 
     // When the last kid was counted anywhere, for /operator's Last tap tile.

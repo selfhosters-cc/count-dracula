@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { computeNearby } from './nearby.js'
+import { computeNearby, nearYou } from './nearby.js'
 import { isBlocked } from './blocklist.js'
 import { startServer } from './app.js'
 import { readFrames } from '../test/sse.js'
@@ -12,30 +12,45 @@ import { namingTheDoor } from '../test/v1-night.js'
 let nextId = 1
 function night(overrides = {}) {
   const id = nextId++
-  return { householdId: id, cell: 'dpz83', suspended: false, kids: 20, kids30: 6, costumes: [], ...overrides }
+  return { householdId: id, cell: 'dpz83', suspended: false, live: true, kids: 20, kids30: 6, costumes: [], ...overrides }
 }
 const area = (result, a) => result.areas.get(a) ?? null
 const compute = (nights) => computeNearby(nights, { isBlocked })
 
 describe('Area figures', () => {
-  test('4 active Households in an Area show nothing; 5 show figures', () => {
-    const four = Array.from({ length: 4 }, () => night())
+  // What one Household's screens get for its own Area (spec v2.1 §10: no minimum crowd).
+  const seen = (nights, house) => nearYou(compute(nights), house.householdId, house.cell)
 
-    expect(area(compute(four), 'dpz8')).toBeNull()
-    expect(area(compute([...four, night()]), 'dpz8')).toMatchObject({ houses: 5, kids30: 30 })
+  test('two Active Households in an Area each see "near you"; one alone sees nothing', () => {
+    const [a, b] = [night({ kids30: 4 }), night({ kids30: 3 })]
+
+    expect(seen([a], a)).toBeNull()
+    expect(seen([a, b], a)).toEqual({ houses: 2, kids30: 5, topCostume: null })
+    expect(seen([a, b], b)).toEqual({ houses: 2, kids30: 5, topCostume: null })
   })
 
-  test("Suspended Households and nights with no kid in 30 minutes don't count", () => {
-    const four = Array.from({ length: 4 }, () => night())
+  test('a Household that is not counting itself sees its Area once one other house is', () => {
+    const quiet = night({ kids30: 0 })
+    const other = night()
 
-    for (const sixth of [night({ suspended: true }), night({ kids30: 0 }), night({ cell: null })]) {
-      expect(area(compute([...four, sixth]), 'dpz8')).toBeNull()
+    expect(seen([quiet], quiet)).toBeNull()
+    expect(seen([quiet, other], quiet)).toMatchObject({ houses: 1 })
+    expect(seen([other], { householdId: 99, cell: 'dpz8b' })).toMatchObject({ houses: 1 }) // nothing open at all
+    expect(seen([other], { householdId: 99, cell: null })).toBeNull() // no Location
+  })
+
+  test("Suspended Households, nights with no kid in 30 minutes and Households without a Location aren't the other house", () => {
+    const me = night()
+
+    for (const other of [night({ suspended: true }), night({ kids30: 0 }), night({ cell: null })]) {
+      expect(seen([me, other], me)).toBeNull()
     }
   })
 
   test('kid counts are rounded to 5s', () => {
     const active = (n) => Array.from({ length: 5 }, () => night({ kids30: n }))
 
+    expect(area(compute([night({ kids30: 0 }), night({ kids30: 2 })]), 'dpz8').kids30).toBe(0) // "under 5 kids"
     expect(area(compute(active(1)), 'dpz8').kids30).toBe(5) // 5 kids
     expect(area(compute(active(3)), 'dpz8').kids30).toBe(15)
     expect(area(compute([...active(1).slice(0, 4), night({ kids30: 3 })]), 'dpz8').kids30).toBe(5) // 7 → 5
@@ -124,6 +139,15 @@ describe('the Site-wide total', () => {
     expect(compute([...nights, night({ kids: 0, cell: null })]).site).toEqual({ houses: 5, kids: 110 }) // 112 → 110
     expect(compute([...nights, night({ suspended: true })]).site).toBeNull()
   })
+
+  test("it's live while any counted door's Event is Live, and not once every one is Ended", () => {
+    const ended = Array.from({ length: 5 }, () => night({ live: false }))
+
+    expect(compute(ended).live).toBe(false)
+    expect(compute([...ended.slice(1), night({ live: true })]).live).toBe(true)
+    expect(compute([...ended, night({ live: true, suspended: true })]).live).toBe(false) // a Suspended one isn't counted
+    expect(compute(ended.slice(1).map((n) => ({ ...n, live: true }))).live).toBe(false) // below 5: nothing to say
+  })
 })
 
 describe('on the screens', () => {
@@ -211,13 +235,82 @@ describe('the Site-wide total on the sign-up page', () => {
     const res = await fetch(`${site(5).url}/api/site`)
     const body = await res.text()
 
-    expect(four).toEqual({ site: null })
-    expect(JSON.parse(body)).toEqual({ site: { houses: 5, kids: 15, topCostume: null } })
+    expect(four).toEqual({ site: null, live: false })
+    expect(JSON.parse(body)).toEqual({ site: { houses: 5, kids: 15, topCostume: null }, live: true })
     expect(body).not.toContain('House')
     expect(body).not.toContain('Secret')
   })
 
   test('the nearby switch hides it', async () => {
-    expect(await (await fetch(`${site(5, { nearby: false }).url}/api/site`)).json()).toEqual({ site: null })
+    expect(await (await fetch(`${site(5, { nearby: false }).url}/api/site`)).json()).toEqual({ site: null, live: false })
+  })
+})
+
+describe("one house per Household, through the door's Event (spec v2.1 §10)", () => {
+  const running56 = []
+  afterEach(() => running56.splice(0).forEach((app) => app.stop()))
+
+  // Households signed up at 2 pm on Halloween in Toronto: each has its Test night Live, and "Halloween 2026"
+  // goes live by itself at 4 pm.
+  function afternoon(cells) {
+    const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
+    const configPath = join(dir, 'config.json')
+    writeFileSync(configPath, JSON.stringify({ dbPath: join(dir, 'db.sqlite') }))
+    const clock = { now: Date.parse('2026-10-31T18:00:00Z') }
+    const app = startServer({ configPath, port: 0, env: {}, now: () => clock.now })
+    running56.push(app)
+    const houses = cells.map((cell, i) => {
+      const house = namingTheDoor(app.ledger.household(app.ledger.createHousehold({ displayName: `House ${i}`, timeZone: 'America/Toronto' })))
+      if (cell) house.apply({ type: 'setLocation', cell })
+      return house
+    })
+    const tap = (house, n) => {
+      for (let k = 0; k < n; k++) house.apply({ type: 'tap', id: `${house.id}-${clock.now}-${k}`, tagId: null, tappedAt: clock.now, phoneName: 'Dad' })
+    }
+    const read = async (path) => (await fetch(`${app.url}${path}`)).json()
+    const nearbyOf = async (house) => (await read(`/api/snapshot?key=${house.joinKey()}`)).nearby
+    return { app, clock, houses, tap, read, nearbyOf }
+  }
+
+  test("a 2 pm test night drops out once Halloween goes live: one house each, with only its door's Event's kids", async () => {
+    const { app, clock, houses, tap, read, nearbyOf } = afternoon(Array(5).fill('dpz83'))
+    houses.forEach((h) => tap(h, 3))
+    app.refreshNearby()
+    expect(await read('/api/site')).toMatchObject({ site: { houses: 5, kids: 15 } })
+    expect((await nearbyOf(houses[0])).area).toMatchObject({ houses: 5, kids30: 15 })
+
+    clock.now = Date.parse('2026-10-31T20:05:00Z') // 4:05 pm: Halloween goes live over each Test night
+    app.tick()
+    expect(houses.every((h) => h.events().filter((e) => e.open).length === 2)).toBe(true)
+    tap(houses[0], 2)
+    app.refreshNearby()
+
+    expect(await read('/api/site')).toMatchObject({ site: { houses: 5, kids: 0 } }) // 2 kids, not 17: 5 houses, not 10
+    expect((await nearbyOf(houses[1])).area).toMatchObject({ houses: 1, kids30: 0 })
+    expect((await nearbyOf(houses[0])).area).toBeNull() // nobody else is counting on Halloween yet
+  })
+
+  test('two Active Households in an Area each see "near you"; one alone falls back to the Site-wide total', async () => {
+    const { app, houses, tap, nearbyOf } = afternoon(['dpz83', 'dpz8g', 'f2m6x', null, null])
+    houses.forEach((h) => tap(h, 2))
+    app.refreshNearby()
+
+    const site = { houses: 5, kids: 10, topCostume: null }
+    expect(await nearbyOf(houses[0])).toEqual({ area: { houses: 2, kids30: 5, topCostume: null }, site })
+    expect(await nearbyOf(houses[1])).toEqual({ area: { houses: 2, kids30: 5, topCostume: null }, site })
+    expect(await nearbyOf(houses[2])).toEqual({ area: null, site }) // alone in its Area
+    expect(await nearbyOf(houses[3])).toEqual({ area: null, site }) // no Location
+  })
+
+  test("/api/site says live during a night, and not once every night is Ended", async () => {
+    const { app, houses, tap, read } = afternoon(Array(5).fill(null))
+    houses.forEach((h) => tap(h, 1))
+    app.refreshNearby()
+    expect(await read('/api/site')).toEqual({ site: { houses: 5, kids: 5, topCostume: null }, live: true })
+
+    for (const h of houses) h.apply({ type: 'end' })
+    app.refreshNearby()
+
+    expect(await read('/api/site')).toEqual({ site: { houses: 5, kids: 5, topCostume: null }, live: false })
   })
 })

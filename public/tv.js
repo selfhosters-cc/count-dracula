@@ -551,7 +551,7 @@ if (pairingMode) {
 }
 let wasDisconnected = false
 
-// The nearby box (spec §11): only with an Area's figures; nothing below the minimum or without a Location.
+// The nearby box (spec §11, v2.1 §10): only with an Area's figures; nothing without another house counting nearby or without a Location.
 function renderNearby(state) {
   const text = tvNearby(state.nearby)
   $('nearby').hidden = !text

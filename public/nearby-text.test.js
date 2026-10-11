@@ -19,4 +19,11 @@ describe('nearby words', () => {
     expect(phoneNearby({ area: null, site: null })).toBeNull()
     expect(phoneNearby(null)).toBeNull()
   })
+
+  test('with no minimum crowd, one house is one house', () => {
+    const one = { houses: 1, kids30: 5, topCostume: null }
+    expect(tvNearby({ area: one, site })).toBe('~5 kids in the last half hour · 1 house counting')
+    expect(phoneNearby({ area: one, site })).toBe('🏘️ Near you: ~5 kids in 30 min · 1 house')
+    expect(phoneNearby({ area: { ...one, houses: 2 }, site })).toBe('🏘️ Near you: ~5 kids in 30 min · 2 houses')
+  })
 })

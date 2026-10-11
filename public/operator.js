@@ -3,7 +3,7 @@
 // Polled every 30 s. Every name is set with textContent, never as HTML.
 const $ = (id) => document.getElementById(id)
 const POLL_MS = 30_000
-const STATUSES = ['Counting', 'Stale', 'Waiting'] // ticket 56 adds Ended and No night
+const STATUSES = ['Counting', 'Stale', 'Waiting', 'Ended', 'No night'] // spec v2.1 §10, on the door's Event
 let data = { pauseSignUps: false, health: [], households: [], now: Date.now() }
 let detail = null // the open Household's /api/operator/household answer
 let filter = null // a status chip, or null for all
@@ -63,7 +63,7 @@ function render() {
       el('button', { textContent: `${status ?? 'All'} ${status ? count(status) : data.households.length}`, ariaPressed: String(filter === status), onclick: () => ((filter = status), render()) })),
   )
   const q = $('search').value.trim().toLowerCase()
-  // Counting → Stale → Waiting, the most kids first within each.
+  // Counting → Stale → Waiting → Ended → No night, the most kids first within each.
   const rows = data.households
     .filter((h) => (filter == null || h.status === filter) && h.displayName.toLowerCase().includes(q))
     .sort((a, b) => STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status) || b.kids - a.kids)
@@ -71,7 +71,7 @@ function render() {
     ...rows.map((h) =>
       el('button', { className: 'house', onclick: () => openHousehold(h.id) },
         el('span', { className: 'top' },
-          el('span', { className: `status ${h.status}`, textContent: h.status }),
+          el('span', { className: `status ${h.status.replace(' ', '-')}`, textContent: h.status }),
           el('span', { className: 'name', textContent: h.displayName || '(no name yet)' }),
           ...(h.reports ? [el('span', { className: 'flag', textContent: `⚑ ${h.reports}` })] : []),
           ...(h.suspendedSince ? [el('span', { className: 'tag', textContent: 'Suspended' })] : [])),
@@ -82,7 +82,7 @@ function render() {
   $('list-view').hidden = !!detail
   if (!detail) return
   $('d-name').textContent = detail.displayName || '(no name yet)'
-  $('d-state').textContent = `${detail.status} · ${detail.suspendedSince ? `Suspended since ${time(detail.suspendedSince)}` : 'Active'} · Area ${detail.area} · ${detail.timeZone} · signed up ${time(detail.signedUpAt)}`
+  $('d-state').textContent = `${detail.status} · ${detail.kids} kids · last kid ${ago(detail.lastKidAt)} · ${detail.suspendedSince ? `Suspended since ${time(detail.suspendedSince)}` : 'Active'} · Area ${detail.area} · ${detail.timeZone} · signed up ${time(detail.signedUpAt)}`
   $('d-managers').textContent = detail.managers.join(', ') || 'none'
   $('d-reports').replaceChildren(
     ...detail.reports.map((r) =>

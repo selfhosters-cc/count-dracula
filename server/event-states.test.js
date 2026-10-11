@@ -353,7 +353,7 @@ describe('zero open Events', () => {
     house.apply({ type: 'setLastYear', total: 120 })
     expect(byName(house, 'Halloween 2026').raceAgainstId).toBe(byName(house, 'Halloween 2025 (estimated)').id)
     expect(house.apply({ type: 'mix', volume: 0.5, mutes: {} })).toHaveLength(1)
-    expect(ledger.liveNights()).toEqual([])
+    expect(ledger.doorNights()).toEqual([])
     expect(ledger.nearbyNights(Date.now())).toEqual([])
   })
 

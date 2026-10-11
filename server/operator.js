@@ -7,13 +7,16 @@ const BACKUP_LATE_MS = 30 * MINUTE // 2× the 15-minute interval
 const RSS_LIMIT = 1024 * 1024 * 1024 // LXC 118's 1 GB
 const RSS_AMBER = 800 * 1024 * 1024
 
-// Ticket 56 adds Ended and No night (spec v2.1 §10).
-export const STATUSES = ['Counting', 'Stale', 'Waiting']
+// Spec v2.1 §10, in the order /operator sorts them.
+export const STATUSES = ['Counting', 'Stale', 'Waiting', 'Ended', 'No night']
 
-// night: { kids, lastKidAt } for the Household's door's Event.
-export function householdStatus({ kids, lastKidAt }, now) {
-  if (!kids) return 'Waiting'
-  return lastKidAt != null && now - lastKidAt <= ACTIVE_MS ? 'Counting' : 'Stale'
+// door: { state: 'live' | 'ended' | null, kids, lastKidAt } for the Household's door's Event (state null:
+// nothing open). Counting is an Active Household: a kid in the last 30 minutes, Live or Ended (a late kid).
+export function householdStatus({ state, kids, lastKidAt }, now) {
+  if (state == null) return 'No night'
+  if (lastKidAt != null && now - lastKidAt <= ACTIVE_MS) return 'Counting'
+  if (state === 'ended') return 'Ended'
+  return kids ? 'Stale' : 'Waiting'
 }
 
 // The health strip, left to right. Each tile: { key, label, value, detail, level: 'ok' | 'amber' | 'red' }.
@@ -24,7 +27,7 @@ export function healthTiles(s, now) {
   return [
     {
       key: 'live',
-      label: 'Live nights',
+      label: 'Households',
       value: STATUSES.map((status) => `${s.statusCounts[status]} ${status}`).join(' · '),
       level: 'ok',
     },

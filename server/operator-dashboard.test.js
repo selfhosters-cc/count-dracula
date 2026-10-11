@@ -2,27 +2,36 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { healthTiles, householdStatus } from './operator.js'
+import { STATUSES, healthTiles, householdStatus } from './operator.js'
 import { startServer } from './app.js'
 import { fakeGoogle } from '../test/fake-google.js'
 import { cookieOf, signIn } from '../test/sign-in.js'
+import { named, namingTheDoor } from '../test/v1-night.js'
 
 const MINUTE = 60_000
 const NOW = Date.parse('2026-10-31T23:00:00Z')
 
-describe('Household status (the 30-minute rule)', () => {
+describe("Household status (spec v2.1 §10: the 30-minute rule, on the door's Event)", () => {
   test.each([
-    ['a live night with no kids yet', { kids: 0, lastKidAt: null }, 'Waiting'],
-    ['a kid 29 minutes ago', { kids: 12, lastKidAt: NOW - 29 * MINUTE }, 'Counting'],
-    ['quiet for 31 minutes', { kids: 12, lastKidAt: NOW - 31 * MINUTE }, 'Stale'],
-  ])('%s → %s', (_, live, status) => {
-    expect(householdStatus(live, NOW)).toBe(status)
+    ['a live night with no kids yet', { state: 'live', kids: 0, lastKidAt: null }, 'Waiting'],
+    ['a kid 29 minutes ago', { state: 'live', kids: 12, lastKidAt: NOW - 29 * MINUTE }, 'Counting'],
+    ['quiet for 31 minutes', { state: 'live', kids: 12, lastKidAt: NOW - 31 * MINUTE }, 'Stale'],
+    ['Ended, with a late kid 10 minutes ago', { state: 'ended', kids: 12, lastKidAt: NOW - 10 * MINUTE }, 'Counting'],
+    ['Ended, quiet for 31 minutes', { state: 'ended', kids: 12, lastKidAt: NOW - 31 * MINUTE }, 'Ended'],
+    ['Ended with no kids at all', { state: 'ended', kids: 0, lastKidAt: null }, 'Ended'],
+    ['nothing open', { state: null, kids: 0, lastKidAt: null }, 'No night'],
+  ])('%s → %s', (_, door, status) => {
+    expect(householdStatus(door, NOW)).toBe(status)
+  })
+
+  test('sorted Counting, Stale, Waiting, Ended, No night', () => {
+    expect(STATUSES).toEqual(['Counting', 'Stale', 'Waiting', 'Ended', 'No night'])
   })
 })
 
 describe('health strip', () => {
   const quiet = {
-    statusCounts: { Counting: 0, Stale: 0, Waiting: 0 },
+    statusCounts: { Counting: 0, Stale: 0, Waiting: 0, Ended: 0, 'No night': 0 },
     connections: { phones: 0, tvScreens: 0, total: 0 },
     cap: 3_000,
     refusals: { total: 0, lastAt: null },
@@ -128,5 +137,47 @@ describe('/api/operator', () => {
     expect(errors.detail).toContain('Error in POST /api/admin')
     expect(JSON.stringify(errors)).not.toContain('SECRET-BODY-TOKEN')
     expect(JSON.stringify(errors)).not.toContain('kaboom')
+  })
+
+  test("rows and the detail read the door's Event: Ended for a night ended at 10 pm, No night with nothing open", async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
+    const configPath = join(dir, 'config.json')
+    writeFileSync(configPath, JSON.stringify({ dbPath: join(dir, 'db.sqlite') }))
+    const google = fakeGoogle()
+    const clock = { now: Date.parse('2026-10-31T23:00:00Z') } // 7 pm in Toronto: Halloween is the door's Event
+    const app = startServer({ configPath, port: 0, google, env: { OPERATOR_EMAILS: 'op@example.com' }, log: () => {}, now: () => clock.now })
+    running.push(app)
+    const op = cookieOf(await signIn({ app, google }, { sub: 'op', email: 'op@example.com' }, { displayName: 'Ops' }))
+    const make = (name) => namingTheDoor(app.ledger.household(app.ledger.createHousehold({ displayName: name, timeZone: 'America/Toronto' })))
+    const [ended, none, counting] = [make('Ended at ten'), make('Nothing open'), make('Still counting')]
+    // A second open Event with more kids, that went live first: never the one the row reads.
+    const [{ event: party }] = counting.apply({ type: 'createEvent', name: 'Party' })
+    counting.apply({ type: 'goLive', eventId: party.id })
+    for (let k = 0; k < 9; k++) counting.apply({ type: 'tap', ...named(counting, party.id), id: `p${k}`, tagId: null, tappedAt: clock.now, phoneName: 'Dad' })
+    clock.now += MINUTE
+    const [{ event: halloween }] = counting.apply({ type: 'createEvent', name: 'Late Halloween' })
+    counting.apply({ type: 'goLive', eventId: halloween.id })
+    for (let k = 0; k < 2; k++) counting.apply({ type: 'tap', id: `c${k}`, tagId: null, tappedAt: clock.now, phoneName: 'Dad' })
+    for (let k = 0; k < 4; k++) ended.apply({ type: 'tap', id: `e${k}`, tagId: null, tappedAt: clock.now, phoneName: 'Dad' })
+    clock.now = Date.parse('2026-11-01T02:00:00Z') // 10 pm
+    ended.apply({ type: 'end' })
+    for (const e of none.events().filter((e) => e.open)) {
+      none.apply({ type: 'end', ...named(none, e.id) })
+      none.apply({ type: 'close', eventId: e.id })
+    }
+    clock.now += 31 * MINUTE
+
+    const data = await (await fetch(`${app.url}/api/operator`, { headers: { Cookie: op } })).json()
+    const row = (house) => data.households.find((h) => h.id === house.id)
+    const detail = async (house) => (await fetch(`${app.url}/api/operator/household?id=${house.id}`, { headers: { Cookie: op } })).json()
+
+    expect(row(ended)).toMatchObject({ status: 'Ended', kids: 4 })
+    expect(row(none)).toMatchObject({ status: 'No night', kids: 0, lastKidAt: null })
+    expect(row(counting)).toMatchObject({ status: 'Stale', kids: 2 })
+    for (const house of [ended, none, counting]) {
+      const { status, kids, lastKidAt } = row(house)
+      expect(await detail(house)).toMatchObject({ status, kids, lastKidAt })
+    }
+    expect(data.health.find((t) => t.key === 'live').value).toBe('0 Counting · 1 Stale · 1 Waiting · 1 Ended · 1 No night') // the Operator's own Household is Waiting
   })
 })

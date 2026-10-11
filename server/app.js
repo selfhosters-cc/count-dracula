@@ -98,7 +98,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   }
   refreshNearby()
   const nearbyTimer = setInterval(refreshNearby, nearby.REFRESH_MS)
-  // The Area figures a night keeps when it ends, for its summary's nearby slide (null below the minimum).
+  // The Area figures a night keeps when it ends, for its summary's nearby slide (null with no other house counting).
   function nearbyArea(householdId) {
     return nearby.forHousehold(householdId, cellOf(householdId))?.area ?? null
   }
@@ -120,6 +120,13 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   // A VACUUM INTO copy every 15 minutes, with the deletions prune on the same timer (spec §15).
   const backups = config.backupDir ? createBackups({ db, dir: config.backupDir, now, log }) : null
   const stopBackups = backups?.start({ also: () => accounts.pruneDeletions() }) ?? (() => {})
+
+  // A Household's /operator status, kids and last kid, from its door's Event (spec v2.1 §10): the table and the
+  // detail view both read it, so they agree.
+  const doorStatus = (night, at) => {
+    const door = night ?? { state: null, kids: 0, lastKidAt: null }
+    return { status: householdStatus(door, at), kids: door.kids, lastKidAt: door.lastKidAt }
+  }
 
   const routes = {
     // The door phone lives on /door (spec v2.1 §11): a helper's ?key= link to / goes there. Until the homepage
@@ -195,20 +202,17 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // The whole dashboard in one answer, polled every 30 s (spec §13). No emails and no Location cells here.
     'GET /api/operator': operator(() => {
       const at = now()
-      const nights = new Map(ledger.liveNights().map((n) => [n.householdId, n])) // one per Household: its door's Event
+      const nights = new Map(ledger.doorNights().map((n) => [n.householdId, n])) // one per Household: its door's Event
       const streams = hub.counts()
       const reportCounts = new Map()
       for (const h of ledger.households()) reportCounts.set(h.id, ledger.reports(h.id).length)
       const households = ledger.households().map((h) => {
-        const night = nights.get(h.id) ?? { kids: 0, lastKidAt: null }
         const s = streams.households[h.id] ?? { phone: 0, paired: 0, tvLink: 0 }
         return {
           id: h.id,
           displayName: h.displayName,
-          status: householdStatus(night, at),
+          ...doorStatus(nights.get(h.id), at),
           area: h.location ? h.location.slice(0, 4) : '—',
-          kids: night.kids,
-          lastKidAt: night.lastKidAt,
           phones: s.phone,
           tvScreens: s.paired + s.tvLink, // the porch TV and remote viewers share the link: one number
           managers: accounts.managers(h.id).length,
@@ -242,13 +246,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const id = Number(new URL(req.url).searchParams.get('id'))
       const h = ledger.households().find((x) => x.id === id)
       if (!h) return notFound()
-      const night = ledger.liveNights().find((n) => n.householdId === id) ?? { kids: 0, lastKidAt: null }
       return Response.json({
         id,
         displayName: h.displayName,
         timeZone: h.timeZone,
         area: h.location ? h.location.slice(0, 4) : '—',
-        status: householdStatus(night, now()),
+        ...doorStatus(ledger.doorNights().find((n) => n.householdId === id), now()),
         signedUpAt: h.signedUpAt,
         suspendedSince: h.suspendedSince,
         managers: accounts.managerEmails(id),
@@ -373,8 +376,9 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     }),
     'GET /summary': managerPage('/summary'),
 
-    // The Site-wide total for the public sign-up page (spec §14): only the rounded line, from the last refresh.
-    'GET /api/site': () => Response.json({ site: nearby.forHousehold(null, null)?.site ?? null }),
+    // The Site-wide total for the public sign-up page (spec §14): only the rounded line, from the last refresh,
+    // and `live` (spec v2.1 §10): whether any counted door's Event is Live, for the homepage's wording.
+    'GET /api/site': () => Response.json(nearby.site()),
 
     // ---- Share links (spec §12): /share?key=<token>, a shape the Caddy log masks. Public: no sign-in.
     'POST /api/share': manager(async (req, house) => {

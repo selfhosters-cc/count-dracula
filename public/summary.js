@@ -117,7 +117,7 @@ export function buildSlides(summary, { showName = true, closing = [] } = {}) {
       ? [
           text('eyebrow', 'Near you 🏘️'),
           text('huge', fmt(f.nearby.houses)),
-          text('line', `houses were counting near you when your night ended, with ${f.nearby.kids30 ? `~${fmt(f.nearby.kids30)}` : 'under 5'} kids in their last half hour.${f.nearby.topCostume ? ` Top costume: ${costume(f.nearby.topCostume)}.` : ''}`),
+          text('line', `${f.nearby.houses === 1 ? 'house was' : 'houses were'} counting near you when your night ended, with ${f.nearby.kids30 ? `~${fmt(f.nearby.kids30)}` : 'under 5'} kids in their last half hour.${f.nearby.topCostume ? ` Top costume: ${costume(f.nearby.topCostume)}.` : ''}`),
         ]
       : null,
     [receipt(summary, f, showName)],

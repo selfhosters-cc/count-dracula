@@ -1,14 +1,18 @@
-// Nearby (v2 spec §11): rounded, delayed totals for each Area, and the Site-wide total. Computed every 10
-// minutes over the live nights, never per tap, so a figure can't be tied to one door. Nothing about a single
-// Household leaves this module.
-const MIN_HOUSEHOLDS = 5
+// Nearby (v2 spec §11, v2.1 §10): rounded, delayed totals for each Area, and the Site-wide total. Computed every
+// 10 minutes over each Household's door's Event, never per tap. Nothing about a single Household leaves this
+// module except as part of an Area's or the site's totals. There's no minimum crowd for an Area: a Household
+// sees its Area's figures once one other Active Household is in it (the accepted risk in spec v2.1 §10).
+const MIN_SITE_HOUSEHOLDS = 5
 const MIN_COSTUME_HOUSEHOLDS = 3
 const REFRESH_MS = 10 * 60_000
 
 const round5 = (n) => Math.round(n / 5) * 5
 
-// nights: [{ householdId, cell, suspended, kids, kids30, costumes: [{ name, emoji, count }] }], one per
-// Household: its door's Event. Returns { areas: Map(area → { houses, kids30, topCostume }), site: { houses, kids, topCostume? } | null }.
+// nights: [{ householdId, cell, suspended, live, kids, kids30, costumes: [{ name, emoji, count }] }], one per
+// Household: its door's Event (`live`: it's Live, not Ended). Returns { areas: Map(area → { houses, kids30,
+// topCostume }), active: Map(area → Set of household ids), site: { houses, kids, topCostume? } | null, live }.
+// An Area is in `areas` with one Active Household or more; nearYou() decides who sees it. `live` is whether
+// any counted door's Event is Live, and false while the site line is hidden.
 // siteTopCostume adds the site line's top costume, under its own switch (spec §14).
 export function computeNearby(nights, { isBlocked, siteTopCostume = false }) {
   const counting = nights.filter((n) => !n.suspended)
@@ -20,8 +24,9 @@ export function computeNearby(nights, { isBlocked, siteTopCostume = false }) {
     byArea.get(area).push(n)
   }
   const areas = new Map()
+  const activeIn = new Map()
   for (const [area, active] of byArea) {
-    if (active.length < MIN_HOUSEHOLDS) continue
+    activeIn.set(area, new Set(active.map((n) => n.householdId)))
     areas.set(area, {
       houses: active.length,
       kids30: round5(active.reduce((sum, n) => sum + n.kids30, 0)),
@@ -29,9 +34,18 @@ export function computeNearby(nights, { isBlocked, siteTopCostume = false }) {
     })
   }
   const site =
-    counting.length >= MIN_HOUSEHOLDS ? { houses: counting.length, kids: round5(counting.reduce((sum, n) => sum + n.kids, 0)) } : null
+    counting.length >= MIN_SITE_HOUSEHOLDS ? { houses: counting.length, kids: round5(counting.reduce((sum, n) => sum + n.kids, 0)) } : null
   if (site && siteTopCostume) site.topCostume = topCostume(counting, isBlocked)
-  return { areas, site }
+  return { areas, active: activeIn, site, live: !!site && counting.some((n) => n.live) }
+}
+
+// One Household's "near you": its Area's figures once at least one Active Household other than itself is in
+// it, else null. Its own night is in the figures when it's Active too. Without a Location, null.
+export function nearYou(figures, householdId, cell) {
+  if (!cell) return null
+  const area = cell.slice(0, 4)
+  const others = [...(figures.active.get(area) ?? [])].filter((id) => id !== householdId)
+  return others.length ? figures.areas.get(area) : null
 }
 
 // The most-counted costume across these nights, by name (case-insensitive, trimmed), only from names counted
@@ -62,7 +76,7 @@ function topCostume(nights, isBlocked) {
 
 // The figures as they stand, refreshed every 10 minutes. forHousehold(id) is what one Household's screens show.
 export function createNearby({ nights, isBlocked, enabled = true, siteTopCostume = false }) {
-  let figures = { areas: new Map(), site: null }
+  let figures = { areas: new Map(), active: new Map(), site: null, live: false }
   let cells = new Map() // household id → cell, as of the last refresh
 
   return {
@@ -75,7 +89,11 @@ export function createNearby({ nights, isBlocked, enabled = true, siteTopCostume
     // { area: { houses, kids30, topCostume } | null, site: { houses, kids } | null }, or null when switched off.
     forHousehold(householdId, cell = cells.get(householdId)) {
       if (!enabled) return null
-      return { area: (cell && figures.areas.get(cell.slice(0, 4))) || null, site: figures.site }
+      return { area: nearYou(figures, householdId, cell), site: figures.site }
+    },
+    // The public Site-wide line (GET /api/site): { site, live }.
+    site() {
+      return { site: enabled ? figures.site : null, live: enabled && figures.live }
     },
   }
 }
