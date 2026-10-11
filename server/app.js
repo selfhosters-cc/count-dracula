@@ -28,14 +28,15 @@ export function startServer({ configPath, port, heartbeatMs }) {
       const snap = house.snapshot(id == null ? undefined : Number(id))
       return snap ? Response.json(snap) : notFound()
     }),
-    'GET /api/stream': read((req, house, server) => hub.attach(req, server, () => house.snapshot())),
+    'GET /api/stream': read((req, house, server) =>
+      hub.attach(req, server, { householdId: house.id, kind: 'phone', credential: house.joinKey(), snapshot: () => house.snapshot() })),
     'POST /api/taps': write(async (req, house) => {
       const { id, tagId, tappedAt, phoneName, teen } = await req.json()
-      hub.publish(house.apply({ type: 'tap', id, tagId, tappedAt, phoneName, teen }))
+      hub.publish(house.id, house.apply({ type: 'tap', id, tagId, tappedAt, phoneName, teen }))
     }),
     'POST /api/remove': write(async (req, house) => {
       const { kidId } = await req.json()
-      hub.publish(house.apply({ type: 'remove', kidId }))
+      hub.publish(house.id, house.apply({ type: 'remove', kidId }))
     }),
     // Tailnet phones join on first open: the key is handed out only on the private *.int name.
     'GET /api/join': (req) => {
@@ -64,34 +65,34 @@ export function startServer({ configPath, port, heartbeatMs }) {
       const command = await req.json()
       if (!ADMIN_COMMANDS.has(command?.type)) throw new BadCommand(`Not a Setup command: ${command?.type}`)
       const deltas = house.apply(command)
-      hub.publish(deltas)
+      hub.publish(house.id, deltas)
       return Response.json({ deltas, joinKey: house.joinKey() })
     }),
     // ☰ "🌙 End the night" / "Resume the night": any phone with the join key.
     'POST /api/end': write(async (req, house) => {
-      hub.publish(house.apply({ type: 'end' }))
+      hub.publish(house.id, house.apply({ type: 'end' }))
     }),
     'POST /api/resume': write(async (req, house) => {
-      hub.publish(house.apply({ type: 'resume' }))
+      hub.publish(house.id, house.apply({ type: 'resume' }))
     }),
     // ☰ "Release remaining tickets": any phone with the join key (the phone shows it from 7:45pm event time).
     'POST /api/release': write(async (req, house) => {
-      hub.publish(house.apply({ type: 'release' }))
+      hub.publish(house.id, house.apply({ type: 'release' }))
     }),
     // ☰ soundboard: any phone with the key; the answer says whether it played or hit the cooldown.
     'POST /api/soundboard': write(async (req, house) => {
       const { slot } = await req.json()
       const deltas = house.apply({ type: 'soundboard', slot })
-      hub.publish(deltas)
+      hub.publish(house.id, deltas)
       return Response.json({ played: deltas.length > 0 })
     }),
     'POST /api/mix': write(async (req, house) => {
       const { volume, mutes } = await req.json()
-      hub.publish(house.apply({ type: 'mix', volume, mutes }))
+      hub.publish(house.id, house.apply({ type: 'mix', volume, mutes }))
     }),
     'POST /api/catch-up': write(async (req, house) => {
       const { tag, n, kid } = await req.json()
-      hub.publish(house.apply({ type: 'catchUp', tag, n, kid }))
+      hub.publish(house.id, house.apply({ type: 'catchUp', tag, n, kid }))
     }),
   }
 
@@ -150,7 +151,7 @@ export function startServer({ configPath, port, heartbeatMs }) {
     url: server.url.origin,
     ledger,
     stop() {
-      hub.close()
+      hub.shutdown()
       server.stop(true)
     },
   }

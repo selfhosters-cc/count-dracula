@@ -1,7 +1,7 @@
 // Live state (modules.md §4): one SSE stream, the snapshot, then deltas.
 // The TV's "never celebrate a snapshot" rule is one check: cause === 'delta'.
 
-const RETRY_MS = 2_000
+const MAX_RETRY_MS = 5_000 // a random 0–5 s, so a server restart isn't met by every device at once
 const STALE_MS = 35_000 // the server pings every 15 s: two missed means the link is dead, even if still "open"
 const RESYNC = new Set(['event.switched', 'event.updated'])
 
@@ -54,8 +54,8 @@ export function connectLive(url = '/api/stream') {
       if (live.connected) disconnectedAt = Date.now()
       live.connected = false
       emit('disconnected')
-      // EventSource retries by itself unless the server answered with an error status.
-      if (source.readyState === EventSource.CLOSED) setTimeout(reopen, RETRY_MS)
+      // EventSource retries by itself (after the server's random `retry:`) unless the server answered with an error status.
+      if (source.readyState === EventSource.CLOSED) setTimeout(reopen, Math.random() * MAX_RETRY_MS)
     })
   }
 

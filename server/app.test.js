@@ -6,6 +6,7 @@ import { Database } from 'bun:sqlite'
 import { startServer } from './app.js'
 import { openLedger } from './ledger.js'
 import { setUpV1Night } from '../test/v1-night.js'
+import { readFrames } from '../test/sse.js'
 
 const running = []
 afterEach(() => running.splice(0).forEach((app) => app.stop()))
@@ -89,29 +90,10 @@ describe('join key', () => {
   })
 })
 
-// Reads an SSE response frame by frame: { id, event, data } or { comment }.
 async function openStream(app) {
   const controller = new AbortController()
   const res = await fetch(`${app.url}/api/stream`, { signal: controller.signal })
-  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
-  let buffer = ''
-
-  async function next() {
-    while (!buffer.includes('\n\n')) {
-      const { value, done } = await reader.read()
-      if (done) throw new Error('stream closed')
-      buffer += value
-    }
-    const end = buffer.indexOf('\n\n')
-    const frame = buffer.slice(0, end)
-    buffer = buffer.slice(end + 2)
-    if (frame.startsWith(':')) return { comment: frame.slice(1) }
-    const fields = Object.fromEntries(
-      frame.split('\n').map((line) => [line.slice(0, line.indexOf(':')), line.slice(line.indexOf(':') + 1).trimStart()]),
-    )
-    return { id: fields.id, event: fields.event, data: JSON.parse(fields.data) }
-  }
-
+  const { next } = readFrames(res)
   return { res, next, close: () => controller.abort() }
 }
 
@@ -178,6 +160,23 @@ describe('live stream', () => {
     expect(await stream.next()).toMatchObject({ event: 'ping' })
     expect(await stream.next()).toMatchObject({ event: 'ping' })
     stream.close()
+  })
+})
+
+describe('per-Household streams', () => {
+  test("a stream opened with one Household's key never hears another Household's taps", async () => {
+    const app = start()
+    const other = app.ledger.household(app.ledger.createHousehold({ displayName: 'Next door', timeZone: 'America/Toronto' }))
+    const res = await fetch(`${app.url}/api/stream?key=${other.joinKey()}`)
+    const stream = readFrames(res)
+    expect((await stream.next()).data.event.rehearsal).toBe(true)
+
+    await postTap(app, aTap('ours'))
+    await postTap(app, aTap('theirs'), { key: other.joinKey() })
+
+    const delta = await stream.next()
+    expect(delta.data).toMatchObject({ seq: 1, kid: { id: 'theirs', number: 1 } })
+    await stream.cancel()
   })
 })
 

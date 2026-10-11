@@ -671,6 +671,8 @@ export function openLedger(db, config) {
     }
 
     return {
+      id: householdId,
+
       apply(command) {
         const run = commands[command.type]
         if (!run) throw new BadCommand(`Unknown command: ${command.type}`)

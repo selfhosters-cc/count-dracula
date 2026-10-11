@@ -1,7 +1,7 @@
 # Per-Household live channels
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 17
 
 ## What to build
@@ -20,10 +20,17 @@ The SSE hub stops being global. That's required before any cap means anything, a
 
 ## Acceptance criteria
 
-- [ ] Household A's taps never reach Household B's streams
-- [ ] Each Household's `seq` runs 1, 2, 3 … with no gaps caused by other Households
-- [ ] A stream that stops reading is dropped, not buffered without limit (a test with a stalled reader)
-- [ ] Closing by credential closes exactly those streams
-- [ ] Per-Household, per-kind stream counts are right as streams open and close
-- [ ] Reconnects wait 0–5 s at random
-- [ ] `bun test` passes
+- [x] Household A's taps never reach Household B's streams
+- [x] Each Household's `seq` runs 1, 2, 3 … with no gaps caused by other Households
+- [x] A stream that stops reading is dropped, not buffered without limit (a test with a stalled reader)
+- [x] Closing by credential closes exactly those streams
+- [x] Per-Household, per-kind stream counts are right as streams open and close
+- [x] Reconnects wait 0–5 s at random
+- [x] `bun test` passes
+
+## Notes from the build
+
+- Hub interface: `attach(req, server, { householdId, kind, credential, snapshot })` with kind `phone` / `paired` / `tvLink`; `publish(householdId, deltas)`; `close({ householdId, credential? })` (no credential = the whole Household, for Suspend); `counts()` → `{ total, households: { id: { phone, paired, tvLink } } }`; `shutdown()`.
+- Per-Household `seq` lives in the Ledger (ticket 17). A stream is dropped once 256 KB of frames sit unread.
+- The snapshot frame carries `retry: <0–4999>`, which EventSource uses for its own reconnects; `live.js` also waits a random 0–5 s when the server answered with an error.
+- Until ticket 22, every stream is attached as `phone` with its Household's join key as the credential (Household #1's without a key).
