@@ -1,0 +1,34 @@
+# The bundled HTTPS front for Docker Compose (compose.yaml, profile "https"). Caddy gets and renews a certificate
+# for PUBLIC_HOST by itself: point its DNS at this machine and open ports 80 and 443. Its access log masks every
+# join key, TV link and sign-in link, like our own deployment's (deploy/caddy-site.caddy), with one pattern per field
+# so it runs on a stock Caddy.
+{$PUBLIC_HOST} {
+	request_body {
+		max_size 64KB
+	}
+	reverse_proxy count-dracula:3131 {
+		# Reloads don't cut the TVs' and phones' live streams for 10 minutes.
+		stream_close_delay 10m
+		# The app reads the visitor's address from this header.
+		header_up CF-Connecting-IP {client_ip}
+	}
+	# Its own log, 30 days and at most ~500 MB, so Halloween doesn't push the other sites' logs out.
+	log {
+		output file /data/count-dracula-access.log {
+			roll_size 50MiB
+			roll_keep 10
+			roll_keep_for 720h
+		}
+		format filter {
+			wrap json
+			# A token in the path or the query: the TV link, join keys, Invites, share links, paired TVs, email sign-in links.
+			request>uri regexp "(/tv/k/|[?&](?:key|device|token)=)[^/?#&]*" "${1}REDACTED"
+			# The same URLs come back as a same-origin Referer.
+			request>headers>Referer regexp "(/tv/k/|[?&](?:key|device|token)=)[^/?#&]*" "${1}REDACTED"
+			# The /?key= redirect carries the key on to /door?key= (spec v2.1 §4) in its Location header.
+			resp_headers>Location regexp "(/tv/k/|[?&](?:key|device|token)=)[^/?#&]*" "${1}REDACTED"
+			# Phones send their join key as a header.
+			request>headers>X-Join-Key delete
+		}
+	}
+}

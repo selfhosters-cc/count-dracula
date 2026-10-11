@@ -1,0 +1,37 @@
+# Count Dracula with Docker Compose. See "Install with Docker Compose" in README.md.
+#   cp docker/.env.example .env      # fill it in
+#   docker compose up -d             # the app on port 3131, behind your own HTTPS proxy
+#   docker compose --profile https up -d   # or with the bundled Caddy, which gets a certificate for PUBLIC_HOST
+services:
+  count-dracula:
+    build: .
+    image: count-dracula:local
+    restart: unless-stopped
+    env_file: .env
+    # On this machine only by default: the app trusts the CF-Connecting-IP header from its proxy for rate limits,
+    # so nothing else should reach it directly. Set COUNT_DRACULA_BIND=0.0.0.0 for a proxy on another machine.
+    ports:
+      - "${COUNT_DRACULA_BIND:-127.0.0.1}:${COUNT_DRACULA_PORT:-3131}:3131"
+    volumes:
+      - count-dracula-data:/data
+
+  # Optional HTTPS in front, with the same log masking as our own deployment (no join key or link in the logs).
+  caddy:
+    image: caddy:2.10.2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on: [count-dracula]
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  count-dracula-data:
+  caddy-data:
+  caddy-config:
