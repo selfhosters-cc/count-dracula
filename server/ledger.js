@@ -3,6 +3,7 @@
 import { nextWallTime, toBuckets, zonedTime } from '../shared/night-maths.js'
 import { migrate, randomToken } from './migrations.js'
 import { isCell } from '../shared/geohash.js'
+import { isBlocked } from './blocklist.js'
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -446,8 +447,7 @@ export function openLedger(db, config) {
       // "+ New" costume: creates the tag and counts the kid at the door with it (spec §2 Catch-up).
       // N is capped by the untagged kids there are; timestamps are untouched.
       catchUp({ tag, n = 0, kid }) {
-        const name = typeof tag?.name === 'string' ? tag.name.trim() : ''
-        if (!name) throw new BadCommand('A costume needs a name')
+        const name = costumeName(tag?.name)
         if (!Number.isInteger(n) || n < 0) throw new BadCommand('Catch-up needs a whole number of kids')
         if (kidExists.get(kid?.id)) return [] // a retry: the door kid already landed, so all of it did
         const event = eventById()
@@ -633,7 +633,7 @@ export function openLedger(db, config) {
       // ---- Costume presets. Deltas only for the live event: nobody is watching the others.
       createTag({ eventId, name, emoji }) {
         const event = writableEvent(eventId)
-        const row = insertTag.get({ $eventId: event.id, $name: requireName(name, 'A costume'), $emoji: emoji ?? null })
+        const row = insertTag.get({ $eventId: event.id, $name: costumeName(name), $emoji: emoji ?? null })
         return event.live ? [{ type: 'tag.added', tag: toTag(row) }] : []
       },
 
@@ -642,7 +642,7 @@ export function openLedger(db, config) {
         const row = db
           .query('UPDATE tags SET name = ?, emoji = ?, sort_order = ?, sound = ? WHERE id = ? RETURNING *')
           .get(
-            name === undefined ? tag.name : requireName(name, 'A costume'),
+            name === undefined ? tag.name : costumeName(name),
             emoji === undefined ? tag.emoji : emoji,
             order === undefined ? tag.sort_order : wholeNumber(order, 'Order', 1),
             sound === undefined ? tag.sound : sound,
@@ -926,7 +926,17 @@ function toKid(row) {
 export function displayNameOf(displayName) {
   const name = requireName(displayName, 'A household')
   if (name.length > 40) throw new BadCommand('A household name is at most 40 characters')
+  return decentName(name)
+}
+
+// Names that reach shared screens pass the blocklist (spec §15): refused outright, never starred out.
+function decentName(name) {
+  if (isBlocked(name)) throw new BadCommand('Pick another name')
   return name
+}
+
+function costumeName(name) {
+  return decentName(requireName(name, 'A costume'))
 }
 
 export function isTimeZone(zone) {

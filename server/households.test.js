@@ -211,3 +211,49 @@ describe('Location', () => {
     expect(JSON.stringify(db.query('SELECT * FROM households').all())).not.toContain('dpz2r')
   })
 })
+
+describe('the blocklist on names', () => {
+  const RUDE = 'Sh1t Heads'
+
+  function house() {
+    const ledger = openLedger(new Database(':memory:'), {})
+    const h = ledger.household(ledger.createHousehold({ displayName: 'The Smiths', timeZone: 'America/Toronto' }))
+    return { ledger, h, live: h.snapshot().event, tag: h.snapshot().tags[0] }
+  }
+  const refused = (fn) => {
+    try {
+      fn()
+    } catch (err) {
+      return err instanceof BadCommand ? err.message : err
+    }
+    return null
+  }
+
+  test('a Household name is refused with "Pick another name" at sign-up and on rename', () => {
+    const { ledger, h } = house()
+
+    expect(refused(() => ledger.createHousehold({ displayName: RUDE, timeZone: 'America/Toronto' }))).toBe('Pick another name')
+    expect(refused(() => h.apply({ type: 'rename', displayName: 'FÜCK this' }))).toBe('Pick another name')
+    expect(ledger.households().map((x) => x.displayName)).toEqual(['The Smiths'])
+  })
+
+  test('a costume name is refused when created, renamed or added at the door with + New', () => {
+    const { h, live, tag } = house()
+
+    expect(refused(() => h.apply({ type: 'createTag', eventId: live.id, name: 'a$$hole' }))).toBe('Pick another name')
+    expect(refused(() => h.apply({ type: 'updateTag', tagId: tag.id, name: 'f u c k' }))).toBe('Pick another name')
+    expect(refused(() => h.apply({ type: 'catchUp', tag: { name: RUDE }, n: 0, kid: { id: 'door', tappedAt: 1, phoneName: 'Dad' } }))).toBe('Pick another name')
+    expect(h.snapshot().tags.map((t) => t.name)).not.toContain(RUDE)
+    expect(h.snapshot().tags[0].name).toBe(tag.name)
+    expect(h.snapshot().kids).toEqual([]) // the door kid isn't counted either
+  })
+
+  test('innocent names still save', () => {
+    const { h, live } = house()
+
+    h.apply({ type: 'createTag', eventId: live.id, name: 'Cocktail waitress' })
+    h.apply({ type: 'rename', displayName: 'Scunthorpe Crew' })
+
+    expect(h.snapshot().tags.map((t) => t.name)).toContain('Cocktail waitress')
+  })
+})

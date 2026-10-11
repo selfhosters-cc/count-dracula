@@ -729,6 +729,8 @@
             n: draft.n,
             kid: { id: draft.kidId, tappedAt: draft.tappedAt, phoneName, ...(draft.teen && { teen: true }) },
           })
+          // A refused name ("Pick another name") is said as is, and the sheet stays open to fix it.
+          if (res.status === 400) return toast(await res.text())
           if (!res.ok) throw new Error(res.status === 403 ? 'Wrong join key' : `HTTP ${res.status}`)
           outbox.claim(draft.kidId)
           armTeen(false)
