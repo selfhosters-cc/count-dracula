@@ -304,6 +304,10 @@ function render() {
   $('goes-zone').textContent = timeZone
   $('s-goes').value = editing.goesLiveAt == null ? '' : stamp(editing.goesLiveAt, timeZone).slice(0, 16).replace(' ', 'T')
   $('auto-ended').hidden = !(live.ended && live.endedAutomatically)
+  // An ended night has its summary straight away (spec §12).
+  $('summary-link').hidden = !live.ended || live.countsOnly
+  $('summary-link').href = `/summary?event=${live.id}`
+  $('auto-ended-summary').href = `/summary?event=${live.id}`
   $('rehearsal-tools').hidden = !live.rehearsal
   renderChecklist()
 
@@ -325,6 +329,7 @@ function render() {
           h('div', { className: 'item' },
             h('span', { className: 'grow', textContent: `${e.name} · ${e.countsOnly ? 'counts only' : `${e.kids} kids`}` }),
             ...(e.countsOnly ? [] : [
+              h('a', { href: `/summary?event=${e.id}`, textContent: '✨ Night summary', style: 'color: var(--orange); font-weight: 700' }),
               h('a', { href: `/tv?event=${e.id}`, target: '_blank', textContent: 'View recap', style: 'color: var(--orange); font-weight: 700' }),
               h('button', { textContent: '⬇ Export', onclick: () => exportEvent(e) }),
             ]),

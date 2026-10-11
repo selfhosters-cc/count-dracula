@@ -168,6 +168,17 @@ describe('the server runs the tick', () => {
     expect(app.ledger.household(id).snapshot().event.name).toBe('Halloween 2026')
   })
 
+  test('a 3 am end missed while the server was down happens as it starts', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
+    const db = new Database(join(dir, 'db.sqlite'), { create: true })
+    const id = openLedger(db, { now: () => at('2026-10-31T21:00:00Z') }).createHousehold({ displayName: 'Late', timeZone: 'America/Toronto' }) // live at once
+    db.close()
+
+    const { app } = serverAt(dir, '2026-11-01T12:00:00Z')
+
+    expect(app.ledger.household(id).snapshot().event).toMatchObject({ name: 'Halloween 2026', ended: true, endedAutomatically: true })
+  })
+
   test('TVs and phones follow a go-live without a reload', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
     const { app, clock } = serverAt(dir, '2026-10-31T19:59:00Z', 20)

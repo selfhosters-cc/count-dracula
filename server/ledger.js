@@ -169,7 +169,8 @@ export function openLedger(db, config) {
     // The minute tick (spec §7): any Event whose Goes live at has passed goes live, and any live,
     // non-Rehearsal night still on at 3:00 am local the morning after it went live is ended. After a
     // restart, the first tick catches up. Returns [{ householdId, deltas }] to publish.
-    tick() {
+    // nearbyFor(householdId): the Area figures to keep on a night the tick ends, for its summary.
+    tick({ nearbyFor = () => null } = {}) {
       const at = now()
       const done = []
       const due = db
@@ -184,7 +185,7 @@ export function openLedger(db, config) {
         .all()
       for (const night of nights) {
         if (at < nextWallTime(night.went_live_at, AUTO_END_AT, night.time_zone)) continue
-        done.push({ householdId: night.household_id, deltas: householdOf(night.household_id).apply({ type: 'end', automatically: true }) })
+        done.push({ householdId: night.household_id, deltas: householdOf(night.household_id).apply({ type: 'end', automatically: true, nearby: nearbyFor(night.household_id) }) })
       }
       return done
     },
@@ -582,10 +583,11 @@ export function openLedger(db, config) {
       // "🌙 End the night" (spec §2 Ended): the event stays live, so stragglers still count; only the next
       // Go live freezes it. Tickets nobody won expire, remembering what they were for Resume.
       // The 3:00 am safety net ends it `automatically`, which /setup tells the Manager about.
-      end({ automatically = false } = {}) {
+      // `nearby`, the Area's figures at this moment (or null), is kept for the Night summary's nearby slide.
+      end({ automatically = false, nearby = null } = {}) {
         const event = eventById()
         if (event.ended) return []
-        db.query('UPDATE events SET ended = 1, ended_automatically = ? WHERE id = ?').run(automatically ? 1 : 0, event.id)
+        db.query('UPDATE events SET ended = 1, ended_automatically = ?, summary_nearby = ? WHERE id = ?').run(automatically ? 1 : 0, nearby ? JSON.stringify(nearby) : null, event.id)
         db.query(`
           UPDATE golden_tickets SET expired_from = state, state = 'expired'
           WHERE event_id = ? AND kid_id IS NULL AND state IN ('hidden', 'rolled', 'released')
@@ -907,6 +909,26 @@ export function openLedger(db, config) {
           .query('SELECT * FROM events WHERE household_id = ? ORDER BY id DESC')
           .all(householdId)
           .map((row) => ({ ...toEventSummary(row), kids: kidCount.get(row.id).n, tags: tagsOf.all(row.id).map(toTag) }))
+      },
+
+      // The Night summary (spec §12): one ended or past night, from stored data, with no phone names. null while
+      // the night is still running, for a counts-only night, or for another Household's.
+      summary(eventId) {
+        const event = eventById(eventId)
+        if (!event || event.counts_only || !(event.ended || event.frozen)) return null
+        const { event: e, tags, kids, ghost, recap, settings } = this.snapshot(event.id)
+        const h = household()
+        return {
+          displayName: h.display_name,
+          timeZone: h.time_zone,
+          event: e,
+          tags,
+          kids: kids.map(({ phoneName, ...kid }) => kid),
+          ghost,
+          recap,
+          switches: settings.switches,
+          nearby: event.summary_nearby ? JSON.parse(event.summary_nearby) : null,
+        }
       },
 
       // null for an event that isn't this Household's.

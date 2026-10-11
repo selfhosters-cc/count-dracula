@@ -79,12 +79,13 @@
 
     <section id="auto-ended" hidden>
       <h2>🌙 Your night ended automatically at 3:00 am</h2>
-      <p class="muted">Nobody pressed End the night, so it ended itself. Your summary is ready. Stragglers still count, and any phone can resume it.</p>
+      <p class="muted">Nobody pressed End the night, so it ended itself. <a href="" id="auto-ended-summary" class="link">Your summary is ready</a>. Stragglers still count, and any phone can resume it.</p>
     </section>
 
     <section>
       <h2>Live now: <span id="live-name"></span></h2>
       <p class="muted"><span id="live-kids"></span> kids · join key <code id="join-key"></code> · time zone <span id="time-zone"></span></p>
+      <p><a href="" id="summary-link" class="link" hidden>✨ Tonight's Night summary</a></p>
       <p id="rehearsal-tools" hidden><button id="reset-rehearsal">🎭 Reset the Rehearsal to 0</button></p>
       <div class="row">
         <button id="count-here" class="primary">📱 Count on this phone</button>
@@ -201,7 +202,7 @@
     <section>
       <h2>Your household</h2>
       <form id="name-form">
-        <label for="h-name">Household name</label>
+        <label for="h-name">Household name (this appears on anything you share)</label>
         <div class="row"><input id="h-name" maxlength="40" autocomplete="off"><button type="submit">Save</button></div>
       </form>
       <p class="muted">Signed in as <span id="signed-in"></span> · time zone <span id="h-zone"></span> · <a href="/privacy" class="link">Privacy and House rules</a></p>

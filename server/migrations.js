@@ -106,6 +106,11 @@ const MIGRATIONS = [
       CREATE INDEX invites_by_household ON invites (household_id);
     `)
   },
+
+  // 8 → 9: the Night summary's nearby slide (v2 spec §12): the Area figures as they stood when the night ended.
+  (db) => {
+    db.exec('ALTER TABLE events ADD COLUMN summary_nearby TEXT')
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

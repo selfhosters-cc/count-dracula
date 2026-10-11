@@ -1,7 +1,7 @@
 # Night summary slides
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 18, 26, 41
 
 ## What to build
@@ -19,11 +19,21 @@ An ended night becomes Wrapped-style tap-through slides that a Manager can open 
 
 ## Acceptance criteria
 
-- [ ] An ended night's slides show the stored figures, matching the TV recap's numbers
-- [ ] A live, unended night has no slides; Resume then End updates them
-- [ ] The no-ghost and estimated-ghost wordings appear when they should
-- [ ] The nearby slide shows the figures frozen at the end, unchanged after the Household moves its Location; it's absent below the minimum
-- [ ] Times are in the Household's zone with the browser elsewhere
-- [ ] Each slide reads on its own in a phone screenshot (checked in the browser)
-- [ ] Costume and display names of `<img src=x onerror=alert(1)>` render as text
-- [ ] `bun test` passes
+- [x] An ended night's slides show the stored figures, matching the TV recap's numbers
+- [x] A live, unended night has no slides; Resume then End updates them
+- [x] The no-ghost and estimated-ghost wordings appear when they should
+- [x] The nearby slide shows the figures frozen at the end, unchanged after the Household moves its Location; it's absent below the minimum
+- [x] Times are in the Household's zone with the browser elsewhere
+- [x] Each slide reads on its own in a phone screenshot (checked in the browser)
+- [x] Costume and display names of `<img src=x onerror=alert(1)>` render as text
+- [x] `bun test` passes
+
+## Notes from the build
+
+- **Server:** `GET /api/summary?event=<id>` (a Manager of the Household) answers `house.summary(id)`: the display name, zone, event, tags, kids without phone names, ghost, the revealed tickets, switches and the frozen nearby figures. 404 while the night is still on (live and not ended), for a counts-only night, or another Household's. `/summary?event=<id>` is the page (Manager only).
+- **Frozen nearby:** `events.summary_nearby` (migration step 9) is written by End, from `/api/end` and from the 3 am tick (`ledger.tick({ nearbyFor })`), with the Area's figures at that moment, or null below the minimum or without a Location. Resume then End rewrites it. Also fixed: the server's first tick ran before nearby existed, so a night ended at start-up would have thrown (now tested).
+- **Facts:** `shared/summary.js` `nightFacts()`: the TV recap's own functions and wording (peak half-hour, biggest crew, costume of the night, the verdict), in the Household's zone, plus the per-minute barcode (tested in UTC with a Toronto night).
+- **Slides** (`public/summary.js`): intro → total and span → vs the ghost with the race chart (or "Next year: N is the number to beat") → peak and crew → costume of the night → golden tickets → nearby → receipt → closing card. A slide with nothing to say is left out (no kids → no peak; no tickets drawn → no golden slide; no frozen figures → no nearby slide). Everything is DOM text; the two SVGs are numbers with escaped labels. Tap the right two-thirds or → for next.
+- The estimated-ghost wording reads `ghost.estimated` ("last year (estimated)"); ticket 45 sets it. The Share button on the closing card is ticket 44 (`buildSlides(…, { closing })`).
+- `/setup`: "✨ Night summary" on past nights and on an ended live night, the link in the "ended automatically" card, and "this appears on anything you share" by the household name.
+- Checked in the browser at phone size on the nearby seed with house 1 renamed `<img src=x onerror=…> House` and a `<b>Bold</b>` costume: all 8 slides read on their own, names as text, no phone names on the page.

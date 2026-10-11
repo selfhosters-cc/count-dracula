@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Count Dracula — Night summary</title>
+  <link rel="stylesheet" href="/vendor/fonts/fonts.css">
+  <style>
+    :root {
+      --night: #140f26; --surface: #1f1838; --ink: #f7efe0; --ink-dim: #b3aacb; --pumpkin: #ff7a1a;
+      --ghost: #c9d2ff; --gold: #ffcf3a; --grid: #2c2449;
+      --f-display: "Bungee", "Arial Black", Impact, sans-serif;
+      --f-spooky: "Creepster", "Bungee", Impact, fantasy;
+      --f-body: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+      --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body { background: #0a0814; color: var(--ink); font-family: var(--f-body); display: grid; place-items: center; padding: 12px; }
+    #message { color: var(--ink-dim); text-align: center; font-size: 18px; max-width: 24em; line-height: 1.5; }
+    #message a { color: var(--pumpkin); }
+    [hidden] { display: none !important; }
+    .frame { container-type: inline-size; position: relative; overflow: hidden; border-radius: 18px; box-shadow: 0 10px 40px #000a;
+      width: min(100%, calc((100dvh - 24px) * 9 / 16)); aspect-ratio: 9 / 16; background: var(--night); user-select: none; cursor: pointer; }
+    .bars { position: absolute; top: 3cqw; left: 4cqw; right: 4cqw; display: flex; gap: 1cqw; z-index: 2; }
+    .bars i { flex: 1; height: .9cqw; border-radius: 1cqw; background: #ffffff33; }
+    .bars i.on { background: var(--ink); }
+    .slide { position: absolute; inset: 0; padding: 14cqw 8cqw 12cqw; display: flex; flex-direction: column; justify-content: center; gap: 4cqw; }
+    .slide .brand { position: absolute; top: 6cqw; left: 8cqw; font-family: var(--f-spooky); color: var(--pumpkin); font-size: 5.4cqw; letter-spacing: .03em; }
+    .eyebrow { font-size: 5cqw; color: var(--ink-dim); overflow-wrap: anywhere; }
+    .huge { font-family: var(--f-display); font-size: 24cqw; line-height: .95; overflow-wrap: anywhere; }
+    .mid { font-family: var(--f-display); font-size: 11cqw; line-height: 1.05; overflow-wrap: anywhere; }
+    .line { font-size: 6cqw; line-height: 1.3; overflow-wrap: anywhere; }
+    .gold { color: var(--gold); }
+    .tap { position: absolute; bottom: 4.5cqw; left: 0; right: 0; text-align: center; font-size: 3.4cqw; color: #ffffff88; }
+    .foot { position: absolute; bottom: 9cqw; left: 0; right: 0; text-align: center; font-size: 3.6cqw; color: #ffffffaa; }
+    .s0 { background: linear-gradient(160deg, #3b1d6e, #140f26 70%); }
+    .s1 { background: linear-gradient(160deg, #1d2a6e, #140f26 70%); }
+    .s2 { background: linear-gradient(160deg, #6e2a1d, #140f26 70%); }
+    .s3 { background: linear-gradient(160deg, #1d6e4f, #140f26 70%); }
+    .s4 { background: linear-gradient(160deg, #6e1d55, #140f26 70%); }
+    .s5 { background: linear-gradient(160deg, #6e5a1d, #140f26 70%); }
+    .s6 { background: linear-gradient(160deg, #2a3f52, #140f26 70%); }
+    .s7 { background: #2b2440; justify-content: flex-start; padding: 12cqw 7cqw 10cqw; }
+    .s8 { background: linear-gradient(160deg, #3b1d6e, #6e2a1d); }
+    .chart svg { display: block; width: 100%; height: auto; }
+    /* the receipt (from the prototype's variant B) */
+    .receipt { width: 100%; background: #fbf7ee; color: #24201c; font-family: var(--f-mono); font-size: 3.1cqw; line-height: 1.4; padding: 5cqw 5cqw 7cqw;
+      --tooth: 3cqw; clip-path: polygon(0 0, 100% 0, 100% 100%, 95% calc(100% - var(--tooth)), 90% 100%, 85% calc(100% - var(--tooth)), 80% 100%, 75% calc(100% - var(--tooth)), 70% 100%, 65% calc(100% - var(--tooth)), 60% 100%, 55% calc(100% - var(--tooth)), 50% 100%, 45% calc(100% - var(--tooth)), 40% 100%, 35% calc(100% - var(--tooth)), 30% 100%, 25% calc(100% - var(--tooth)), 20% 100%, 15% calc(100% - var(--tooth)), 10% 100%, 5% calc(100% - var(--tooth)), 0 100%); }
+    .receipt .c { text-align: center; overflow-wrap: anywhere; }
+    .receipt .shop { font-family: var(--f-spooky); font-size: 8cqw; color: #c2410c; line-height: 1; }
+    .receipt hr { border: 0; border-top: .4cqw dashed #24201c88; margin: 1.6cqw 0; }
+    .receipt .li { display: flex; gap: 1.5cqw; }
+    .receipt .li .n { flex: 1; overflow: hidden; white-space: nowrap; }
+    .receipt .li .n::after { content: " ................................................................"; color: #24201c55; }
+    .receipt .total { font-size: 5cqw; font-weight: 700; }
+    .receipt .coupon { border: .5cqw dashed #b8860b; background: #fff3c4; padding: 1.4cqw 2.2cqw; margin: 1.4cqw 0; overflow-wrap: anywhere; }
+    .receipt svg { display: block; width: 100%; height: 12cqw; margin-top: 1.6cqw; }
+    .receipt .tiny { font-size: 2.6cqw; color: #24201caa; }
+  </style>
+</head>
+<body>
+  <p id="message">Loading the night…</p>
+  <div class="frame" id="frame" hidden role="region" aria-label="Night summary: tap for the next slide">
+    <div class="bars" id="bars"></div>
+    <div id="slide"></div>
+  </div>
+  <script type="module" src="/summary.js"></script>
+</body>
+</html>

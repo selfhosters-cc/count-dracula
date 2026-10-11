@@ -19,7 +19,7 @@ import { toCsv } from './export.js'
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
-const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html', '/privacy': '/privacy.html' }
+const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html', '/privacy': '/privacy.html', '/summary': '/summary.html' }
 const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink', 'setLocation', 'passFirstRun', 'resetRehearsal'])
 
 // What a TV-link holder gets (spec §9): what the TV draws, without each kid's phone name.
@@ -78,13 +78,11 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   // anything missed while the server was down.
   function tick() {
     try {
-      for (const { householdId, deltas } of ledger.tick()) hub.publish(householdId, deltas)
+      for (const { householdId, deltas } of ledger.tick({ nearbyFor: nearbyArea })) hub.publish(householdId, deltas)
     } catch (err) {
       console.error('tick failed:', err)
     }
   }
-  tick()
-  const ticker = setInterval(tick, tickMs)
 
   // Nearby (spec §11): figures every 10 minutes, pushed to every open screen as a `nearby` event.
   const nearby = createNearby({ nights: () => ledger.nearbyNights(now()), isBlocked, enabled: { ...DEFAULT_SWITCHES, ...config.switches }.nearby })
@@ -99,8 +97,16 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   }
   refreshNearby()
   const nearbyTimer = setInterval(refreshNearby, nearby.REFRESH_MS)
+  // The Area figures a night keeps when it ends, for its summary's nearby slide (null below the minimum).
+  function nearbyArea(householdId) {
+    return nearby.forHousehold(householdId, cellOf(householdId))?.area ?? null
+  }
   // A snapshot carries the figures as they stood at the last refresh.
   const withNearby = (snap, house) => ({ ...snap, nearby: nearby.forHousehold(house.id, cellOf(house.id)) })
+
+  // The first tick runs now, with nearby ready for any night it ends.
+  tick()
+  const ticker = setInterval(tick, tickMs)
 
   // A VACUUM INTO copy every 15 minutes, with the deletions prune on the same timer (spec §15).
   const backups = config.backupDir ? createBackups({ db, dir: config.backupDir, now, log }) : null
@@ -341,6 +347,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       return new Response('Deleted', { headers: { 'Set-Cookie': sessionCookie('', 0) } })
     }),
     'GET /api/events': manager((req, house) => Response.json(house.events())),
+    // The Night summary's data (spec §12), for a Manager; /summary?event=<id> draws it.
+    'GET /api/summary': manager((req, house) => {
+      const summary = house.summary(Number(new URL(req.url).searchParams.get('event')))
+      return summary ? Response.json(summary) : new Response('No summary: the night is still on, or there is no such night', { status: 404 })
+    }),
+    'GET /summary': managerPage('/summary'),
     // ⬇ Export event (spec §6): a CSV download.
     'GET /api/export': manager((req, house) => {
       const night = house.exportEvent(Number(new URL(req.url).searchParams.get('event')))
@@ -364,7 +376,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     }),
     // ☰ "🌙 End the night" / "Resume the night": any phone with the join key.
     'POST /api/end': write(async (req, house) => {
-      hub.publish(house.id, house.apply({ type: 'end' }))
+      hub.publish(house.id, house.apply({ type: 'end', nearby: nearbyArea(house.id) }))
     }),
     'POST /api/resume': write(async (req, house) => {
       hub.publish(house.id, house.apply({ type: 'resume' }))
@@ -543,6 +555,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       failNext = message
     },
     refreshNearby,
+    tick,
     stop() {
       clearInterval(nearbyTimer)
       process.off('uncaughtException', onUncaught)
