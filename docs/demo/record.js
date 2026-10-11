@@ -17,38 +17,51 @@ if (!out || !process.env.PLAYWRIGHT_CORE) {
   process.exit(2)
 }
 const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_CORE)
-const { joinKey, tvToken, eventId, stamp, tags } = JSON.parse(seeded)
+const { joinKey, tvToken } = JSON.parse(seeded)
 
-const W = 1824
-const H = 936
-// [costume, seconds to wait after it, helper]: about a kid a second, then the takeovers play out. Sam's phone
-// is off screen: its #103 is what shows "NEXT KID IS GOLDEN" on the phone in the clip.
+const W = 1890
+const H = 1048
+// [costume, seconds to wait after it]: about a kid a second, then the takeovers play out.
 const TAPS = [
   ['Spider-Man', 1.0], ['Witch', 0.8], ['Princess', 1.1], ['Dinosaur', 0.9], ['Superhero', 1.0],
   ['Ghost', 2.2], // #100: the takeover, and the door keeps counting through it
   ['Vampire', 1.8], ['Witch', 1.0],
-  ['Skeleton', 1.8, 'Sam'], // #103
+  ['Skeleton', 1.8], // #103: "NEXT KID IS GOLDEN" on the phone
   ['Princess', 9.2], // #104: the golden ticket, then the board
 ]
 
-const page = `<!doctype html><meta charset="utf-8"><style>
-  html, body { margin: 0; width: ${W}px; height: ${H}px; overflow: hidden; cursor: none;
-    background: radial-gradient(ellipse at 30% 20%, #241640 0%, #120c22 55%, #0a0712 100%); }
-  .phone { position: absolute; left: 32px; top: 32px; width: 390px; height: 844px; padding: 14px;
-    border-radius: 58px; background: #050407; box-shadow: 0 0 0 2px #3a3248, 0 24px 60px #000a; }
+// Two panels with a gap between them, each labelled: the phone in its bezel, the TV in a TV's frame on a stand.
+const page = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/vendor/fonts/fonts.css"><style>
+  html, body { margin: 0; width: ${W}px; height: ${H}px; overflow: hidden; cursor: none; background: #07050c; }
+  .panel { position: absolute; top: 20px; height: 1008px; box-sizing: border-box; padding: 20px; border-radius: 28px;
+    background: linear-gradient(180deg, #1d1433 0%, #120c22 100%); border: 2px solid #34284d; }
+  .door { left: 20px; width: 458px; }
+  .porch { left: 502px; width: 1368px; }
+  .label { height: 96px; text-align: center; }
+  .label b { display: block; font: 400 36px/1.15 Bungee, sans-serif; color: #ff8a2a; letter-spacing: .02em; }
+  .label span { display: block; margin-top: 6px; font: 500 28px/1.2 Fredoka, sans-serif; color: #d8cff0; }
+  .phone { width: 390px; height: 844px; padding: 14px; border-radius: 58px; background: #050407;
+    box-shadow: 0 0 0 2px #4a3f5e, 0 20px 50px #000c; }
   .phone iframe { width: 390px; height: 844px; border: 0; border-radius: 44px; display: block; background: #13101c; }
-  .tv { position: absolute; left: 488px; top: 64px; padding: 12px; border-radius: 14px; background: #050407;
-    box-shadow: 0 0 0 2px #3a3248, 0 24px 60px #000a; }
+  .tv { width: 1280px; height: 720px; padding: 24px; border-radius: 18px; background: linear-gradient(180deg, #1a1a1f, #0b0b0e);
+    box-shadow: 0 0 0 2px #4a3f5e, 0 20px 50px #000c; }
   .tv iframe { width: 1280px; height: 720px; border: 0; display: block; background: #13101c; }
-  .say { position: absolute; left: 488px; top: 830px; width: 1304px; text-align: center; color: #c9bfe0;
-    font: 600 28px/1.3 system-ui, sans-serif; letter-spacing: .01em; }
-  .say b { color: #ff8a2a; }
+  .neck { width: 90px; height: 26px; margin: 0 auto; background: #121216; }
+  .base { width: 380px; height: 14px; margin: 0 auto; border-radius: 8px 8px 3px 3px; background: #1c1c22; box-shadow: 0 0 0 2px #2c2838; }
+  .say { margin-top: 26px; text-align: center; font: 500 28px/1.2 Fredoka, sans-serif; color: #a99cc8; }
   .touch { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%;
     background: #ffffff55; box-shadow: 0 0 0 3px #ffffffaa; pointer-events: none; opacity: 0; }
 </style>
-<div class="phone"><iframe id="door" src="/door?key=${encodeURIComponent(joinKey)}"></iframe></div>
-<div class="tv"><iframe id="tv" src="/tv/k/${tvToken}"></iframe></div>
-<div class="say"><b>At the door,</b> a helper taps each kid in. <b>On the TV,</b> every one is celebrated.</div>
+<div class="panel door">
+  <div class="label"><b>📱 The door phone</b><span>a helper taps each kid</span></div>
+  <div class="phone"><iframe id="door" src="/door?key=${encodeURIComponent(joinKey)}"></iframe></div>
+</div>
+<div class="panel porch">
+  <div class="label"><b>📺 The TV on the porch</b><span>everyone watches</span></div>
+  <div class="tv"><iframe id="tv" src="/tv/k/${tvToken}"></iframe></div>
+  <div class="neck"></div><div class="base"></div>
+  <div class="say">Each tap lands on the TV a moment later. Watch for kid #100, then a golden ticket.</div>
+</div>
 <div class="touch" id="touch"></div>
 <script>
   window.touch = (x, y) => {
@@ -97,14 +110,11 @@ try {
   await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 92, everyNthFrame: 1 })
   await tab.waitForTimeout(900)
 
-  for (const [costume, wait, helper] of TAPS) {
-    if (helper) await helperTap(helper, tags[costume])
-    else {
-      const tile = door.locator('.tile[data-tag]').filter({ has: door.locator('.nm', { hasText: new RegExp(`^${costume}$`) }) })
-      const box = await tile.boundingBox() // in the page's coordinates, the iframe's offset included
-      await tab.evaluate(([x, y]) => window.touch(x, y), [box.x + box.width / 2, box.y + box.height / 2])
-      await tile.click()
-    }
+  for (const [costume, wait] of TAPS) {
+    const tile = door.locator('.tile[data-tag]').filter({ has: door.locator('.nm', { hasText: new RegExp(`^${costume}$`) }) })
+    const box = await tile.boundingBox() // in the page's coordinates, the iframe's offset included
+    await tab.evaluate(([x, y]) => window.touch(x, y), [box.x + box.width / 2, box.y + box.height / 2])
+    await tile.click()
     await tab.waitForTimeout(wait * 1000)
   }
   await cdp.send('Page.stopScreencast')
@@ -114,12 +124,3 @@ try {
   await browser.close()
 }
 
-// Another helper's phone: the same tap the door page sends.
-async function helperTap(phoneName, tagId) {
-  const res = await fetch(`${base}/api/taps`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Join-Key': joinKey },
-    body: JSON.stringify({ id: crypto.randomUUID(), tagId, tappedAt: Date.now(), phoneName, eventId, stamp }),
-  })
-  if (!res.ok) throw new Error(`${phoneName}'s tap: HTTP ${res.status}`)
-}

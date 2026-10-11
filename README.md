@@ -3,7 +3,7 @@
 A Halloween trick-or-treater counter for one household. Helpers at the door tap each kid in on their
 phones. A TV facing the porch celebrates every kid live and races tonight's count against last year's.
 
-![A night in progress: a helper taps costume tiles on the door phone, and the TV beside it counts each kid with a pop and confetti, the race against last year's ghost and the costume leaderboard moving. Kid #100 brings the giant headstone takeover, the phone warns that the next kid is golden, and kid #104 wins a golden ticket](docs/demo/demo.gif)
+![A night in progress, the door phone and the porch TV side by side: a helper taps costume tiles on the phone, and the TV counts each kid with a pop and confetti, the race against last year's ghost and the costume leaderboard moving. Kid #100 brings the giant headstone takeover, the phone warns that the next kid is golden, and kid #104 wins a golden ticket](docs/demo/demo.gif)
 
 [▶ Watch in full quality (WebM)](docs/demo/demo.webm)
 

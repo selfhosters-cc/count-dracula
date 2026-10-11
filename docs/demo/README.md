@@ -9,9 +9,9 @@ They're made by three scripts, run on a throwaway server with a scratch database
 - `seed.js`: a fresh database with "The Smiths on Elm St" live on Halloween 2026, its Clock shift set so the
   TV reads about 6:30 pm on Oct 31, racing the real 2025 night (346 kids), 94 kids in, golden tickets put on
   #104 and up. It only works before Nov 1, 2026 (after that, sign-up makes no Halloween 2026).
-- `record.js`: puts the phone (390×844, in a phone bezel) and the TV (1280×720) side by side on one page,
-  taps the phone's costume tiles and records it frame by frame. A second, off-screen helper taps #103, which
-  is what shows "NEXT KID IS GOLDEN" on the phone.
+- `record.js`: lays the phone (390×844, in a phone bezel) and the TV (1280×720, in a TV's frame on a stand)
+  out side by side, each in its own labelled panel, taps the phone's costume tiles and records it frame by
+  frame. The phone's own #103 is what shows "NEXT KID IS GOLDEN" on it.
 - `encode.js`: the frames into `demo.webm` (VP8) and `demo.gif` (960 px, 10 fps, 128 colours, under 8 MB).
 
 ## Re-recording

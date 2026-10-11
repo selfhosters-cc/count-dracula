@@ -4,7 +4,7 @@
 //
 //   bun docs/demo/seed.js <scratch database>
 //
-// Prints what the recorder needs as JSON: { joinKey, tvToken, eventId, stamp, tags: { name: id } }.
+// Prints what the recorder needs as JSON: { joinKey, tvToken }.
 import { Database } from 'bun:sqlite'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -67,7 +67,7 @@ costumes.forEach((name, i) => {
 const tickets = db.query('SELECT id FROM golden_tickets WHERE event_id = ? ORDER BY id').all(night.id)
 tickets.forEach((t, i) => db.query("UPDATE golden_tickets SET number = ?, state = 'hidden', kid_id = NULL WHERE id = ?").run(GOLDEN[i], t.id))
 
-console.log(JSON.stringify({ joinKey: house.joinKey(), tvToken: house.tvToken(), eventId: night.id, stamp: night.wentLiveAt, tags }))
+console.log(JSON.stringify({ joinKey: house.joinKey(), tvToken: house.tvToken() }))
 
 function fail(message) {
   console.error(`!! ${message}`)
