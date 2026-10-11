@@ -14,6 +14,9 @@ export function tvNearby(nearby) {
 // The phone's strip: the Area, or else the Site-wide total, or null to hide it.
 export function phoneNearby(nearby) {
   if (nearby?.area) return `🏘️ Near you: ${kidsText(nearby.area.kids30)} in 30 min · ${fmt(nearby.area.houses)} houses`
-  if (nearby?.site) return `🎃 Count Dracula tonight: ${fmt(nearby.site.houses)} houses · ${kidsText(nearby.site.kids)}`
+  if (nearby?.site) {
+    const top = nearby.site.topCostume ? ` · top costume: ${nearby.site.topCostume.emoji ? `${nearby.site.topCostume.emoji} ` : ''}${nearby.site.topCostume.name}` : ''
+    return `🎃 Count Dracula tonight: ${fmt(nearby.site.houses)} houses · ${kidsText(nearby.site.kids)}${top}`
+  }
   return null
 }

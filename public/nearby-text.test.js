@@ -15,6 +15,7 @@ describe('nearby words', () => {
   test('the phone strip: the Area, else the Site-wide total, else hidden', () => {
     expect(phoneNearby({ area, site })).toBe('🏘️ Near you: ~90 kids in 30 min · 14 houses')
     expect(phoneNearby({ area: null, site })).toBe('🎃 Count Dracula tonight: 212 houses · ~3,140 kids')
+    expect(phoneNearby({ area: null, site: { ...site, topCostume: { name: 'Witch', emoji: '🧙' } } })).toBe('🎃 Count Dracula tonight: 212 houses · ~3,140 kids · top costume: 🧙 Witch')
     expect(phoneNearby({ area: null, site: null })).toBeNull()
     expect(phoneNearby(null)).toBeNull()
   })

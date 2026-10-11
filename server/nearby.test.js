@@ -82,6 +82,39 @@ describe('top costume', () => {
   })
 })
 
+describe('the site-wide top costume', () => {
+  const witch = { name: 'Witch', emoji: '🧙', count: 2 }
+  const rude = { name: 'Sh1t', emoji: '💩', count: 90 }
+  const bluey = { name: 'Bluey', emoji: '🐶', count: 90 }
+  const withTop = (nights) => computeNearby(nights, { isBlocked, siteTopCostume: true }).site
+
+  test('the most-counted name in at least 3 Households, never a blocklisted one', () => {
+    const nights = [
+      night({ costumes: [witch, rude, bluey] }),
+      night({ costumes: [witch, rude, bluey] }),
+      night({ cell: null, costumes: [witch, rude] }), // no Location: still on the site line
+      night({ kids30: 0 }),
+      night(),
+    ]
+
+    expect(withTop(nights).topCostume).toEqual({ name: 'Witch', emoji: '🧙' })
+  })
+
+  test('with none qualifying, there is none; and it comes only with its switch', () => {
+    const nights = [night({ costumes: [bluey] }), night({ costumes: [bluey] }), night(), night(), night()]
+
+    expect(withTop(nights).topCostume).toBeNull()
+    expect(computeNearby(nights, { isBlocked }).site).not.toHaveProperty('topCostume')
+  })
+
+  test('a name made of HTML is just a name', () => {
+    const tag = { name: '<img src=x onerror=alert(1)>', emoji: '🎃', count: 1 }
+    const nights = [night({ costumes: [tag] }), night({ costumes: [tag] }), night({ costumes: [tag] }), night(), night()]
+
+    expect(withTop(nights).topCostume.name).toBe('<img src=x onerror=alert(1)>')
+  })
+})
+
 describe('the Site-wide total', () => {
   test("every live, non-Rehearsal night's Household and kids, rounded, from 5 Households", () => {
     const nights = [night({ kids: 100, kids30: 0 }), night({ kids: 3, kids30: 0 }), night({ kids: 0, kids30: 0 }), night({ kids: 9 }), night({ rehearsal: true, kids: 500 })]
@@ -138,7 +171,7 @@ describe('on the screens', () => {
 
     const pushed = await tv.next()
     expect(pushed.event).toBe('nearby')
-    expect(pushed.data).toEqual({ area: { houses: 6, kids30: 10, topCostume: { name: 'Witch', emoji: '🧙' } }, site: { houses: 6, kids: 10 } })
+    expect(pushed.data).toEqual({ area: { houses: 6, kids30: 10, topCostume: { name: 'Witch', emoji: '🧙' } }, site: { houses: 6, kids: 10, topCostume: { name: 'Witch', emoji: '🧙' } } })
     expect((await snap()).nearby.area.houses).toBe(6)
   })
 
@@ -178,7 +211,7 @@ describe('the Site-wide total on the sign-up page', () => {
     const body = await res.text()
 
     expect(four).toEqual({ site: null })
-    expect(JSON.parse(body)).toEqual({ site: { houses: 5, kids: 15 } })
+    expect(JSON.parse(body)).toEqual({ site: { houses: 5, kids: 15, topCostume: null } })
     expect(body).not.toContain('House')
     expect(body).not.toContain('Secret')
   })

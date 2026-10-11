@@ -85,7 +85,8 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   }
 
   // Nearby (spec §11): figures every 10 minutes, pushed to every open screen as a `nearby` event.
-  const nearby = createNearby({ nights: () => ledger.nearbyNights(now()), isBlocked, enabled: { ...DEFAULT_SWITCHES, ...config.switches }.nearby })
+  const switches = { ...DEFAULT_SWITCHES, ...config.switches }
+  const nearby = createNearby({ nights: () => ledger.nearbyNights(now()), isBlocked, enabled: switches.nearby, siteTopCostume: switches.siteTopCostume })
   const cellOf = (householdId) => ledger.households().find((h) => h.id === householdId)?.location ?? null
   function refreshNearby() {
     try {

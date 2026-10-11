@@ -8,8 +8,9 @@ const REFRESH_MS = 10 * 60_000
 const round5 = (n) => Math.round(n / 5) * 5
 
 // nights: [{ householdId, cell, rehearsal, suspended, kids, kids30, costumes: [{ name, emoji, count }] }], one per
-// Household's live Event. Returns { areas: Map(area → { houses, kids30, topCostume }), site: { houses, kids } | null }.
-export function computeNearby(nights, { isBlocked }) {
+// Household's live Event. Returns { areas: Map(area → { houses, kids30, topCostume }), site: { houses, kids, topCostume? } | null }.
+// siteTopCostume adds the site line's top costume, under its own switch (spec §14).
+export function computeNearby(nights, { isBlocked, siteTopCostume = false }) {
   const counting = nights.filter((n) => !n.rehearsal && !n.suspended)
   const byArea = new Map()
   for (const n of counting) {
@@ -29,6 +30,7 @@ export function computeNearby(nights, { isBlocked }) {
   }
   const site =
     counting.length >= MIN_HOUSEHOLDS ? { houses: counting.length, kids: round5(counting.reduce((sum, n) => sum + n.kids, 0)) } : null
+  if (site && siteTopCostume) site.topCostume = topCostume(counting, isBlocked)
   return { areas, site }
 }
 
@@ -59,7 +61,7 @@ function topCostume(nights, isBlocked) {
 }
 
 // The figures as they stand, refreshed every 10 minutes. forHousehold(id) is what one Household's screens show.
-export function createNearby({ nights, isBlocked, enabled = true }) {
+export function createNearby({ nights, isBlocked, enabled = true, siteTopCostume = false }) {
   let figures = { areas: new Map(), site: null }
   let cells = new Map() // household id → cell, as of the last refresh
 
@@ -67,7 +69,7 @@ export function createNearby({ nights, isBlocked, enabled = true }) {
     REFRESH_MS,
     refresh() {
       const all = enabled ? nights() : []
-      figures = computeNearby(all, { isBlocked })
+      figures = computeNearby(all, { isBlocked, siteTopCostume })
       cells = new Map(all.map((n) => [n.householdId, n.cell]))
     },
     // { area: { houses, kids30, topCostume } | null, site: { houses, kids } | null }, or null when switched off.
