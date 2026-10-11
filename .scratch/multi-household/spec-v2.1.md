@@ -358,7 +358,12 @@ Prototype: branch `prototype/homepage` (`d414470`), `public/home-prototype.html?
   - **Footer:** Privacy and House rules · TV setup help · Help: email us
 - **Got a code?** (added after opening, 2026-10-11): one box for both codes a person may type, worked out from the code's shape (`shared/codes.js`): a TV's pairing code (6 characters, e.g. `K7Q-M4X`) goes to `/setup?pair=`, through sign-in if need be (Sign in carries it, and the callback lands on `/setup?pair=`); a join code (10 characters) is checked with the server, then opens `/door?key=`. The TV's pairing screen says "On your phone, go to <host> and enter this code, or scan this", and every helper QR adds "No camera? On their phone, go to <host> and enter <code>". A line under Start / Sign in links to it, and a phone holding a door's key can still reach it (`/#code`).
 - **A sticky Start counting / Sign in bar on phones** slides up while neither the top row nor the forms are on screen.
-- **Paused sign-ups:** "Sign-ups are paused, try again later." replaces the Continue button, before anyone goes to Google. Sign in still works.
+- **One way in** (changed after opening, 2026-10-11): the separate Start (household name + Continue with Google) and Sign in forms read as "signing in needs a household name". Now:
+  - a single **Continue with Google**, with no name field: a known account lands in its Household; an unknown, verified one gets a new Household named **"Our household"**, which first-run's screen 1 renames. The top row and the sticky bar are **Continue with Google · Got a code?**. The "You already run…" notice (`/setup?already=1`) is gone.
+  - **Continue with email** under it: one field; the answer is always "Check your email". The email (plain text and HTML, subject "Your Count Dracula sign-in link") says who asked (the IP) and when, and holds `/auth/email?token=`, single use, 15 minutes, kept hashed. Opening it shows a **Sign in** button that POSTs, so a mail scanner's prefetch can't spend it. **Same address = same Manager**: the address finds a Manager by email in any case, whichever way they first signed in; an email-only Manager gets Google's `sub` on their first Google sign-in. A TV's code rides with the link. Limits: 3 links per address per 15 minutes (quietly not sent past that) and 10 per IP per hour.
+  - Sent through the LAN's own mail relay by a small SMTP client (`server/mail.js`), configured by `SMTP_HOST`, `SMTP_PORT` and `EMAIL_FROM` in `deploy/local.env`; hidden until they're set. The log says a link went out, the household, and a masked address (`a***@example.com`), never the token. Caddy masks `?token=`.
+  - **Paused sign-ups** refuse only new households: "New households are paused for now. Signing in still works." The buttons stay.
+- **Paused sign-ups:** "Sign-ups are paused, try again later." replaces the Continue button, before anyone goes to Google. Sign in still works. (Since 2026-10-11: a note, and the buttons stay; see One way in.)
 - **A signed-in Manager:** a **Welcome back** card at the top ("Signed in to *<Household>*", **Go to Setup ›**, 📱 Count on this device, Not you? Sign out). It replaces the row, the bar and both forms. There's no redirect.
 - **The site-wide line:**
   - "🎃 **Counting now** on Count Dracula: 212 houses · ~3,140 kids · top costume: 🧙 Witch" while `live` is true
@@ -492,6 +497,7 @@ Every deploy from here starts with a timestamped DB copy, and its migrations onl
 | §13: Operator statuses Counting, Stale, Waiting, Rehearsal | Counting, Stale, Waiting, **Ended**, **No night** |
 | §14: the estimate races "the coming night"; offered only without a past night | The Household's default Race against; always offered ([§7](#7-ghost-golden-tickets-and-summaries)) |
 | `/signup` | Folded into `/` |
+| §3: Google sign-in only, "no email is ever sent"; §16 "we never send email" | Continue with Google or with email; the only email is a sign-in link someone asked for ([§11](#11-the-homepage)) |
 | §4, §18: Household #1 migrated; `HOUSEHOLD1_MANAGER_EMAIL` | Rebuilt by sign-up; the real 2025 counts imported; the key retired ([§12](#12-household-1-and-the-opening-line)) |
 | `/setup`: one column with "Live now" and "Edit <select>" | Tonight · Nights · Household and a screen per night ([§9](#9-setup)) |
 | §16: Abandoned sign-up "outside its starter Rehearsal" | "On any Event but its Test night" |

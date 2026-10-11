@@ -172,6 +172,15 @@ describe('deploy/caddy-site.caddy log masking', () => {
     expect(mask('/api/stream?key=s3cret&x=1')).toBe('/api/stream?key=REDACTED&x=1')
   })
 
+  test('an email sign-in link, /auth/email?token=, is masked in the request and in the Referer its page sends', () => {
+    const referer = caddy.slice(caddy.indexOf('request>headers>Referer multi_regexp'), caddy.indexOf('resp_headers>Location'))
+    const own = [...referer.matchAll(/regexp "((?:[^"\\]|\\.)*)" "([^"]*)"/g)].map(([, find, put]) => [new RegExp(find, 'g'), put.replaceAll('${1}', '$1')])
+    const maskReferer = (uri) => own.reduce((out, [find, put]) => out.replace(find, put), uri)
+
+    expect(mask('/auth/email?token=Ab3-dEf_7hJk')).toBe('/auth/email?token=REDACTED')
+    expect(maskReferer('https://count-dracula.example.com/auth/email?token=Ab3-dEf_7hJk')).toBe('https://count-dracula.example.com/auth/email?token=REDACTED')
+  })
+
   test("the /?key= redirect's Location header is masked too", () => {
     const block = caddy.slice(caddy.indexOf('resp_headers>Location multi_regexp'), caddy.indexOf('request>headers>X-Join-Key'))
     const own = [...block.matchAll(/regexp "((?:[^"\\]|\\.)*)" "([^"]*)"/g)].map(([, find, put]) => [new RegExp(find, 'g'), put.replaceAll('${1}', '$1')])

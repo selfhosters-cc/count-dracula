@@ -27,20 +27,20 @@ count-dracula.example.com {
 		}
 		format filter {
 			wrap json
-			# A token in the path or the query: the TV link, join keys, Invites, share links, paired TVs.
+			# A token in the path or the query: the TV link, join keys, Invites, share links, paired TVs, email sign-in links.
 			request>uri multi_regexp {
 				regexp "/tv/k/[^/?#]+" "/tv/k/REDACTED"
-				regexp "([?&](?:key|device)=)[^&#]*" "${1}REDACTED"
+				regexp "([?&](?:key|device|token)=)[^&#]*" "${1}REDACTED"
 			}
 			# The same URLs come back as a same-origin Referer.
 			request>headers>Referer multi_regexp {
 				regexp "/tv/k/[^/?#]+" "/tv/k/REDACTED"
-				regexp "([?&](?:key|device)=)[^&#]*" "${1}REDACTED"
+				regexp "([?&](?:key|device|token)=)[^&#]*" "${1}REDACTED"
 			}
 			# The /?key= redirect carries the key on to /door?key= (spec v2.1 §4) in its Location header.
 			resp_headers>Location multi_regexp {
 				regexp "/tv/k/[^/?#]+" "/tv/k/REDACTED"
-				regexp "([?&](?:key|device)=)[^&#]*" "${1}REDACTED"
+				regexp "([?&](?:key|device|token)=)[^&#]*" "${1}REDACTED"
 			}
 			# Phones send their join key as a header.
 			request>headers>X-Join-Key delete

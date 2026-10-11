@@ -40,8 +40,9 @@
     .link-button { display: inline; width: auto; margin: 0; padding: 0; background: none; border: 0; color: var(--orange);
       font-weight: inherit; text-decoration: underline; }
     #signed-in form { display: inline; }
-    .cta-row { display: grid; grid-template-columns: 3fr 2fr; gap: 8px; margin: 0 0 14px; }
-    .cta-row .button { margin: 0; }
+    .cta-row { display: grid; grid-template-columns: 3fr 2fr; gap: 8px; margin: 0 0 8px; }
+    .cta-row .button, .cta-row button, .sticky-cta button { margin: 0; height: 100%; }
+    .top-note { text-align: center; margin: 0 0 14px; }
     .how { background: none; padding: 0; }
     .how h2 { font-size: 24px; margin-bottom: 4px; }
     .how > p { color: var(--dim); }
@@ -54,7 +55,7 @@
     .how-step img.first { margin-bottom: 8px; }
     .how-step .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     footer { text-align: center; padding: 8px 0 16px; }
-    /* Phones: Start / Sign in slide up while neither the top row nor the forms are on screen. */
+    /* Phones: Continue with Google / Got a code? slide up while neither the top row nor the forms are on screen. */
     .sticky-cta { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
       background: #14101cee; border-top: 1px solid #ffffff18; display: grid; grid-template-columns: 3fr 2fr; gap: 8px;
       max-width: 560px; margin-inline: auto; transform: translateY(110%); transition: transform .2s; }
@@ -63,12 +64,11 @@
     .sticky-space { height: 72px; }
     @media (min-width: 700px) { .sticky-cta, .sticky-space { display: none; } }
     [hidden] { display: none !important; }
-      .join-line { text-align: center; margin: 4px 0 14px; }
-    .join-line a { color: var(--text); text-decoration: none; }
-    .join-line b { color: var(--orange); }
+    .or { display: flex; align-items: center; gap: 10px; color: var(--dim); font-size: 13px; margin: 16px 0 10px; }
+    .or::before, .or::after { content: ""; flex: 1; border-top: 1px solid #ffffff20; }
     #code-input { font-family: ui-monospace, Menlo, monospace; letter-spacing: 0.04em; }
     .error { color: #ff8a8a; margin: 8px 0 0; }
-      .pair-note { background: var(--panel2); border-radius: 10px; padding: 10px 12px; margin: 0; }
+    .pair-note { background: var(--panel2); border-radius: 10px; padding: 10px 12px; margin: 0 0 4px; }
   </style>
 </head>
 <body>
@@ -79,7 +79,7 @@
 
   <p class="site-line" id="site-line" hidden><span id="site-text"></span><small>Rounded, updated every 10 minutes.</small></p>
 
-  <!-- A signed-in Manager: a button, not a redirect. It replaces the row, the bar and both forms. -->
+  <!-- A signed-in Manager: a button, not a redirect. It replaces the row, the bar and the Sign in section. -->
   <section id="signed-in" hidden>
     <h2>Welcome back</h2>
     <p class="muted">Signed in to <b id="house-name"></b>.</p>
@@ -88,12 +88,18 @@
     <div class="muted after">Not you? <form method="post" action="/auth/signout"><button class="link-button" type="submit">Sign out</button></form></div>
   </section>
 
-  <!-- Start and Sign in, one tap away: the full forms sit after How it works. -->
+  <!-- One way in (spec v2.1 §11): Continue with Google signs in, or starts a household for an account new here.
+       Continue with email and the code box sit after How it works. -->
   <div class="cta-row" id="cta-top">
-    <a class="button primary" href="#start">Start counting</a>
-    <a class="button" href="#sign-in">Sign in</a>
+    <form method="post" action="/auth/google/start">
+      <input type="hidden" name="timeZone">
+      <input type="hidden" name="pair">
+      <button class="primary" type="submit">Continue with Google</button>
+    </form>
+    <a class="button" href="#code">Got a code?</a>
   </div>
-  <p class="join-line"><a href="#code">Got a code from a TV or a host? <b>Enter it ›</b></a></p>
+  <p class="paused" id="paused" hidden>New households are paused for now. Signing in still works.</p>
+  <p class="muted top-note" id="top-note"><span id="email-line" hidden>No Google account? <a href="#sign-in">Use your email</a> · </span>By continuing you agree to the <a href="/privacy">Privacy notice and House rules</a>.</p>
 
   <section class="how" id="how">
     <h2>How it works</h2>
@@ -119,26 +125,25 @@
     </div>
   </section>
 
-  <section id="start">
-    <h2>Start your household</h2>
-    <form method="post" action="/auth/google/start">
-      <label for="name">Name your household</label>
-      <input id="name" name="displayName" maxlength="40" required autocomplete="off" placeholder="The Smiths on Elm St">
-      <input type="hidden" name="timeZone">
-      <button class="primary" id="start-button" type="submit">Continue with Google</button>
-      <p class="paused" id="paused" hidden>Sign-ups are paused, try again later.</p>
-      <p class="muted after">By continuing you agree to the <a href="/privacy">Privacy notice and House rules</a>.</p>
-    </form>
-  </section>
-
+  <!-- Sign in, or start: the same button. A new account gets a household, named on Setup's first screen. -->
   <section id="sign-in">
-    <h2>Already counting?</h2>
+    <h2>Start counting, or sign in</h2>
+    <p class="muted">New here? We make your household as you sign in, and you name it next. Already counting? You land in yours.</p>
+    <p class="pair-note" id="pair-note" hidden>Sign in to put your TV on: it's showing <b id="pair-note-code"></b>.</p>
     <form method="post" action="/auth/google/start">
       <input type="hidden" name="timeZone">
-      <input type="hidden" name="pair" id="sign-in-pair">
-      <p class="pair-note" id="pair-note" hidden>Sign in to put your TV on: it's showing <b id="pair-note-code"></b>.</p>
-      <button type="submit">Sign in with Google</button>
+      <input type="hidden" name="pair">
+      <button class="primary" type="submit">Continue with Google</button>
     </form>
+    <form method="post" action="/auth/email/start" id="email-form" hidden>
+      <p class="or">or</p>
+      <input type="hidden" name="timeZone">
+      <input type="hidden" name="pair">
+      <label for="email">Your email: we'll send you a sign-in link</label>
+      <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com">
+      <button type="submit">Continue with email</button>
+    </form>
+    <p class="muted after">By continuing you agree to the <a href="/privacy">Privacy notice and House rules</a>.</p>
   </section>
 
   <!-- The one code box (spec v2.1 §11): a TV's pairing code or a host's join code; the page tells them apart. -->
@@ -158,8 +163,12 @@
   <div class="sticky-space" id="sticky-space"></div>
 
   <div class="sticky-cta" id="sticky-cta">
-    <a class="button primary" href="#start">Start counting</a>
-    <a class="button" href="#sign-in">Sign in</a>
+    <form method="post" action="/auth/google/start">
+      <input type="hidden" name="timeZone">
+      <input type="hidden" name="pair">
+      <button class="primary" type="submit">Continue with Google</button>
+    </form>
+    <a class="button" href="#code">Got a code?</a>
   </div>
 
   <script type="module" src="/home.js"></script>

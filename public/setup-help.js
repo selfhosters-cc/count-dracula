@@ -175,7 +175,7 @@ export const HELP = {
   account: {
     title: 'Your account',
     p: [
-      "Signing out doesn't stop the door phones or the TV.",
+      "You sign in with Google, or with a link we email you: the same email address is the same account. Signing out doesn't stop the door phones or the TV.",
       "Delete my household deletes every night, kid and costume straight away, once you type its name. It can't be undone.",
     ],
   },

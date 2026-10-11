@@ -59,20 +59,25 @@ describe('/ is the homepage', () => {
     expect(res.headers.get('Location')).toBe('/')
   })
 
-  test('the Start and Sign in forms post to Google sign-in with the time zone, and the footer has its three links', async () => {
+  test('one Continue with Google (no household name), Continue with email, Got a code?, and the footer\'s three links', async () => {
     const { app } = boot()
 
     const html = await (await get(app, '/')).text()
 
-    expect(html.match(/<form method="post" action="\/auth\/google\/start"/g)).toHaveLength(2)
-    expect(html).toContain('name="displayName"')
-    expect(html.match(/name="timeZone"/g)).toHaveLength(2)
-    expect(html).toContain('id="start"')
+    // The top row, the Sign in section and the sticky phone bar: each the same Google form, with the zone and a TV's code.
+    expect(html.match(/<form method="post" action="\/auth\/google\/start">/g)).toHaveLength(3)
+    expect(html.match(/<button class="primary" type="submit">Continue with Google<\/button>/g)).toHaveLength(3)
+    expect(html).not.toContain('name="displayName"')
+    expect(html).not.toContain('Start your household')
+    expect(html.match(/<input type="hidden" name="timeZone">/g)).toHaveLength(4)
+    expect(html.match(/<input type="hidden" name="pair">/g)).toHaveLength(4)
+    expect(html.match(/<a class="button" href="#code">Got a code\?<\/a>/g)).toHaveLength(2)
     expect(html).toContain('id="sign-in"')
-    expect(html).toContain('<a href="#code">Got a code from a TV or a host? <b>Enter it ›</b></a>')
+    expect(html).toContain('<form method="post" action="/auth/email/start" id="email-form" hidden>')
+    expect(html).toContain('<input id="email" name="email" type="email"')
+    expect(html).toContain('>Continue with email</button>')
     expect(html).toContain('<form id="code-form"')
-    expect(html).toContain('<input type="hidden" name="pair" id="sign-in-pair">') // a TV's code rides through Sign in
-    expect(html).toContain('Sign-ups are paused, try again later.')
+    expect(html).toContain('New households are paused for now. Signing in still works.')
     expect(html).toContain('<a href="/privacy">Privacy and House rules</a>')
     expect(html).toContain('<a href="/help/tv">TV setup help</a>')
     expect(html).toContain('Help: <a href="mailto:help@count-dracula.example.com">email us</a>')
@@ -144,17 +149,14 @@ describe('every "go sign in" points at /', () => {
     expect(res.headers.get('Location')).toBe('/')
   })
 
-  test("the sign-in error pages' Try again, Start again, Sign up and Back links", async () => {
+  test("the sign-in error pages' Try again, Start again and Back links", async () => {
     const { app, google } = boot()
 
     const stale = await (await get(app, '/auth/google/callback?code=x&state=nope')).text()
-    expect(stale).toContain('<a href="/#start">Start again</a>')
-
-    const noHousehold = await signIn({ app, google }, { sub: 'b', email: 'b@example.com' })
-    expect(await noHousehold.text()).toContain('<a href="/#start">Sign up</a>')
+    expect(stale).toContain('<a href="/#sign-in">Start again</a>')
 
     const badName = await fetch(`${app.url}/auth/google/start`, { method: 'POST', body: new URLSearchParams({ displayName: 'x'.repeat(41), timeZone: 'America/Toronto' }) })
-    expect(await badName.text()).toContain('<a href="/#start">Back</a>')
+    expect(await badName.text()).toContain('<a href="/#sign-in">Back</a>')
   })
 
   test("Google failing says Try again, pointing at /", async () => {
@@ -165,7 +167,7 @@ describe('every "go sign in" points at /', () => {
     const res = await get(app, `/auth/google/callback?code=not-a-code&state=${state}`)
 
     expect(res.status).toBe(502)
-    expect(await res.text()).toContain('<a href="/#start">Try again</a>')
+    expect(await res.text()).toContain('<a href="/#sign-in">Try again</a>')
   })
 })
 
@@ -173,15 +175,15 @@ describe('GET /api/home', () => {
   test('a fresh browser: sign-ups open, nobody signed in', async () => {
     const { app } = boot()
 
-    expect(await (await get(app, '/api/home')).json()).toEqual({ signUpsPaused: false, household: null })
+    expect(await (await get(app, '/api/home')).json()).toEqual({ signUpsPaused: false, household: null, emailSignIn: false })
   })
 
   test("a signed-in Manager's Household name, and nothing else about it", async () => {
     const { app, google } = boot()
     const cookie = cookieOf(await signIn({ app, google }, { sub: 'a', email: 'a@example.com' }, { displayName: 'The Smiths on Elm St' }))
 
-    expect(await (await get(app, '/api/home', cookie)).json()).toEqual({ signUpsPaused: false, household: 'The Smiths on Elm St' })
-    expect(await (await get(app, '/api/home', 'cd_session=forged')).json()).toEqual({ signUpsPaused: false, household: null })
+    expect(await (await get(app, '/api/home', cookie)).json()).toEqual({ signUpsPaused: false, household: 'The Smiths on Elm St', emailSignIn: false })
+    expect(await (await get(app, '/api/home', 'cd_session=forged')).json()).toEqual({ signUpsPaused: false, household: null, emailSignIn: false })
   })
 
   test("follows the Operator's pause-sign-ups switch", async () => {
@@ -190,7 +192,7 @@ describe('GET /api/home', () => {
     const pause = (on) => fetch(`${app.url}/api/operator/pause`, { method: 'POST', headers: { Cookie: op }, body: JSON.stringify({ on }) })
 
     await pause(true)
-    expect(await (await get(app, '/api/home')).json()).toEqual({ signUpsPaused: true, household: null })
+    expect(await (await get(app, '/api/home')).json()).toEqual({ signUpsPaused: true, household: null, emailSignIn: false })
     await pause(false)
     expect((await (await get(app, '/api/home')).json()).signUpsPaused).toBe(false)
   })

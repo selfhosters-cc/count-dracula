@@ -68,7 +68,7 @@ stays on LXC 118 and here, kept and never used, like `v1-final`.
 
    **Check:** `{ user_version: 15 } { households: 0 }`.
 4. **Sign up Household #1** in a desktop browser, with the main Google account: `https://$PUBLIC_HOST/` →
-   **Start counting** → our household's name → **Continue with Google**. The consent screen is still in **Testing**,
+   **Continue with Google** (since Oct 11 there's no name field: first-run's first screen names it). The consent screen is still in **Testing**,
    so only its listed test users can sign in at all. That is the real gate until step 6: a fresh database has Pause
    sign-ups **off**.
 5. **First-run** (it opens by itself in `/setup`). Before its Location screen, open the browser's network panel and

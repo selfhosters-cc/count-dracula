@@ -26,8 +26,9 @@ cp deploy/local.env.example deploy/local.env
 ```
 
 It needs `PUBLIC_HOST`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (v2 ticket 20), `OPERATOR_EMAILS` and
-`OPERATOR_CONTACT`. `deploy.sh` refuses without all five, and sends only those five to the server: any other line
-in `local.env` stays on the dev machine.
+`OPERATOR_CONTACT`. `deploy.sh` refuses without all five. `SMTP_HOST`, `SMTP_PORT` and `EMAIL_FROM` are optional:
+Continue with email (sign-in links through the LAN's mail relay) stays hidden until `SMTP_HOST` and `EMAIL_FROM`
+are set. `deploy.sh` sends only these keys to the server: any other line in `local.env` stays on the dev machine.
 
 ## Once: create the LXC
 

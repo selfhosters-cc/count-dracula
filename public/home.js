@@ -1,4 +1,5 @@
-// The homepage on / (spec v2.1 §11): the pitch, the site-wide line, How it works, Start and Sign in.
+// The homepage on / (spec v2.1 §11): the pitch, the site-wide line, How it works, and one way in: Continue with
+// Google (or email), which signs in or starts a household.
 import { doorRedirect } from '/door-view.js'
 import { readCode, tvCodeFrom } from '/shared/codes.js'
 import { homeSiteLine } from '/nearby-text.js'
@@ -14,7 +15,7 @@ function storedKey() {
 }
 
 // A phone that remembers a door's key belongs on /door; only the browser knows the key. A Manager sent here to
-// sign in (/#sign-in, /#start) stays.
+// sign in (/#sign-in) stays.
 const goTo = doorRedirect({ pathname: location.pathname, search: location.search, hash: location.hash, storedKey: storedKey() })
 if (goTo) location.replace(goTo)
 
@@ -23,14 +24,14 @@ for (const input of document.querySelectorAll('input[name="timeZone"]')) {
   input.value = Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
-// The sticky Start / Sign in bar on phones: up while neither the top row nor the forms are on screen.
+// The sticky Continue with Google / Got a code? bar on phones: up while neither the top row nor the forms are on screen.
 const sticky = $('sticky-cta')
 const inView = new Map()
 const watch = new IntersectionObserver((entries) => {
   for (const e of entries) inView.set(e.target.id, e.isIntersecting)
   sticky.classList.toggle('show', ![...inView.values()].some(Boolean))
 })
-for (const id of ['cta-top', 'start', 'sign-in', 'code']) watch.observe($(id))
+for (const id of ['cta-top', 'sign-in', 'code']) watch.observe($(id))
 
 const getJson = (path) => fetch(path).then((r) => (r.ok ? r.json() : null)).catch(() => null)
 
@@ -46,14 +47,16 @@ getJson('/api/site').then((answer) => {
 
 getJson('/api/home').then((home) => {
   if (!home) return
-  // Paused sign-ups show here, before anyone goes to Google. Sign in still works.
-  $('start-button').hidden = home.signUpsPaused
+  // Paused sign-ups show here, before anyone goes to Google. Signing in still works, so the buttons stay.
   $('paused').hidden = !home.signUpsPaused
-  // A signed-in Manager runs one Household: Welcome back replaces the row, the bar and both forms.
+  // Continue with email, once the server can send mail.
+  $('email-form').hidden = !home.emailSignIn
+  $('email-line').hidden = !home.emailSignIn
+  // A signed-in Manager runs one Household: Welcome back replaces the row, the bar and the Sign in section.
   if (home.household != null) {
     $('house-name').textContent = home.household
     $('signed-in').hidden = false
-    for (const id of ['cta-top', 'start', 'sign-in', 'sticky-cta', 'sticky-space']) $(id).hidden = true
+    for (const id of ['cta-top', 'paused', 'top-note', 'sign-in', 'sticky-cta', 'sticky-space']) $(id).hidden = true
     watch.disconnect()
   }
 })
@@ -68,10 +71,10 @@ $('count-here').addEventListener('click', async () => {
   location.href = '/door'
 })
 
-// A TV's scan-to-pair QR on a signed-out phone lands here with ?pair=: Sign in carries the code on to /setup.
+// A TV's scan-to-pair QR on a signed-out phone lands here with ?pair=: every way in carries the code on to /setup.
 const waitingTv = tvCodeFrom(new URLSearchParams(location.search).get('pair'))
 if (waitingTv) {
-  $('sign-in-pair').value = waitingTv
+  for (const input of document.querySelectorAll('input[name="pair"]')) input.value = waitingTv
   $('pair-note-code').textContent = `${waitingTv.slice(0, 3)}-${waitingTv.slice(3)}`
   $('pair-note').hidden = false
 }

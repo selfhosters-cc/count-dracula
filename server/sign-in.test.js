@@ -72,16 +72,29 @@ describe('signing up', () => {
     expect(events.filter((e) => e.live)).toMatchObject([{ name: 'Test night', state: 'live' }])
   })
 
-  test('Start counting with an account that already runs a Household lands in it, told so, and makes nothing', async () => {
+  test('the one Continue with Google: an unknown account gets a new Household, "Our household", with a live Test night', async () => {
     const server = start({ fresh: true })
-    const first = await signIn(server, ALICE, { displayName: 'The Smiths' })
-    expect(first.headers.get('Location')).toBe('/setup')
 
-    const again = await signIn(server, ALICE, { displayName: 'A test house' })
+    const res = await signIn(server, ALICE)
+
+    expect(res.status).toBe(303)
+    expect(res.headers.get('Location')).toBe('/setup')
+    const house = await household(server.app, cookieOf(res))
+    expect(house).toMatchObject({ displayName: 'Our household', timeZone: 'America/Vancouver', firstRunPassed: false, manager: { email: 'alice@example.com' } })
+    const events = await (await fetch(`${server.app.url}/api/events`, as(cookieOf(res)))).json()
+    expect(events.filter((e) => e.live)).toMatchObject([{ name: 'Test night' }])
+  })
+
+  test('the one Continue with Google: a known account signs in to its Household, makes nothing, and lands on plain /setup', async () => {
+    const server = start({ fresh: true })
+    await signIn(server, ALICE, { displayName: 'The Smiths' })
+
     const plain = await signIn(server, ALICE)
+    const named = await signIn(server, ALICE, { displayName: 'A test house' }) // an old form still posting a name
 
-    expect(again.headers.get('Location')).toBe('/setup?already=1')
-    expect(plain.headers.get('Location')).toBe('/setup') // Sign in, not Start counting: nothing to tell
+    expect(plain.headers.get('Location')).toBe('/setup')
+    expect(named.headers.get('Location')).toBe('/setup')
+    expect(await household(server.app, cookieOf(plain))).toMatchObject({ displayName: 'The Smiths' })
     expect(server.db().query('SELECT display_name FROM households').all()).toEqual([{ display_name: 'The Smiths' }])
   })
 
@@ -97,14 +110,18 @@ describe('signing up', () => {
     expect(server.app.ledger.households()).toHaveLength(2) // Household #1 and the Smiths
   })
 
-  test('signing in without a Household and without a name creates nothing', async () => {
-    const server = start()
+  test('paused sign-ups: a known account still signs in, a new one is refused and nothing is made', async () => {
+    const server = start({ fresh: true })
+    await signIn(server, ALICE)
+    server.app.ledger.setSiteSwitch('pauseSignUps', true)
 
-    const res = await signIn(server, ALICE)
+    const known = await signIn(server, ALICE)
+    const stranger = await signIn(server, BOB)
 
-    expect(res.status).toBe(404)
-    expect(await res.text()).toContain('Sign up')
-    expect(cookieOf(res)).toBeNull()
+    expect(known.headers.get('Location')).toBe('/setup')
+    expect(stranger.status).toBe(503)
+    expect(await stranger.text()).toContain('Sign-ups are paused')
+    expect(cookieOf(stranger)).toBeNull()
     expect(server.app.ledger.households()).toHaveLength(1)
   })
 
@@ -143,10 +160,8 @@ describe('Household #1 and Operators', () => {
     const server = start()
     const us = { sub: 'g-us', email: 'us@example.com', name: 'Us' }
 
-    const plain = await signIn(server, us)
     const signedUp = await household(server.app, cookieOf(await signIn(server, us, { displayName: 'The Froeses' })))
 
-    expect(plain.status).not.toBe(303)
     expect(signedUp.id).not.toBe(1)
     expect(signedUp).toMatchObject({ displayName: 'The Froeses', manager: { email: 'us@example.com' } })
     expect(server.db().query('SELECT COUNT(*) AS n FROM managers WHERE household_id = 1').get().n).toBe(0)

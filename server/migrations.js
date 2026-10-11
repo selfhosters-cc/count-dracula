@@ -186,6 +186,25 @@ const MIGRATIONS = [
   (db) => {
     db.exec('ALTER TABLE households ADD COLUMN test_night_event_id INTEGER')
   },
+
+  // 15 → 16: Continue with email (spec v2.1 §11). A Manager is found by their address too (same address, same
+  // person), and a sign-in link is kept hashed until it's used or 15 minutes pass. A Manager who has only ever
+  // used email has google_sub 'email:<address>' until their first Google sign-in, which puts Google's id there:
+  // the column stays NOT NULL UNIQUE, so the step only adds.
+  (db) => {
+    db.exec(`
+      CREATE INDEX managers_by_email ON managers (lower(email));
+      CREATE TABLE email_links (
+        token_hash TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        time_zone TEXT NOT NULL,
+        pair TEXT,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        used_at INTEGER
+      );
+    `)
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

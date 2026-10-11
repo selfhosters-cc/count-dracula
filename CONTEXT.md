@@ -25,7 +25,7 @@ The Event sign-up makes live, so a new Household can try its TV and a phone stra
 _Avoid_: Rehearsal, practice night, demo
 
 **Manager**:
-A person, signed in with their Google account, who runs one Household: its events, `/setup`, sharing and deletion. A Household can have several Managers, all equal.
+A person, signed in with their Google account or a sign-in link emailed to them, who runs one Household: its events, `/setup`, sharing and deletion. The same email address is the same Manager either way. A Household can have several Managers, all equal.
 _Avoid_: Admin, owner, user, account
 
 **Invite link**:
@@ -102,7 +102,7 @@ The three rules every Household agrees to by signing in, on the same page as the
 _Avoid_: Terms, terms of service, policy, code of conduct
 
 **Idle Household**:
-A Household no Manager has signed in to for 2 years. It's deleted with everything it owns, without warning, since nothing is ever emailed.
+A Household no Manager has signed in to for 2 years. It's deleted with everything it owns, without warning: the only email we ever send is a sign-in link someone asked for.
 _Avoid_: Inactive, dormant, stale (Stale is an Operator-dashboard status on the night)
 
 **Abandoned sign-up**:

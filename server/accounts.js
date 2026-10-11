@@ -1,5 +1,6 @@
-// Accounts (v2 spec §3, §20): Managers signing in with Google, their sessions, sign-up, and deleting a
-// Household. Google is the one outside call and sits behind a seam (server/google.js; a fake in tests).
+// Accounts (v2 spec §3, §20; v2.1 §11): Managers signing in with Google or an email link, their sessions,
+// sign-up, and deleting a Household. Google is the one outside call and sits behind a seam (server/google.js;
+// a fake in tests). Sending the email link is the caller's: Accounts makes the token and checks it.
 import { BadCommand, displayNameOf, isTimeZone } from './ledger.js'
 import { tvCodeFrom } from '../shared/codes.js'
 import { randomToken } from './migrations.js'
@@ -9,6 +10,9 @@ const RENEW_AFTER_MS = 86_400_000 // a used session is pushed out to 90 days aga
 const STATE_MS = 10 * 60_000 // a sign-in has 10 minutes to come back from Google
 const DELETIONS_KEPT_MS = 61 * 86_400_000 // "gone within 2 months" (spec §16)
 const INVITE_MS = 7 * 86_400_000
+const EMAIL_LINK_MS = 15 * 60_000 // a sign-in link works once, for 15 minutes
+export const NEW_HOUSEHOLD_NAME = 'Our household' // until first-run's "Name your household"
+const EMAIL_SUB = 'email:' // google_sub of a Manager who has only signed in by email (migration 16)
 
 export function openAccounts(db, { ledger, google, now = Date.now, operatorEmails = [], canSignUp = () => true }) {
   const pending = new Map() // state → { nonce, displayName, timeZone, expiresAt }
@@ -18,6 +22,11 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
     return db.query('SELECT * FROM managers WHERE google_sub = ?').get(sub)
   }
 
+  // Same address, same person: the Manager with this verified email, in any case.
+  function managerByEmail(email) {
+    return db.query('SELECT * FROM managers WHERE lower(email) = lower(?) ORDER BY id LIMIT 1').get(String(email ?? '').trim())
+  }
+
   function startSession(managerId) {
     const token = randomToken()
     db.query('INSERT INTO sessions (token, manager_id, expires_at) VALUES (?, ?, ?)').run(token, managerId, now() + SESSION_MS)
@@ -25,9 +34,10 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
   }
 
   return {
-    // The sign-up or sign-in button: remembers what to do when Google sends the person back, and
-    // returns Google's address to send them to. A sign-up carries the display name and the browser's zone.
-    // pair: a TV's code that sent a signed-out phone here (spec v2.1 §11), kept so the callback can carry it on.
+    // Continue with Google: remembers what to do when Google sends the person back, and returns Google's
+    // address to send them to. timeZone is the browser's, for a new Household. displayName names a new Household
+    // (the homepage no longer asks; "Our household" until first-run). pair: a TV's code that sent a signed-out
+    // phone here (spec v2.1 §11), kept so the callback can carry it on.
     beginSignIn({ displayName, timeZone, invite = null, pair = null, redirectUri }) {
       const name = invite || displayName == null || String(displayName).trim() === '' ? null : displayNameOf(displayName)
       const at = now()
@@ -38,8 +48,8 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
       return google.authUrl({ state, nonce, redirectUri })
     },
 
-    // Google's callback. Returns { token, householdId, created, already, pair } or { refused } with one of
-    // 'state' | 'unverified' | 'noHousehold' | 'paused' | 'alreadyManager' | 'invite' (with `why`). A state works once.
+    // Google's callback. Returns { token, householdId, created, pair } or { refused } with one of
+    // 'state' | 'unverified' | 'paused' | 'alreadyManager' | 'invite' (with `why`). A state works once.
     async finishSignIn({ code, state, redirectUri, ip }) {
       const started = pending.get(state)
       pending.delete(state)
@@ -47,30 +57,36 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
       const identity = await google.exchange({ code, redirectUri })
       if (identity.nonce !== started.nonce) return { refused: 'state' }
       if (!identity.emailVerified) return { refused: 'unverified' }
+      return land(identity, started, ip)
+    },
 
-      const known = managerBySub(identity.sub)
-      const invited = started.invite ? inviteStatus(started.invite) : null
-      if (known) {
-        // One Household per Manager: an invite to another one is refused, and left unused.
-        if (invited && invited.householdId !== known.household_id) return { refused: 'alreadyManager' }
-        db.query('UPDATE managers SET email = ?, name = ?, last_sign_in_at = ? WHERE id = ?').run(identity.email, identity.name ?? null, now(), known.id)
-        // Start counting (a name was typed) with an account that already runs a Household: signed in to that one,
-        // and told so, never a second Household.
-        return { token: startSession(known.id), householdId: known.household_id, created: false, already: started.displayName != null, pair: started.pair }
-      }
-      if (invited) {
-        if (invited.status !== 'ok') return { refused: 'invite', why: invited.status }
-        return db.transaction(() => {
-          db.query('UPDATE invites SET used_at = ? WHERE token = ?').run(now(), started.invite)
-          return { ...join(invited.householdId, identity), created: false, pair: started.pair }
-        })()
-      }
-      if (!started.displayName) return { refused: 'noHousehold' }
-      if (!canSignUp({ ip })) return { refused: 'paused' }
-      return db.transaction(() => {
-        const householdId = ledger.createHousehold({ displayName: started.displayName, timeZone: started.timeZone })
-        return { ...join(householdId, identity), created: true, pair: started.pair }
-      })()
+    // Continue with email: a link for this address, as a token to send, and the Household it would sign in
+    // to (null: a new one), for the log. Only the token's hash is kept. Expired links are pruned here.
+    beginEmailSignIn({ email, timeZone, pair = null }) {
+      const at = now()
+      db.query('DELETE FROM email_links WHERE expires_at <= ?').run(at)
+      const token = randomToken()
+      db.query('INSERT INTO email_links (token_hash, email, time_zone, pair, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+        hashOf(token), String(email).trim(), isTimeZone(timeZone) ? timeZone : 'UTC', tvCodeFrom(pair), at, at + EMAIL_LINK_MS)
+      return { token, householdId: managerByEmail(email)?.household_id ?? null }
+    },
+
+    // What an email link says before its button is pressed: 'ok', or 'gone' (made up, used or expired). Uses nothing.
+    emailLinkStatus(token) {
+      const link = db.query('SELECT used_at, expires_at FROM email_links WHERE token_hash = ?').get(hashOf(token))
+      return link && link.used_at == null && link.expires_at > now() ? 'ok' : 'gone'
+    },
+
+    // The email link's Sign in button: the link is used up, then it signs in like Google with the address as
+    // a verified identity. Returns what finishSignIn does; a made-up, used or expired link is { refused: 'link' }.
+    finishEmailSignIn({ token, ip }) {
+      const at = now()
+      const link = db
+        .query('UPDATE email_links SET used_at = ? WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? RETURNING email, time_zone, pair')
+        .get(at, hashOf(token), at)
+      if (!link) return { refused: 'link' }
+      const email = link.email
+      return land({ sub: null, email, name: null }, { displayName: null, invite: null, pair: link.pair, timeZone: link.time_zone }, ip)
     },
 
     // The session a cookie's token names: { manager, householdId, operator, renewed }, or null once it's
@@ -185,12 +201,49 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
     db.query('DELETE FROM deletions WHERE deleted_at < ?').run(now() - DELETIONS_KEPT_MS)
   }
 
+  // A verified identity, from Google ({ sub, email, name }) or an email link (sub null), signs in: as the Manager
+  // with that Google id, or else with that address; or by an invite; or as a new Household's first Manager.
+  function land(identity, started, ip) {
+    const bySub = identity.sub == null ? null : managerBySub(identity.sub)
+    const known = bySub ?? managerByEmail(identity.email)
+    const invited = started.invite ? inviteStatus(started.invite) : null
+    if (known) {
+      // One Household per Manager: an invite to another one is refused, and left unused.
+      if (invited && invited.householdId !== known.household_id) return { refused: 'alreadyManager' }
+      if (identity.sub != null) {
+        // A Manager who had only used email gets Google's id as their key, the first time they use Google.
+        const sub = bySub || !known.google_sub.startsWith(EMAIL_SUB) ? known.google_sub : identity.sub
+        db.query('UPDATE managers SET google_sub = ?, email = ?, name = ?, last_sign_in_at = ? WHERE id = ?').run(sub, identity.email, identity.name ?? known.name ?? null, now(), known.id)
+      } else {
+        db.query('UPDATE managers SET last_sign_in_at = ? WHERE id = ?').run(now(), known.id)
+      }
+      return { token: startSession(known.id), householdId: known.household_id, created: false, pair: started.pair }
+    }
+    if (invited) {
+      if (invited.status !== 'ok') return { refused: 'invite', why: invited.status }
+      return db.transaction(() => {
+        db.query('UPDATE invites SET used_at = ? WHERE token = ?').run(now(), started.invite)
+        return { ...join(invited.householdId, identity), created: false, pair: started.pair }
+      })()
+    }
+    if (!canSignUp({ ip })) return { refused: 'paused' }
+    return db.transaction(() => {
+      const householdId = ledger.createHousehold({ displayName: started.displayName ?? NEW_HOUSEHOLD_NAME, timeZone: started.timeZone })
+      return { ...join(householdId, identity), created: true, pair: started.pair }
+    })()
+  }
+
   function join(householdId, identity) {
+    const sub = identity.sub ?? `${EMAIL_SUB}${normalEmail(identity.email)}`
     const { id } = db
       .query('INSERT INTO managers (google_sub, email, name, household_id, last_sign_in_at) VALUES (?, ?, ?, ?, ?) RETURNING id')
-      .get(identity.sub, identity.email, identity.name ?? null, householdId, now())
+      .get(sub, identity.email, identity.name ?? null, householdId, now())
     return { token: startSession(id), householdId }
   }
+}
+
+function hashOf(token) {
+  return new Bun.CryptoHasher('sha256').update(String(token ?? '')).digest('hex')
 }
 
 function normalEmail(email) {

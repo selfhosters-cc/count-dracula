@@ -16,6 +16,8 @@ import { STATUSES, healthTiles, householdStatus } from './operator.js'
 import { createNearby } from './nearby.js'
 import { isBlocked } from './blocklist.js'
 import { toCsv } from './export.js'
+import { isMailAddress, sendMail } from './mail.js'
+import { maskEmail, signInEmail } from './email-sign-in.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
@@ -40,9 +42,9 @@ const OPERATOR_ACTIONS = new Set(['rename', 'timeZone', 'suspend', 'unsuspend', 
 const SESSION_COOKIE = 'cd_session'
 const sessionCookie = (token, maxAge = 90 * 86_400) => `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`
 
-// env: PUBLIC_HOST, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPERATOR_EMAILS, OPERATOR_CONTACT (deploy/local.env).
-// google, now, canSignUp, tickMs, limits and log are seams for the tests.
-export function startServer({ configPath, port, heartbeatMs, env = process.env, google, now = Date.now, canSignUp, tickMs = 60_000, limits = LIMITS, log = console.log }) {
+// env: PUBLIC_HOST, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPERATOR_EMAILS, OPERATOR_CONTACT, SMTP_HOST, SMTP_PORT,
+// EMAIL_FROM (deploy/local.env). google, mailer, now, canSignUp, tickMs, limits and log are seams for the tests.
+export function startServer({ configPath, port, heartbeatMs, env = process.env, google, mailer, now = Date.now, canSignUp, tickMs = 60_000, limits = LIMITS, log = console.log }) {
   const config = loadConfig(configPath)
   const guard = createGuard({ now, limits, log })
   const contact = env.OPERATOR_CONTACT || DEFAULT_CONTACT // the one contact address (spec §5)
@@ -77,6 +79,14 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   })
   const hub = createHub({ heartbeatMs })
   const pairing = createPairing({ now })
+  // Continue with email (spec v2.1 §11): the LAN's relay, plain SMTP. Hidden, and its routes refused, until
+  // SMTP_HOST and EMAIL_FROM are both set. mailer.send({ to, subject, text, html }) resolves once the relay has it.
+  const mail =
+    mailer !== undefined
+      ? mailer
+      : env.SMTP_HOST && env.EMAIL_FROM
+        ? { send: (message) => sendMail({ host: env.SMTP_HOST, port: Number(env.SMTP_PORT) || 25, from: env.EMAIL_FROM, ...message }) }
+        : null
 
   // The minute tick (spec §7): nights go live and end by themselves. The first runs at start, catching up on
   // anything missed while the server was down.
@@ -167,11 +177,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // The sign-up page folded into the homepage.
     'GET /signup': () => new Response(null, { status: 302, headers: { Location: '/' } }),
     // What the homepage can't know from the page alone: whether sign-ups are paused (shown before anyone goes to
-    // Google), and a signed-in Manager's Household, for the Welcome back card. Never more than its name.
+    // Google), whether Continue with email is on, and a signed-in Manager's Household, for the Welcome back card.
+    // Never more than its name.
     'GET /api/home': (req) => {
       const session = accounts.session(tokenOf(req))
       const household = session ? (ledger.households().find((h) => h.id === session.householdId)?.displayName ?? null) : null
-      return Response.json({ signUpsPaused: ledger.siteSwitch(PAUSE_SIGN_UPS), household })
+      return Response.json({ signUpsPaused: ledger.siteSwitch(PAUSE_SIGN_UPS), household, emailSignIn: mail != null })
     },
     // The door's Event, for a phone, a TV or a Manager; ?event=<id> reads one of the Household's events (a past
     // night's recap on /tv?event=<id>), for a Manager only.
@@ -322,14 +333,15 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       return new Response('OK')
     }),
 
-    // ---- Signing in (spec §3). The homepage's Start and Sign in forms post here; Google sends the person back to the callback.
+    // ---- Signing in (spec §3, v2.1 §11). The homepage's Continue with Google posts here; Google sends the person
+    // back to the callback. An unknown account gets a new Household (unless sign-ups are paused).
     'POST /auth/google/start': async (req, server) => {
-      if (!guard.take('signIn', clientIp(req, server))) return page('Slow down', '<p>Too many sign-ins from here. Try again in a while.</p>', 429)
+      if (!guard.take('signIn', clientIp(req, server))) return slowDown()
       const form = await req.formData()
       try {
         return redirect(accounts.beginSignIn({ displayName: form.get('displayName'), timeZone: form.get('timeZone'), invite: form.get('invite'), pair: form.get('pair'), redirectUri: callbackUrl(req) }))
       } catch (err) {
-        if (err instanceof BadCommand) return page('Pick another name', `<p>${esc(err.message)}.</p><p><a href="/#start">Back</a></p>`, 400)
+        if (err instanceof BadCommand) return page('Pick another name', `<p>${esc(err.message)}.</p><p><a href="${SIGN_IN}">Back</a></p>`, 400)
         throw err
       }
     },
@@ -341,12 +353,50 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
         result = await accounts.finishSignIn({ code: params.get('code'), state: params.get('state'), redirectUri: callbackUrl(req), ip: clientIp(req, server) })
       } catch (err) {
         console.error('google sign-in failed:', err.message)
-        return page('Sign-in didn\'t work', '<p>Google sign-in didn\'t work. <a href="/#start">Try again</a>.</p>', 502)
+        return page('Sign-in didn\'t work', `<p>Google sign-in didn't work. <a href="${SIGN_IN}">Try again</a>.</p>`, 502)
       }
-      if (result.refused) return REFUSALS[result.refused](result)
-      // A TV's code that sent a signed-out phone to sign in comes back to /setup?pair= (spec v2.1 §11).
-      const next = new URLSearchParams({ ...(result.already && { already: '1' }), ...(result.pair && { pair: result.pair }) }).toString()
-      return redirect(next ? `/setup?${next}` : '/setup', { 'Set-Cookie': sessionCookie(result.token) })
+      return signedIn(result)
+    },
+
+    // Continue with email: a link to the address, whatever it is. The answer is the same whether or not the
+    // address has an account, and whether or not its 3 links per 15 minutes are spent. The send runs after it.
+    'POST /auth/email/start': async (req, server) => {
+      if (!mail) return notFound()
+      const ip = clientIp(req, server)
+      if (!guard.take('emailLinkIp', ip)) return slowDown()
+      const form = await req.formData()
+      const email = String(form.get('email') ?? '').trim()
+      if (!isMailAddress(email)) return page('Check the address', `<p>That doesn't look like an email address. <a href="${SIGN_IN}">Back</a></p>`, 400)
+      if (guard.take('emailLink', hashOf(email.toLowerCase()))) {
+        const { token, householdId } = accounts.beginEmailSignIn({ email, timeZone: form.get('timeZone'), pair: form.get('pair') })
+        const message = signInEmail({ link: `${publicOrigin(req)}/auth/email?token=${token}`, to: email, ip, at: now(), timeZone: form.get('timeZone') })
+        Promise.resolve()
+          .then(() => mail.send({ to: email, ...message }))
+          .then(
+            () => log(`email-link sent to=${maskEmail(email)} household=${householdId ?? 'new'}`),
+            (err) => console.error(`email-link failed to=${maskEmail(email)}: ${err?.message ?? err}`),
+          )
+      }
+      return page('Check your email', `<p>We've sent a sign-in link to <b>${esc(email)}</b>. Open it on this device: it works once, for 15 minutes.</p>
+<p>Nothing after a few minutes? Check your spam folder, or <a href="${SIGN_IN}">try again</a>.</p>`, 200)
+    },
+    // The link in the email: /auth/email?token=<token>, a shape the Caddy log masks. Opening it uses nothing up,
+    // so a mail scanner that fetches links can't spend it: the Sign in button POSTs.
+    'GET /auth/email': (req) => {
+      if (!mail) return notFound()
+      const token = new URL(req.url).searchParams.get('token') ?? ''
+      if (accounts.emailLinkStatus(token) !== 'ok') return REFUSALS.link()
+      const res = page('Sign in', `<p>Press Sign in to finish signing in to Count Dracula.</p>
+<form method="post" action="/auth/email"><input type="hidden" name="token" value="${esc(token)}"><button style="font:inherit;font-weight:700;padding:12px 16px;border:0;border-radius:10px;background:#ff7a1a;color:#1a0d00">Sign in</button></form>`, 200)
+      res.headers.set('Cache-Control', 'no-store')
+      return res
+    },
+    'POST /auth/email': async (req, server) => {
+      if (!mail) return notFound()
+      const ip = clientIp(req, server)
+      if (!guard.take('signIn', ip)) return slowDown()
+      const form = await req.formData()
+      return signedIn(accounts.finishEmailSignIn({ token: String(form.get('token') ?? ''), ip }))
     },
     'POST /auth/signout': (req) => {
       accounts.signOut(tokenOf(req))
@@ -560,6 +610,13 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     }
   }
 
+  // Where a sign-in ends: /setup with the session cookie, carrying a TV's code on as /setup?pair= (spec v2.1
+  // §11), or the page that says why not.
+  function signedIn(result) {
+    if (result.refused) return REFUSALS[result.refused](result)
+    return redirect(result.pair ? `/setup?pair=${result.pair}` : '/setup', { 'Set-Cookie': sessionCookie(result.token) })
+  }
+
   // A page only a signed-in Manager opens; anyone else goes to sign-in. A Suspended Household's Managers see
   // the notice and the contact instead.
   function managerPage(pathname) {
@@ -765,6 +822,14 @@ function withSecurityHeaders(res) {
   return res
 }
 
+function slowDown() {
+  return page('Slow down', '<p>Too many sign-ins from here. Try again in a while.</p>', 429)
+}
+
+function hashOf(text) {
+  return new Bun.CryptoHasher('sha256').update(text).digest('hex').slice(0, 16)
+}
+
 function tooMany() {
   return new Response('Too many: slow down and try again', { status: 429 })
 }
@@ -787,9 +852,9 @@ function page(title, bodyHtml, status) {
 
 // Why a sign-in didn't end in /setup (Accounts' finishSignIn refusals).
 const REFUSALS = {
-  state: () => page('Start again', '<p>That sign-in link has expired or was already used. <a href="/#start">Start again</a>.</p>', 400),
+  state: () => page('Start again', `<p>That sign-in link has expired or was already used. <a href="${SIGN_IN}">Start again</a>.</p>`, 400),
+  link: () => page('Start again', `<p>That sign-in link has expired or was already used: each one works once, for 15 minutes. <a href="${SIGN_IN}">Get a new one</a>.</p>`, 400),
   unverified: () => page('Email not verified', '<p>Google hasn\'t verified this account\'s email yet, so it can\'t sign in.</p>', 403),
-  noHousehold: () => page('No household yet', '<p>This Google account doesn\'t run a household here yet. <a href="/#start">Sign up</a> to start one.</p>', 404),
   paused: () => page('Sign-ups are paused', '<p>Sign-ups are paused, try again later.</p>', 503),
   alreadyManager: () => page('One household each', "<p>You already manage a household here, and a Google account can only manage one. To help this one, use another Google account.</p><p><a href=\"/setup\">Go to your household</a></p>", 409),
   invite: ({ why }) => page('Invite link', `<p>${INVITE_PROBLEMS[why] ?? INVITE_PROBLEMS.unknown}</p>`, 410),

@@ -11,6 +11,8 @@ cd "$(dirname "$0")/.."
 # Private settings stay out of the repo: deploy/local.env (git-ignored); deploy/local.env.example lists them.
 if [[ -f deploy/local.env ]]; then source deploy/local.env; fi
 ENV_KEYS=(PUBLIC_HOST GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET OPERATOR_EMAILS OPERATOR_CONTACT)
+# Passed on when set: Continue with email stays hidden until SMTP_HOST and EMAIL_FROM are (SMTP_PORT defaults to 25).
+OPTIONAL_ENV_KEYS=(SMTP_HOST SMTP_PORT EMAIL_FROM)
 
 PVE=${PVE:-proxmox}
 VMID=${VMID:-118}
@@ -86,8 +88,9 @@ cp deploy/count-dracula.service deploy/config.production.json deploy/journald-co
 cp "$(readlink -f "$(command -v bun)")" "$stage/bun"
 git rev-parse HEAD >"$stage/REVISION"
 # The service's private settings: only these keys, from local.env, never anything else in it.
-for key in "${ENV_KEYS[@]}"; do
-  value=${!key}
+for key in "${ENV_KEYS[@]}" "${OPTIONAL_ENV_KEYS[@]}"; do
+  value=${!key:-}
+  [[ -n $value ]] || continue
   [[ $value != *$'\n'* ]] || { echo "!! $key has a line break" >&2; exit 1; }
   printf '%s=%s\n' "$key" "$value"
 done >"$stage/env"

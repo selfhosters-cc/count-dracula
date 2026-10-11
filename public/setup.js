@@ -443,22 +443,11 @@ if (new URLSearchParams(location.search).has('pair')) screen = { tab: 'household
 await load()
 $('admin').hidden = false
 
-// Start counting with an account that already runs a Household (spec v2.1 §11): one Household per Google account.
-// First-run waits for the next visit, so the notice isn't hidden under it.
-const already = new URLSearchParams(location.search).has('already')
-if (already) {
-  const box = $('already')
-  box.replaceChildren(
-    'You already run ', h('strong', {}, house.displayName), ` with ${house.manager.email}, so we've signed you in to it. `,
-    'A Google account runs one household: to start another, sign out and use a different Google account.')
-  box.hidden = false
-  history.replaceState(null, '', location.pathname)
-}
 help.update(screenKey())
 household.start()
 
 // First-run until screen 3 has been passed once; not when a TV's QR brought us here to pair.
-const firstRun = !house.firstRunPassed && !already && !new URLSearchParams(location.search).has('pair')
+const firstRun = !house.firstRunPassed && !new URLSearchParams(location.search).has('pair')
   ? showFirstRun($('first-run'), { house: structuredClone(house), admin, redeem: household.redeem, tvUrl: household.tvUrl, share })
   : null
 
