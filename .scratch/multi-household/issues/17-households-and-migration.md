@@ -38,7 +38,7 @@ The Ledger learns about Households. Today's data becomes Household #1. See [spec
 - [x] `v1-final` is tagged on the last v1 code commit and pushed
 - [x] The migration on a v1-built database (a test fixture made by the v1 schema) keeps every event, kid, tag, ticket, batch and moment, all in Household #1, and keeps the mix
 - [x] Running it twice changes nothing; a fresh database gets the v2 schema with no Household
-- [ ] A copy of the production DB, pulled with `ssh proxmox pct pull`, migrates cleanly locally: "Halloween 2025 (counts)", the Rehearsal and Race against survive (the copy stays out of git)
+- [x] A copy of the production DB, pulled with `ssh proxmox pct pull`, migrates cleanly locally: "Halloween 2025 (counts)", the Rehearsal and Race against survive (the copy stays out of git)
   - **Left for the user:** the agent wasn't allowed to read production. A copy of the local dev DB (v1 data: the 2025 ghost, the live Rehearsal racing it, 67 kids) migrated cleanly. The opening-day checklist repeats this on the real copy.
 - [x] Two Households each have exactly one live Event; Go live in one never touches the other
 - [x] A command for another Household's event, tag or kid is refused
@@ -55,3 +55,5 @@ The Ledger learns about Households. Today's data becomes Household #1. See [spec
 - Starter costumes: 🧙 Witch, 🦸 Superhero, 👸 Princess, 👻 Ghost, 🧛 Vampire, 💀 Skeleton, 🦖 Dinosaur, 🎃 Other.
 - The v1 test fixture is `test/fixtures/v1.sql`, a dump of a database built by the `v1-final` Ledger. The v1 Ledger tests run on `test/v1-night.js`, a Household set up the way a v1 first install was.
 - `ghostSeed` and `ghostSeedFromCsv` are gone; the HTTP layer reads Household #1 (or the join key's Household) until ticket 22.
+
+Production copy checked on opening day (2026-10-11), with `deploy/v1-final.sh`: an 88 KB `VACUUM INTO` copy migrated to Household #1, the live Rehearsal (314 kids) racing "Halloween 2025 (counts)", America/Toronto. (The first try copied the `.sqlite` with `cp` and got an empty 4 KB file: the rows were in the `-wal` file.)

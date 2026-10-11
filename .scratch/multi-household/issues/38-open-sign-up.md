@@ -1,7 +1,7 @@
 # Open sign-up
 
 Type: task (HITL)
-Status: ready-for-agent
+Status: in-progress
 Blocked by: 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37
 
 ## What to build
@@ -10,7 +10,7 @@ Blocked by: 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 
 
 ## Acceptance criteria
 
-- [ ] 1. `v1-final` tag confirmed (from [ticket 17](17-households-and-migration.md)) and a timestamped copy of the SQLite file taken
+- [x] 1. `v1-final` tag confirmed (from [ticket 17](17-households-and-migration.md)) and a timestamped copy of the SQLite file taken
 - [ ] 2. v2 deployed and the migration ran; the public host switched on ([ticket 35](35-public-host-on-caddy.md)); signed in with `HOUSEHOLD1_MANAGER_EMAIL`; "Halloween 2025 (counts)", the Rehearsal and Race against survived; our TV pairs
 - [ ] 3. Load check passed, or the caps lowered to what passes and redeployed
 - [ ] 4. `/privacy` shows the real contact and a test email arrived; a TV-link token is masked in the Caddy log; OSM tiles load only after the tap
