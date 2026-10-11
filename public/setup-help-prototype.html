@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE — the /setup help column</title>
+  <!--
+    PROTOTYPE, throwaway (events-rework ticket 13). Not linked from anywhere, stub data, no server calls.
+    /setup's variant B (ticket 08: Tonight · Nights · Household, a screen per night) with its help:
+    a sticky right column at >= 900 px that follows the section in view, and a "?" on each section heading
+    on phones that opens that section's help in place. Both render from the one HELP object below.
+    ?scenario=signup|halloween|morning|nothing|cap
+  -->
+  <style>
+    :root { --bg: #14101c; --panel: #221a2e; --panel2: #2d2340; --text: #f5efe6; --dim: #a99cbc;
+      --orange: #ff7a1a; --danger: #ff5a6e; --ok: #6c6; --blue: #7ab8ff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; padding-bottom: 90px; }
+    .shell { max-width: 720px; margin-inline: auto; padding: 16px; }
+    @media (min-width: 900px) { .shell { max-width: 1120px; display: grid; grid-template-columns: minmax(0, 720px) 320px; gap: 24px; } }
+    h1 { margin: 0 0 12px; font-size: 24px; }
+    h2 { margin: 0 0 10px; font-size: 18px; display: flex; gap: 8px; align-items: center; }
+    h3 { margin: 14px 0 6px; font-size: 15px; }
+    section, .card { background: var(--panel); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+    label { display: block; color: var(--dim); font-size: 13px; margin: 10px 0 4px; }
+    input, select, button { font: inherit; color: inherit; }
+    input, select { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ffffff30; background: var(--bg); }
+    button { border: 0; border-radius: 10px; padding: 10px 14px; background: var(--panel2); font-weight: 700; cursor: pointer; }
+    button.primary { background: var(--orange); color: #1a0d00; }
+    button.danger { color: var(--danger); }
+    button.small { padding: 6px 10px; font-size: 14px; }
+    button:disabled { opacity: .4; cursor: default; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .row > * { flex: 1; min-width: 0; }
+    .row > button, .row > .fit, .row > .pill, .row > b { flex: 0 0 auto; }
+    .row > b { max-width: 100%; }
+    .muted { color: var(--dim); font-size: 13px; }
+    .item { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #ffffff10; flex-wrap: wrap; }
+    .item:last-child { border-bottom: 0; }
+    .item .grow { flex: 1; min-width: 8em; }
+    code { background: var(--bg); padding: 2px 6px; border-radius: 6px; }
+    a.link, .link-button { color: var(--orange); font-weight: 700; }
+    .link-button { background: none; padding: 0; }
+    details > summary { cursor: pointer; color: var(--dim); }
+    [hidden] { display: none !important; }
+    .pill { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 99px; letter-spacing: .02em; white-space: nowrap; }
+    .pill.Live { background: #6c63; color: var(--ok); }
+    .pill.Ended { background: #ff7a1a33; color: var(--orange); }
+    .pill.Upcoming { background: #7ab8ff2a; color: var(--blue); }
+    .pill.Past { background: #ffffff14; color: var(--dim); }
+    .pill.door { background: var(--orange); color: #1a0d00; }
+    .note { background: #ff7a1a1c; border-left: 3px solid var(--orange); border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 14px; }
+    .note .row { margin-top: 6px; }
+    .big { font-size: 34px; font-weight: 800; }
+    .help-q { flex: 0 0 auto; width: 26px; height: 26px; padding: 0; border-radius: 99px; font-size: 14px; background: var(--panel2); color: var(--dim); margin-left: auto; }
+    @media (min-width: 900px) { .help-q { display: none; } }
+    .help-inline { background: var(--bg); border-radius: 10px; padding: 10px; font-size: 14px; color: var(--dim); margin: 0 0 10px; }
+    aside.help { display: none; }
+    @media (min-width: 900px) { aside.help { display: block; position: sticky; top: 16px; align-self: start; background: var(--panel); border-radius: 14px; padding: 14px; color: var(--dim); font-size: 14px; max-height: calc(100vh - 32px); overflow: auto; } }
+    aside.help h2 { color: var(--text); }
+    .door-line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--panel2); border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; font-size: 14px; }
+    .door-line b { color: var(--text); }
+    /* B: tabs and drill-in */
+    .tabs { position: sticky; top: 0; z-index: 3; display: flex; gap: 4px; background: var(--bg); padding: 8px 0; margin-bottom: 8px; }
+    .tabs button { flex: 1; background: var(--panel); }
+    .tabs button[aria-selected="true"] { background: var(--orange); color: #1a0d00; }
+    .night-row { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; background: var(--panel); padding: 12px; border-radius: 12px; margin-bottom: 8px; font-weight: 400; }
+    .night-row .grow { flex: 1; min-width: 0; }
+    .night-row .chev { color: var(--dim); font-size: 20px; }
+    .group-title { color: var(--dim); font-size: 13px; text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 6px; }
+    /* C: chip strip and lifecycle */
+    .chips { position: sticky; top: 0; z-index: 3; display: flex; gap: 6px; overflow-x: auto; background: var(--bg); padding: 8px 0 10px; margin-bottom: 6px; scrollbar-width: thin; }
+    .chip { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; background: var(--panel); border: 2px solid transparent; border-radius: 12px; padding: 8px 12px; font-weight: 700; max-width: 12em; }
+    .chip small { font-weight: 400; color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .chip[aria-pressed="true"] { border-color: var(--orange); }
+    .chip .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .steps { display: flex; gap: 4px; margin: 10px 0; }
+    .steps span { flex: 1; text-align: center; font-size: 12px; padding: 6px 2px; border-radius: 8px; background: var(--bg); color: var(--dim); }
+    .steps span.on { background: var(--orange); color: #1a0d00; font-weight: 800; }
+    .steps span.was { color: var(--text); }
+    /* prototype chrome */
+    #proto-bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 50; display: flex; gap: 6px; align-items: center;
+      background: #fff; color: #111; border-radius: 99px; padding: 6px 8px; box-shadow: 0 6px 24px #0009; font-size: 13px; max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center; }
+    #proto-bar button { background: #111; color: #fff; padding: 6px 10px; border-radius: 99px; }
+    #proto-bar select { width: auto; max-width: 9.5em; background: #eee; color: #111; padding: 4px 6px; border: 0; }
+    #proto-bar .lbl { font-weight: 800; padding: 0 4px; white-space: nowrap; }
+    #proto-bar { flex-wrap: nowrap; }
+    @media (max-width: 600px) { #proto-bar .long { display: none; } }
+    #toast { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 60; background: var(--ok); color: #071; padding: 8px 14px; border-radius: 10px; font-weight: 700; }
+    #toast.err { background: var(--danger); color: #300; }
+    /* the help: one source, two renderings */
+    .help-body p { margin: 0 0 8px; line-height: 1.45; }
+    .help-body dl { margin: 0 0 8px; }
+    .help-body dt { color: var(--text); font-weight: 700; margin-top: 8px; }
+    .help-body dd { margin: 2px 0 0; line-height: 1.45; }
+    .help-inline .help-body p:last-child, .help-inline .help-body dl:last-child { margin-bottom: 0; }
+    .help-q[aria-expanded="true"] { background: var(--orange); color: #1a0d00; }
+    aside.help .topic { border-top: 1px solid #ffffff14; padding: 8px 0; }
+    aside.help .topic:first-of-type { border-top: 0; }
+    aside.help .topic > button { background: none; padding: 0; color: var(--dim); font-weight: 700; text-align: left; width: 100%; }
+    aside.help .topic.cur > button { color: var(--orange); }
+    aside.help .topic .help-body { margin-top: 6px; }
+    aside.help .foot { border-top: 1px solid #ffffff14; padding-top: 8px; margin-top: 4px; font-size: 13px; }
+    section.flash { outline: 2px solid var(--orange); outline-offset: 2px; transition: outline-color .8s; }
+    .check { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #ffffff10; }
+    .check:last-of-type { border-bottom: 0; }
+    .check .tick { flex: 0 0 22px; height: 22px; border-radius: 99px; border: 2px solid var(--dim); text-align: center; line-height: 18px; font-weight: 800; font-size: 13px; }
+    .check.done .tick { background: var(--ok); border-color: var(--ok); color: #071; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <main id="app"></main>
+    <aside class="help" id="help-col" aria-label="Help"></aside>
+  </div>
+  <div id="toast" hidden></div>
+  <div id="proto-bar">
+    <span class="lbl">Help prototype<span class="long"> · ≥ 900 px: column · phones: ?</span></span>
+    <select id="scenario" aria-label="Scenario"></select>
+  </div>
+
+<script>
+// ───────────────────────── the help: ONE source ─────────────────────────
+// Keyed by section (each section in the page carries data-help="<key>"). In the build this is
+// public/setup-help.js, imported by setup.js; a test checks every data-help key has an entry and
+// every entry is used. Text is plain: {p: [...]} paragraphs, {terms: [[term, text], ...]}, {more: [[label, href]]}.
+const HELP = {
+  // Tonight
+  checklist: { title: 'Ready for Halloween', p: [
+    'Three things to check before the night. They tick themselves as you do them.',
+    'Hide the list whenever you like: it\'s remembered on this phone only, and nothing else depends on it.'] },
+  door: { title: 'On the door & TV', p: [
+    'Your TV and every helper\'s phone are on this night: the open night that went live most recently. Nobody picks it.',
+    'When another night goes live, the TV and phones move onto it by themselves, and only the night on the TV plays sound.'] },
+  nothing: { title: 'No night on right now', p: [
+    'No night is open, so the TV and the door phones say “No night on right now”.',
+    'Your next night goes live by itself at its time, or press Go live now. The TV and phones pick it up without a reload.'] },
+  also: { title: 'Also open', p: [
+    'Other nights that are still open, like a test from this afternoon. Kids tapped at the door don\'t go to them: open one and use Add missed kids.',
+    'They end by themselves at 3 am. A household can have 3 nights open at once.'] },
+  waiting: { title: 'Waiting to go live', p: [
+    'This night\'s time came while 3 nights were live. It goes live as soon as you end one of them.'] },
+  helpers: { title: 'Helpers', p: [
+    'Count on this device turns this phone into a door phone.',
+    'Add a helper shows a QR code a helper scans with their camera. It works on every night, so a phone set up for a test still works on Halloween.'] },
+
+  // Nights
+  nights: { title: 'Your nights', p: [
+    'A night is Upcoming until it goes live, Live while you count, and Ended after End the night (or at 3 am by itself). Late kids still count on an Ended night, and Resume brings it back.',
+    'At noon the next day it becomes Past and read-only, or straight away with Close now. Up to 3 nights can be Live or Ended at once.'] },
+  make: { title: 'Make a night', p: [
+    'A night for a test, a street party or the real thing. Copy costumes from another night to keep your buttons.',
+    'It stays Upcoming until you press Go live or its Goes live at comes.'] },
+
+  // A night's screen: the header's help depends on the night's state
+  'night-Upcoming': { title: 'An Upcoming night', p: [
+    'Waiting to start. It goes live by itself at its Goes live at, or when you press Go live, and its golden tickets are drawn then.',
+    'If 3 nights are already open, it closes the oldest Ended one to make room, or waits.'] },
+  'night-Live': { title: 'A Live night', p: [
+    'Counting now. Press End the night when the last kids are gone; it ends by itself at 3 am anyway.',
+    'Reset deletes its kids, golden tickets and summary and makes it Upcoming again, as if it never happened: handy after a test. Taps a phone was still holding from before are dropped.'] },
+  'night-Ended': { title: 'An Ended night', p: [
+    'Over, but late kids still count until noon tomorrow, when it becomes Past. Its summary is ready.',
+    'Resume if you ended too soon. Close now makes it Past straight away and frees an open slot. Reset puts it back to Upcoming with no kids.'] },
+  'night-Past': { title: 'A Past night', p: [
+    'Read-only: its kids, summary and CSV stay. Race against it next year.',
+    'Delete removes it and everything in it, for good.'] },
+  'night-imported': { title: 'Imported counts', p: [
+    'Counts from an earlier year, brought in so you have a ghost to race. You can race against it or delete it, nothing else.'] },
+  tools: { title: 'Night tools', terms: [
+    ['🎫 Add a golden ticket', 'Hides one more winning kid number in the rest of tonight\'s range.'],
+    ['➕ Add missed kids', 'A count per 15-minute row, added as plain kids that don\'t celebrate. It\'s also how you count into a night the door isn\'t on.'],
+    ['⬇ CSV and 🖨 Tally sheet', 'Every kid, for a spreadsheet or the fridge.'],
+    ['✨ Night summary', 'Slides of the night, once it\'s ended. Sharing on makes one public link; turning it off kills the link.']] },
+  settings: { title: 'Night settings', terms: [
+    ['Race against', 'The ghost on the TV: a past night, imported counts, or last year\'s estimate. A night racing None races your estimate, if you\'ve set one.'],
+    ['Expected kids', 'Your guess for this year. With no ghost, golden tickets are spread over it.'],
+    ['Visit window', 'Taps this close together are one crew, for the summary\'s “Biggest crew”.'],
+    ['Goes live at', 'The night starts by itself at this time, in your time zone. Empty: only when you press Go live.'],
+    ['Advanced: Clock shift', 'Moves this night\'s clock, so a 2 pm test plays like 5 pm. Leave it at 0 for the real night.'],
+    ['Advanced: Golden tickets', 'How many winning kid numbers are hidden at Go live, between 10% and 80% of the ghost\'s total (or Expected kids).']] },
+  costumes: { title: 'Costumes', p: [
+    'The buttons on the door phones for this night, in this order. Adding one mid-night is fine.',
+    'Each night has its own list; Make a night copies one.'] },
+
+  // Household
+  join: { title: 'Helpers and the join key', p: [
+    'The join key lets a phone count at your door, on every night, test or real. Anyone holding it can add kids, so share it with your helpers only.',
+    'Change join key cuts off every phone that has it, yours too: they\'ll need the new QR.'] },
+  tv: { title: 'Your TV', p: [
+    'The TV link only watches: it shows whichever night the door is on and switches by itself. Pair a TV with the code on its screen, or send the link to family far away.',
+    'Rotate TV link cuts every screen off, your porch TV included.'], more: [['TV help: laptops, sound, smart TVs', '/help/tv']] },
+  estimate: { title: 'Last year (estimated)', p: [
+    'No count from last year? Type a guess. It becomes a ghost shaped like a typical night, labelled “last year (estimated)”.',
+    'Every night racing None races it, nights you make later too. Clear it to go back to no ghost.'] },
+  name: { title: 'Household name', p: [
+    'Shown on your TV and on any summary you share. Keep it decent: it\'s under the House rules.'], more: [['House rules', '/privacy']] },
+  location: { title: 'Location', p: [
+    'Optional. Pick roughly where you are: only a cell about 5 × 3 km is kept, never your address.',
+    'It puts you in nearby figures: once 5 houses around you are counting, your TV and phones show how many kids came nearby.'] },
+  managers: { title: 'Managers', p: [
+    'Everyone here runs the household equally. Invite someone with a link: it works once, for 7 days, with a Google account.',
+    'Leave this household removes only you.'] },
+  account: { title: 'Your account', p: [
+    'Signing out doesn\'t stop the door phones or the TV.',
+    'Delete my household deletes every night, kid and costume straight away. It can\'t be undone.'] },
+}
+const helpHtml = k => {
+  const h = HELP[k]; if (!h) return ''
+  return `<div class="help-body">${(h.p ?? []).map(t => `<p>${esc(t)}</p>`).join('')}${h.terms ? `<dl>${h.terms.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>` : ''}${(h.more ?? []).map(([l, href]) => `<p><a class="link" href="${href}">${esc(l)} ›</a></p>`).join('')}</div>`
+}
+
+// ───────────────────────── stub data ─────────────────────────
+const SCENARIOS = {
+  signup: { label: 'Just signed up: Test night live, Halloween scheduled (checklist)', now: 'Oct 14, 7:30 pm', checklist: true, events: [
+    { id: 8, name: 'Test night', state: 'Live', wentLive: 1700, wentLiveText: 'Oct 14, 7:20 pm', kids: 1, race: 'none', expected: 0, golden: 0, goldenWon: 0 },
+    { id: 1, name: 'Halloween 2026', state: 'Upcoming', kids: 0, race: 'none', expected: 0, golden: 5, goes: 'Oct 31, 4:00 pm' },
+  ] },
+  halloween: { label: 'Halloween 7:10 pm, a test night still Live', now: 'Oct 31, 7:10 pm', events: [
+    { id: 1, name: 'Halloween 2026', state: 'Live', wentLive: 1600, wentLiveText: 'Oct 31, 4:00 pm', kids: 132, race: 'est', expected: 150, golden: 5, goldenWon: 2, goes: 'Oct 31, 4:00 pm' },
+    { id: 2, name: 'Afternoon test', state: 'Live', wentLive: 1405, wentLiveText: 'Oct 31, 2:05 pm', kids: 4, race: 'est', expected: 0, golden: 0, goldenWon: 0 },
+    { id: 3, name: 'Test night', state: 'Past', wentLive: 1015, wentLiveText: 'Oct 15, 6:00 pm', kids: 9, race: 'est', expected: 10, golden: 0, goldenWon: 0, sharing: true },
+    { id: 4, name: 'Halloween 2025 (counts)', state: 'Past', imported: true, kids: 141 },
+  ] },
+  morning: { label: 'Oct 31, 10 am: test auto-ended, Halloween scheduled', now: 'Oct 31, 10:00 am', events: [
+    { id: 1, name: 'Halloween 2026', state: 'Upcoming', kids: 0, race: 'est', expected: 150, golden: 5, goes: 'Oct 31, 4:00 pm' },
+    { id: 2, name: 'Dress rehearsal', state: 'Ended', wentLive: 1030, wentLiveText: 'Oct 30, 6:00 pm', kids: 11, race: 'est', expected: 10, golden: 2, goldenWon: 1,
+      notes: [{ kind: 'auto', text: 'Ended automatically at 3:00 am. Late kids still count until noon.' }] },
+    { id: 4, name: 'Halloween 2025 (counts)', state: 'Past', imported: true, kids: 141 },
+  ] },
+  nothing: { label: 'Oct 20: nothing open', now: 'Oct 20, 8:00 pm', events: [
+    { id: 1, name: 'Halloween 2026', state: 'Upcoming', kids: 0, race: 'est', expected: 150, golden: 5, goes: 'Oct 31, 4:00 pm' },
+    { id: 5, name: 'Street party', state: 'Upcoming', kids: 0, race: 'none', expected: 40, golden: 3 },
+    { id: 3, name: 'Test night', state: 'Past', wentLive: 1015, wentLiveText: 'Oct 15, 6:00 pm', kids: 9, race: 'est', expected: 10, golden: 0, goldenWon: 0 },
+  ] },
+  cap: { label: 'Oct 31, 4:01 pm: 3 nights live, Halloween waiting', now: 'Oct 31, 4:01 pm', events: [
+    { id: 1, name: 'Halloween 2026', state: 'Upcoming', kids: 0, race: 'est', expected: 150, golden: 5, goes: 'Oct 31, 4:00 pm',
+      notes: [{ kind: 'wait', text: "Couldn't go live at 4:00 pm: 3 nights are live. It'll go live as soon as you end one." }] },
+    { id: 2, name: 'Afternoon test', state: 'Live', wentLive: 1405, wentLiveText: 'Oct 31, 2:05 pm', kids: 4, race: 'est', golden: 0, goldenWon: 0 },
+    { id: 6, name: 'Kids testing the TV', state: 'Live', wentLive: 1500, wentLiveText: 'Oct 31, 3:00 pm', kids: 37, race: 'none', golden: 0, goldenWon: 0 },
+    { id: 7, name: 'Sound check', state: 'Live', wentLive: 1530, wentLiveText: 'Oct 31, 3:30 pm', kids: 2, race: 'none', golden: 0, goldenWon: 0 },
+  ] },
+}
+const HOUSE = { name: 'The Harker House', key: 'b7f2-91kq', tv: 'https://count-dracula.example.com/tv?key=Qm3x…9Za', zone: 'America/Toronto', estimate: 120,
+  managers: ['mina@example.com (you)', 'jonathan@example.com'], location: 'Around Exampletown' }
+const TAGS = ['🧛 Vampire', '🎃 Pumpkin', '🦸 Superhero', '👻 Ghost', '🧙 Witch']
+
+// ───────────────────────── state ─────────────────────────
+const params = new URLSearchParams(location.search)
+let scenarioKey = SCENARIOS[params.get('scenario')] ? params.get('scenario') : 'signup'
+let events, ui
+function loadScenario() {
+  events = structuredClone(SCENARIOS[scenarioKey].events)
+  for (const e of events) { e.notes ??= []; e.sharing ??= false; e.goldenWon ??= 0 }
+  ui = { tab: 'tonight', open: null, help: {}, helper: false, checklist: !!SCENARIOS[scenarioKey].checklist }
+}
+loadScenario()
+
+const open = e => e.state === 'Live' || e.state === 'Ended'
+const openEvents = () => events.filter(open)
+const doorEvent = () => openEvents().sort((a, b) => b.wentLive - a.wentLive)[0] ?? null
+const nextUpcoming = () => events.find(e => e.state === 'Upcoming' && e.goes)
+const byState = s => events.filter(e => e.state === s)
+const ev = id => events.find(e => e.id === +id)
+let clock = 1900
+
+function toast(msg, err) { const t = document.getElementById('toast'); t.textContent = msg; t.className = err ? 'err' : ''; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2600) }
+
+// ───────────────────────── actions (in memory) ─────────────────────────
+const ACT = {
+  golive(id) { const e = ev(id); if (openEvents().length >= 3) return toast('End or close one of your open nights first', true)
+    e.state = 'Live'; e.wentLive = ++clock; e.wentLiveText = 'just now'; e.notes = []; toast(`${e.name} is live`) },
+  end(id) { const e = ev(id); e.state = 'Ended'; e.notes = e.notes.filter(n => n.kind !== 'auto'); toast(`${e.name} ended`)
+    const w = events.find(x => x.notes.some(n => n.kind === 'wait')); if (w) { w.notes = []; e.state = 'Past'; ACT.golive(w.id) } },
+  resume(id) { const e = ev(id); e.state = 'Live'; e.notes = e.notes.filter(n => n.kind !== 'auto'); toast(`${e.name} is live again`) },
+  close(id) { const e = ev(id); e.state = 'Past'; e.notes = []; toast(`${e.name} closed`) },
+  reset(id) { const e = ev(id); if (!confirm(`Reset ${e.name}? Its ${e.kids} kids are deleted and it goes back to Upcoming.`)) return
+    e.state = 'Upcoming'; e.kids = 0; e.goldenWon = 0; e.wentLive = 0; e.notes = []; e.sharing = false; toast(`${e.name} is Upcoming again`) },
+  del(id) { const e = ev(id); if (e.state === 'Live') return toast('End the night first', true)
+    if (!confirm(`Delete ${e.name}?`)) return; events = events.filter(x => x !== e); if (ui.open === e.id) ui.open = null; toast('Deleted') },
+  share(id) { const e = ev(id); e.sharing = !e.sharing },
+  ticket(id) { ev(id).golden++; toast('A golden ticket is hidden') },
+  missed(id) { ev(id).kids += 3; toast('3 missed kids added') },
+  create() { const id = Math.max(...events.map(e => e.id)) + 1; events.push({ id, name: 'New night', state: 'Upcoming', kids: 0, race: 'est', expected: 0, golden: 5, notes: [], goldenWon: 0 }); toast('Made “New night”'); return id },
+  helper() { ui.helper = !ui.helper },
+  hideChecklist() { ui.checklist = false },
+  stub(what) { toast(`(prototype) ${what}`) },
+}
+
+// ───────────────────────── shared bits ─────────────────────────
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const pill = e => `<span class="pill ${e.state}">${e.state}</span>`
+const doorPill = e => e === doorEvent() ? '<span class="pill door">On the door & TV</span>' : ''
+const btn = (label, act, id, cls = '') => `<button class="${cls}" data-act="${act}" data-id="${id ?? ''}">${label}</button>`
+// The "?" a heading carries on phones, and the help it opens in place: the same HELP entry the column shows.
+const q = key => `<button class="help-q" data-q="${key}" aria-label="Help: ${esc(HELP[key]?.title ?? '')}" aria-expanded="${!!ui.help[key]}">?</button>`
+const inline = key => ui.help[key] ? `<div class="help-inline">${helpHtml(key)}</div>` : ''
+const H = (key, title, tag = 'h2') => `<${tag}>${title}${q(key)}</${tag}>${inline(key)}`
+const sec = (key, title, body) => `<section data-help="${key}">${H(key, title)}${body}</section>`
+
+function raceName(e) { return e.race === 'est' ? `Last year (estimated, ${HOUSE.estimate})` : e.race === 'none' ? 'None' : e.race }
+function whenLine(e) {
+  if (e.imported) return `${e.kids} kids · imported counts`
+  if (e.state === 'Upcoming') return e.goes ? `Goes live by itself ${e.goes}` : 'Goes live when you press Go live'
+  if (e.state === 'Live') return `${e.kids} kids · live since ${e.wentLiveText}`
+  if (e.state === 'Ended') return `${e.kids} kids · ended, late kids count until noon`
+  return `${e.kids} kids · ${e.wentLiveText ?? ''}`
+}
+function notesHtml(e) {
+  return e.notes.map(n => `<div class="note">${esc(n.text)}${n.kind === 'auto' ? `<div class="row">${btn('Resume', 'resume', e.id, 'small fit')}${btn('Close now', 'close', e.id, 'small fit')}<a class="link fit" href="#">✨ Summary</a></div>` : ''}</div>`).join('')
+}
+function lifecycle(e, small = true) {
+  const s = small ? 'small fit' : 'fit'
+  if (e.imported) return btn('Delete', 'del', e.id, `danger ${s}`)
+  if (e.state === 'Upcoming') return btn('▶ Go live', 'golive', e.id, `primary ${s}`) + btn('Delete', 'del', e.id, `danger ${s}`)
+  if (e.state === 'Live') return btn('■ End the night', 'end', e.id, `primary ${s}`) + btn('↺ Reset', 'reset', e.id, `danger ${s}`)
+  if (e.state === 'Ended') return btn('▶ Resume', 'resume', e.id, s) + btn('Close now', 'close', e.id, s) + btn('↺ Reset', 'reset', e.id, `danger ${s}`) + btn('Delete', 'del', e.id, `danger ${s}`)
+  return btn('Delete', 'del', e.id, `danger ${s}`)
+}
+function tools(e) {
+  if (e.imported) return ''
+  const t = []
+  if (e.state === 'Live') t.push(btn('🎫 Add a golden ticket', 'ticket', e.id, 'small fit'))
+  if (open(e)) t.push(btn('➕ Add missed kids', 'missed', e.id, 'small fit'))
+  if (e.state !== 'Upcoming') t.push(btn('⬇ CSV', 'stub', 'CSV export', 'small fit'), `<a class="link fit" href="#">🖨 Tally sheet</a>`)
+  if (e.state === 'Ended' || e.state === 'Past') t.push(`<a class="link fit" href="#">✨ Night summary</a>`, `<label class="fit" style="display:flex;gap:6px;align-items:center;margin:0;color:var(--text)"><input type="checkbox" style="width:auto" data-act="share" data-id="${e.id}" ${e.sharing ? 'checked' : ''}> Sharing on</label>`)
+  return t.length ? `<div class="row" style="margin-top:8px">${t.join('')}</div>` : '<p class="muted">Nothing to do until it goes live.</p>'
+}
+function settingsForm(e) {
+  if (e.imported) return '<p class="muted">Imported counts can only be raced against or deleted.</p>'
+  return `<label>Name</label><input value="${esc(e.name)}">
+    <label>Race against</label><select><option>${raceName(e)}</option><option>None</option><option>Test night</option><option>Halloween 2025 (counts)</option></select>
+    <div class="row"><div><label>Expected kids</label><input type="number" value="${e.expected ?? 0}"></div><div><label>Visit window (s)</label><input type="number" value="15"></div></div>
+    <details style="margin-top:10px"><summary>Advanced</summary><label>Clock shift (hours)</label><input type="number" value="0"><label>Golden tickets (drawn at Go live)</label><input type="number" value="${e.golden ?? 0}"></details>
+    ${e.state === 'Upcoming' ? `<label>Goes live by itself at (America/Toronto; empty: only when you press Go live)</label><input value="${e.goes ?? ''}" placeholder="—">` : ''}
+    <p>${btn('Save settings', 'stub', 'Saved', 'primary')}</p>`
+}
+const costumes = e => `<div>${TAGS.map(t => `<div class="item"><span class="grow">${t}</span><span class="muted">${e.state === 'Upcoming' ? 0 : Math.floor(e.kids / 5)}</span></div>`).join('')}</div><div class="row" style="margin-top:6px"><input placeholder="New costume name"><button class="fit">Add</button></div>`
+
+function helperBox() {
+  return `<div class="row">${btn('📱 Count on this device', 'stub', 'Opens /door', 'primary')}${btn('➕ Add a helper', 'helper')}</div>
+    ${ui.helper ? `<div style="margin-top:10px"><div style="background:#fff;color:#111;border-radius:12px;padding:30px;width:200px;text-align:center">[QR /door?key=…]</div>${btn('Share join link', 'stub', 'Share sheet', 'primary')}</div>` : ''}`
+}
+const joinKey = () => `<p class="muted">Join key <code>${HOUSE.key}</code> · works on every night</p>
+  <p>${btn('📱 Count on this device', 'stub', 'Opens /door', 'primary')} ${btn('➕ Add a helper', 'helper')}</p>
+  ${ui.helper ? `<div style="background:#fff;color:#111;border-radius:12px;padding:30px;width:200px;text-align:center;margin-bottom:8px">[QR /door?key=…]</div>` : ''}
+  <p>${btn('Change join key', 'stub', 'Join key changed', 'danger small')}</p>`
+const tvBox = () => `<label>Pair a TV: the code on its screen</label><div class="row"><input placeholder="K7Q-M4X"><button class="primary">Pair a TV</button></div>
+  <p class="muted">Anyone with this link watches whichever night the door is on.</p><p><code style="word-break:break-all;display:block">${HOUSE.tv}</code></p>
+  <div class="row"><button>Share</button><button>Copy</button><button>Show QR</button></div>
+  <div class="row" style="margin-top:8px"><button>Use this screen as the TV</button><button class="danger">Rotate TV link</button></div>`
+const estimateBox = () => `<label>About how many kids came last year?</label><div class="row"><input type="number" value="${HOUSE.estimate}"><button>Save</button><button class="danger">Clear</button></div>`
+const createBox = () => `<input placeholder="Night name, e.g. Street party"><div class="row" style="margin-top:6px"><select><option>Copy costumes from Halloween 2026</option></select>${btn('Make it', 'create', '', 'primary')}</div>`
+// The ready checklist (ticket 09), at the top of Tonight.
+const checklistBox = () => {
+  const c = (done, title, line) => `<div class="check ${done ? 'done' : ''}"><span class="tick">${done ? '✓' : ''}</span><div><b>${title}</b><div class="muted">${line}</div></div></div>`
+  return c(true, 'A TV is watching', 'Your TV is showing Test night.') +
+    c(true, 'A phone counted a test kid', 'Test night ends by itself at 3 am. Your TV switches to Halloween 2026 when it goes live.') +
+    c(false, 'Your Halloween night', 'Halloween 2026 goes live Sat Oct 31, 4:00 pm. <span class="row" style="margin-top:6px;display:flex"><input type="number" placeholder="Expected kids"><input type="number" placeholder="Kids last year (about)"><button class="fit">Save</button></span>') +
+    `<p style="margin:8px 0 0">${btn('Hide this list', 'hideChecklist', '', 'small')}</p>`
+}
+
+// ───────────────────────── /setup, variant B ─────────────────────────
+function page() {
+  const tab = (k, l) => `<button role="tab" aria-selected="${ui.tab === k}" data-act="tab" data-id="${k}">${l}</button>`
+  let body
+  if (ui.open && ev(ui.open)) {
+    const e = ev(ui.open), hk = e.imported ? 'night-imported' : `night-${e.state}`
+    body = `<p><button class="link-button" data-act="back">‹ All nights</button></p>
+      <section data-help="${hk}"><h1 style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${esc(e.name)} ${pill(e)} ${doorPill(e)}${q(hk)}</h1>${inline(hk)}
+      <p class="muted">${whenLine(e)}</p>${notesHtml(e)}
+      <div class="row">${lifecycle(e, false)}</div></section>
+      ${e.imported ? '' : sec('tools', 'Night tools', tools(e))}
+      ${sec('settings', 'Settings', settingsForm(e))}
+      ${e.imported ? '' : sec('costumes', 'Costumes', costumes(e))}`
+  } else if (ui.tab === 'tonight') {
+    const d = doorEvent(), n = nextUpcoming(), others = openEvents().filter(e => e !== d)
+    body = (ui.checklist ? sec('checklist', '✅ Ready for Halloween', checklistBox()) : '')
+      + (d ? `<section data-help="door"><div class="row"><span class="muted">On the door & TV</span>${pill(d)}${q('door')}</div>${inline('door')}
+        <div class="big">${d.kids} <span style="font-size:18px">kids</span></div><b>${esc(d.name)}</b><p class="muted">${whenLine(d)}${d.golden ? ` · golden tickets ${d.goldenWon}/${d.golden} won` : ''}</p>${notesHtml(d)}
+        <div class="row">${lifecycle(d, false)}</div>${tools(d)}
+        <p><button class="link-button" data-act="drill" data-id="${d.id}">Settings and costumes ›</button></p></section>`
+      : sec('nothing', 'No night on right now', `<p class="muted">${n ? `${esc(n.name)} goes live by itself ${n.goes}.` : 'Nothing is scheduled.'}</p>
+        ${n ? `<div class="row">${btn(`▶ Go live on ${esc(n.name)} now`, 'golive', n.id, 'primary fit')}</div>` : ''}`))
+      + (others.length ? sec('also', 'Also open', others.map(e => `<div class="item"><span class="grow"><b>${esc(e.name)}</b> ${pill(e)}<br><span class="muted">${whenLine(e)}</span></span>${lifecycle(e)}<button class="small fit" data-act="drill" data-id="${e.id}">›</button></div>${notesHtml(e)}`).join('')) : '')
+      + events.filter(e => e.notes.some(n => n.kind === 'wait')).map(e => sec('waiting', `⏳ ${esc(e.name)}`, `${notesHtml(e)}<button class="link-button" data-act="drill" data-id="${e.id}">Open ${esc(e.name)} ›</button>`)).join('')
+      + sec('helpers', '📱 Helpers', helperBox())
+  } else if (ui.tab === 'nights') {
+    const row = e => `<button class="night-row" data-act="drill" data-id="${e.id}"><span class="grow"><b>${esc(e.name)}</b> ${pill(e)} ${doorPill(e)}<br><span class="muted">${whenLine(e)}</span>${e.notes.length ? `<br><span style="color:var(--orange);font-size:13px">● ${esc(e.notes[0].text.split('.')[0])}</span>` : ''}</span><span class="chev">›</span></button>`
+    const grp = (t, list) => list.length ? `<div class="group-title">${t}</div>${list.map(row).join('')}` : ''
+    body = `<section data-help="nights" style="background:none;padding:0">${H('nights', '🌙 Your nights')}
+      ${grp(`Open (${openEvents().length} of 3)`, openEvents().sort((a, b) => b.wentLive - a.wentLive))}${grp('Coming up', byState('Upcoming'))}${grp('Past', byState('Past'))}</section>
+      ${sec('make', 'Make a night', createBox())}`
+  } else {
+    body = sec('join', '📱 Helpers and the join key', joinKey()) + sec('tv', '📺 Your TV', tvBox()) + sec('estimate', '👻 Last year (estimated)', estimateBox())
+      + sec('name', 'Household name', `<div class="row"><input value="${HOUSE.name}"><button>Save</button></div>`)
+      + sec('location', '📍 Location (optional)', `<p class="muted">${HOUSE.location}</p><button class="small">Change</button>`)
+      + sec('managers', '👥 Managers', HOUSE.managers.map(m => `<div class="item">${m}</div>`).join('') + `<p><button class="primary">➕ Invite a Manager</button></p><p><button class="danger">Leave this household</button></p>`)
+      + sec('account', 'Your account', `<p class="muted">Signed in as mina@example.com · time zone ${HOUSE.zone}</p><div class="row"><button class="fit">Sign out</button><button class="danger fit">Delete my household…</button></div>`)
+  }
+  return `<h1>🧛 ${HOUSE.name}</h1><div class="tabs" role="tablist">${tab('tonight', 'Tonight')}${tab('nights', `Nights${openEvents().length > 1 ? ` (${openEvents().length} open)` : ''}`)}${tab('house', 'Household')}</div>${body}`
+}
+
+// ───────────────────────── render and the help column ─────────────────────────
+// The column lists every topic on the screen showing, in page order; the section in view is open and
+// highlighted. Clicking a topic scrolls to its section. It never moves the page by itself.
+let helpObs, current
+function renderColumn() {
+  const keys = [...new Set([...document.querySelectorAll('#app [data-help]')].map(el => el.dataset.help))]
+  if (!keys.includes(current)) current = keys[0]
+  document.getElementById('help-col').innerHTML = `<h2>❔ Help</h2>` +
+    keys.map(k => `<div class="topic ${k === current ? 'cur' : ''}"><button data-goto="${k}">${esc(HELP[k]?.title ?? k)}</button>${k === current ? helpHtml(k) : ''}</div>`).join('') +
+    `<p class="foot muted"><a class="link" href="/help/tv">TV help</a> · <a class="link" href="#">Email us</a></p>`
+}
+function watchHelp() {
+  helpObs?.disconnect()
+  helpObs = new IntersectionObserver(es => {
+    const v = es.filter(x => x.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
+    if (v && v.target.dataset.help !== current) { current = v.target.dataset.help; renderColumn() }
+  }, { rootMargin: '-15% 0px -55% 0px' })
+  document.querySelectorAll('#app [data-help]').forEach(el => helpObs.observe(el))
+  renderColumn()
+}
+function render() {
+  document.getElementById('app').innerHTML = page()
+  const u = new URL(location); u.searchParams.set('scenario', scenarioKey); history.replaceState(null, '', u)
+  watchHelp()
+}
+
+document.addEventListener('click', e => {
+  if (e.target.closest('a[href="#"]')) e.preventDefault()
+  const g = e.target.closest('[data-goto]')
+  if (g) { const s = document.querySelector(`#app [data-help="${g.dataset.goto}"]`); current = g.dataset.goto; renderColumn()
+    s?.scrollIntoView({ behavior: 'smooth', block: 'start' }); s?.classList.add('flash'); setTimeout(() => s?.classList.remove('flash'), 900); return }
+  const qb = e.target.closest('[data-q]'); if (qb) { ui.help[qb.dataset.q] = !ui.help[qb.dataset.q]; return render() }
+  const b = e.target.closest('[data-act]'); if (!b) return
+  const { act, id } = b.dataset
+  if (act === 'tab') { ui.tab = id; ui.open = null; ui.help = {}; scrollTo(0, 0) }
+  else if (act === 'drill') { ui.open = +id; ui.help = {}; scrollTo(0, 0) }
+  else if (act === 'back') { ui.open = null; ui.help = {} }
+  else if (act === 'create') { ui.open = ACT.create(); ui.help = {} }
+  else if (act === 'stub') ACT.stub(id)
+  else ACT[act](id)
+  render()
+})
+const sel = document.getElementById('scenario')
+sel.innerHTML = Object.entries(SCENARIOS).map(([k, s]) => `<option value="${k}" ${k === scenarioKey ? 'selected' : ''}>${s.now}</option>`).join('')
+sel.title = SCENARIOS[scenarioKey].label
+sel.onchange = () => { scenarioKey = sel.value; sel.title = SCENARIOS[scenarioKey].label; loadScenario(); render() }
+render()
+</script>
+</body>
+</html>
