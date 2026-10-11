@@ -22,7 +22,7 @@ const el = (tag, props = {}, ...children) => {
 
 async function load() {
   const res = await fetch('/api/operator')
-  if (res.status === 401) location.href = '/signup'
+  if (res.status === 401) location.href = '/#sign-in'
   if (!res.ok) return say(await res.text(), true)
   data = await res.json()
   if (detail) await loadDetail(detail.id)

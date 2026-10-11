@@ -201,7 +201,7 @@ if (location.pathname === '/summary') {
   // A Manager's own summary: /summary?event=<id>.
   const eventId = params.get('event')
   const res = await fetch(`/api/summary?event=${encodeURIComponent(eventId)}`)
-  if (res.status === 401) location.href = '/signup'
+  if (res.status === 401) location.href = '/#sign-in'
   else if (!res.ok) $('message').textContent = "There's no summary for this night yet: it appears once the night has ended."
   else {
     const summary = await res.json()

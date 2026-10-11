@@ -307,15 +307,22 @@ describe('a refused key on /door', () => {
   })
 })
 
-describe('where / goes (until the homepage)', () => {
+describe('where / goes', () => {
   test('a ?key= or a remembered key goes to /door, keeping the query', () => {
     expect(doorRedirect({ pathname: '/', search: '?key=abc', storedKey: null })).toBe('/door?key=abc')
     expect(doorRedirect({ pathname: '/', search: '', storedKey: 'abc' })).toBe('/door')
   })
 
-  test('/ with no key stays, and /door never redirects', () => {
+  test('/ with no key stays on the homepage, and /door never redirects', () => {
     expect(doorRedirect({ pathname: '/', search: '', storedKey: null })).toBeNull()
     expect(doorRedirect({ pathname: '/door', search: '?key=abc', storedKey: 'abc' })).toBeNull()
+  })
+
+  test("a Manager sent to sign in or sign up stays, even on a phone that remembers a door's key", () => {
+    expect(doorRedirect({ pathname: '/', search: '', hash: '#sign-in', storedKey: 'abc' })).toBeNull()
+    expect(doorRedirect({ pathname: '/', search: '', hash: '#start', storedKey: 'abc' })).toBeNull()
+    expect(doorRedirect({ pathname: '/', search: '', hash: '#how', storedKey: 'abc' })).toBe('/door')
+    expect(doorRedirect({ pathname: '/', search: '?key=abc', hash: '#sign-in', storedKey: null })).toBe('/door?key=abc')
   })
 })
 

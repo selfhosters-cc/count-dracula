@@ -53,15 +53,6 @@ describe('/door', () => {
     expect(res.status).toBe(302)
     expect(res.headers.get('Location')).toBe('/door?key=abc&x=1')
   })
-
-  test('/ with no key keeps v2 until the homepage: the same page, whose script sends a remembered key to /door', async () => {
-    const { app } = await served()
-
-    const res = await fetch(`${app.url}/`, { redirect: 'manual' })
-
-    expect(res.status).toBe(200)
-    expect(await res.text()).toContain('src="/door.js"')
-  })
 })
 
 describe('the outbox across a switch, over HTTP', () => {

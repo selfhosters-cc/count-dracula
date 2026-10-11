@@ -16,9 +16,20 @@ export function tvNearby(nearby) {
 // The phone's strip: the Area, or else the Site-wide total, or null to hide it.
 export function phoneNearby(nearby) {
   if (nearby?.area) return `🏘️ Near you: ${kidsText(nearby.area.kids30)} in 30 min · ${houses(nearby.area.houses)}`
-  if (nearby?.site) {
-    const top = nearby.site.topCostume ? ` · top costume: ${nearby.site.topCostume.emoji ? `${nearby.site.topCostume.emoji} ` : ''}${nearby.site.topCostume.name}` : ''
-    return `🎃 Count Dracula tonight: ${fmt(nearby.site.houses)} houses · ${kidsText(nearby.site.kids)}${top}`
-  }
+  if (nearby?.site) return `🎃 Count Dracula tonight: ${siteFigures(nearby.site)}`
   return null
+}
+
+// "212 houses · ~3,140 kids · top costume: 🧙 Witch": the Site-wide total's figures, on the phone and the homepage.
+function siteFigures(site) {
+  const top = site.topCostume ? ` · top costume: ${site.topCostume.emoji ? `${site.topCostume.emoji} ` : ''}${site.topCostume.name}` : ''
+  return `${fmt(site.houses)} houses · ${kidsText(site.kids)}${top}`
+}
+
+// The homepage's line (spec v2.1 §11), from GET /api/site: "🎃 Counting now" while any counted door's Event is
+// Live, "🌙 Last night" once every one has Ended (until they go Past at noon). The lead is drawn bold. Null hides
+// it: below 5 Households, or with nearby switched off.
+export function homeSiteLine(answer) {
+  if (!answer?.site) return null
+  return { lead: answer.live ? '🎃 Counting now' : '🌙 Last night', rest: ` on Count Dracula: ${siteFigures(answer.site)}` }
 }

@@ -54,7 +54,7 @@ describe('who gets in', () => {
 
     expect((await get(app, '/operator', op)).status).toBe(200)
     expect((await get(app, '/operator', manager)).status).toBe(403)
-    expect((await get(app, '/operator')).headers.get('Location')).toBe('/signup')
+    expect((await get(app, '/operator')).headers.get('Location')).toBe('/#sign-in')
     for (const cookie of [manager, null]) {
       expect((await get(app, '/api/operator', cookie)).status).toBeGreaterThanOrEqual(401)
       expect((await get(app, `/api/operator/household?id=${info.id}`, cookie)).status).toBeGreaterThanOrEqual(401)

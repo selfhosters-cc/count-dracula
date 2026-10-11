@@ -1,7 +1,7 @@
 // The door phone on /door (v1 spec §4–5, v2.1 §4): counting, the ☰ door menu, the soundboard.
 import { connectLive } from '/live.js'
 import { createOutbox, uuid } from '/outbox.js'
-import { doorRedirect, doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, quietNudge, refusedKey } from '/door-view.js'
+import { doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, quietNudge, refusedKey } from '/door-view.js'
 import { noNightLines } from '/no-night.js'
 import { phoneNearby } from '/nearby-text.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
@@ -9,12 +9,6 @@ import { clockTime, eventNow, releaseOpen } from '/shared/night-maths.js'
 
 const $ = (id) => document.getElementById(id)
 const EMOJIS = ['🧙', '🧛', '🧟', '👻', '🎃', '🦸', '🕷️', '👑', '🦖', '🐶', '🐱', '🦄', '🤖', '🦇', '🧚', '🏴‍☠️', '🐉', '🤡', '❓']
-
-// `/` with a ?key= or a remembered key belongs on /door (spec v2.1 §11). Until the homepage, `/` with no key
-// is still this page, as in v2.
-const goTo = doorRedirect({ pathname: location.pathname, search: location.search, storedKey: localStorage.getItem('cd.joinKey') })
-if (goTo) location.replace(goTo)
-const onDoor = location.pathname === '/door'
 
 // The join key arrives as ?key=… once (a helper QR, Share join link, or Count on this device) and is remembered.
 const params = new URLSearchParams(location.search)
@@ -27,9 +21,8 @@ if (params.get('key')) {
 const joinKey = localStorage.getItem('cd.joinKey') ?? ''
 
 // A refused key (spec v2.1 §4): forgotten unless its Household is only Suspended, and the phone says so, with
-// one way on: the homepage. On `/` (v2's page, until the homepage) nothing changes.
+// one way on: the homepage.
 function refused({ suspended }) {
-  if (!onDoor) return
   const { forget, says } = refusedKey({ hadKey: !!joinKey, suspended })
   if (forget) localStorage.removeItem('cd.joinKey')
   $('gone-text').textContent = says
@@ -582,9 +575,7 @@ function start(phoneName) {
 
 // First open: ask once, remember on the phone.
 const savedName = localStorage.getItem('cd.phoneName')
-if (goTo) {
-  // on the way to /door
-} else if (savedName) {
+if (savedName) {
   start(savedName)
 } else {
   $('who').style.display = 'flex'

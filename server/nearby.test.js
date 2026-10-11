@@ -212,7 +212,7 @@ describe('on the screens', () => {
   })
 })
 
-describe('the Site-wide total on the sign-up page', () => {
+describe('the Site-wide total on the homepage', () => {
   const running46 = []
   afterEach(() => running46.splice(0).forEach((app) => app.stop()))
 

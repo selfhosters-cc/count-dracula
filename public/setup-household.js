@@ -13,7 +13,7 @@ export function wireHousehold(core) {
   // ---- Pair a TV (spec §9): the code a bare /tv shows, typed or arriving from its QR as ?pair=<code>
   async function redeem(code) {
     const res = await fetch('/api/pair/redeem', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
-    if (res.status === 401) location.href = '/signup'
+    if (res.status === 401) location.href = '/#sign-in'
     if (!res.ok) {
       say(await res.text(), true)
       return false
@@ -84,7 +84,7 @@ export function wireHousehold(core) {
     if (typed !== name) return say("That didn't match, so nothing was deleted", true)
     const res = await fetch('/api/household/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: typed }) })
     if (!res.ok) return say(await res.text(), true)
-    location.href = '/signup'
+    location.href = '/'
   })
 
   // ---- Managers and invites (spec §3)
@@ -135,7 +135,7 @@ export function wireHousehold(core) {
     if (!confirm('Leave this household? Your account details are deleted. The household and its nights stay with the other Managers.')) return
     const res = await fetch('/api/managers/leave', { method: 'POST' })
     if (!res.ok) return say(await res.text(), true)
-    location.href = '/signup'
+    location.href = '/'
   })
 
   return {

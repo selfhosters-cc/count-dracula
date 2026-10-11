@@ -19,7 +19,7 @@ import { toCsv } from './export.js'
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
-const PAGES = { '/': '/door.html', '/door': '/door.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html', '/privacy': '/privacy.html', '/summary': '/summary.html' }
+const PAGES = { '/': '/home.html', '/door': '/door.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html', '/privacy': '/privacy.html', '/summary': '/summary.html' }
 const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink', 'setLocation', 'passFirstRun', 'setLastYear', 'close', 'reset'])
 
 // What a TV-link holder gets (spec §9): what the TV draws, without each kid's phone name.
@@ -28,6 +28,9 @@ const tvSnapshot = (snap) => ({ ...snap, kids: snap.kids.map(withoutPhone) })
 const tvDelta = (delta) => (delta.kid ? { ...delta, kid: withoutPhone(delta.kid) } : delta)
 
 const PAUSE_SIGN_UPS = 'pauseSignUps'
+// Where "go sign in" lands (spec v2.1 §11): the homepage's Sign in form. The hash keeps the homepage even on a
+// phone that remembers a door's key (doorRedirect in public/door-view.js).
+const SIGN_IN = '/#sign-in'
 const DEFAULT_CONTACT = 'privacy@count-dracula.example.com'
 const OPERATOR_ACTIONS = new Set(['rename', 'timeZone', 'suspend', 'unsuspend', 'invite', 'dismissReport'])
 
@@ -129,12 +132,21 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   }
 
   const routes = {
-    // The door phone lives on /door (spec v2.1 §11): a helper's ?key= link to / goes there. Until the homepage
-    // (ticket 59), / with no key is still the door page, whose script sends a remembered key on to /door.
+    // `/` is the public homepage (spec v2.1 §11). The door phone lives on /door: a helper's ?key= link to / goes
+    // there, and the homepage's script sends a phone that remembers a key on too (only the browser knows it).
     'GET /': (req) => {
       const { search, searchParams } = new URL(req.url)
       if (searchParams.get('key')) return new Response(null, { status: 302, headers: { Location: `/door${search}` } })
       return serveStatic('/', req, contact)
+    },
+    // The sign-up page folded into the homepage.
+    'GET /signup': () => new Response(null, { status: 302, headers: { Location: '/' } }),
+    // What the homepage can't know from the page alone: whether sign-ups are paused (shown before anyone goes to
+    // Google), and a signed-in Manager's Household, for the Welcome back card. Never more than its name.
+    'GET /api/home': (req) => {
+      const session = accounts.session(tokenOf(req))
+      const household = session ? (ledger.households().find((h) => h.id === session.householdId)?.displayName ?? null) : null
+      return Response.json({ signUpsPaused: ledger.siteSwitch(PAUSE_SIGN_UPS), household })
     },
     // The door's Event, for a phone, a TV or a Manager; ?event=<id> reads one of the Household's events (a past
     // night's recap on /tv?event=<id>), for a Manager only.
@@ -195,7 +207,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // ---- The Operator (spec §13): a Manager on OPERATOR_EMAILS.
     'GET /operator': async (req) => {
       const session = accounts.session(tokenOf(req))
-      if (!session) return redirect('/signup')
+      if (!session) return redirect(SIGN_IN)
       if (!session.operator) return page('Not here', '<p>This page is for the Operator.</p>', 403)
       return renew(await serveStatic('/operator', req), session, req)
     },
@@ -285,33 +297,33 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       return new Response('OK')
     }),
 
-    // ---- Signing in (spec §3). The sign-up page posts here; Google sends the person back to the callback.
+    // ---- Signing in (spec §3). The homepage's Start and Sign in forms post here; Google sends the person back to the callback.
     'POST /auth/google/start': async (req, server) => {
       if (!guard.take('signIn', clientIp(req, server))) return page('Slow down', '<p>Too many sign-ins from here. Try again in a while.</p>', 429)
       const form = await req.formData()
       try {
         return redirect(accounts.beginSignIn({ displayName: form.get('displayName'), timeZone: form.get('timeZone'), invite: form.get('invite'), redirectUri: callbackUrl(req) }))
       } catch (err) {
-        if (err instanceof BadCommand) return page('Pick another name', `<p>${esc(err.message)}.</p><p><a href="/signup">Back</a></p>`, 400)
+        if (err instanceof BadCommand) return page('Pick another name', `<p>${esc(err.message)}.</p><p><a href="/#start">Back</a></p>`, 400)
         throw err
       }
     },
     'GET /auth/google/callback': async (req, server) => {
       const params = new URL(req.url).searchParams
-      if (params.has('error')) return redirect('/signup') // they backed out at Google
+      if (params.has('error')) return redirect('/') // they backed out at Google
       let result
       try {
         result = await accounts.finishSignIn({ code: params.get('code'), state: params.get('state'), redirectUri: callbackUrl(req), ip: clientIp(req, server) })
       } catch (err) {
         console.error('google sign-in failed:', err.message)
-        return page('Sign-in didn\'t work', '<p>Google sign-in didn\'t work. <a href="/signup">Try again</a>.</p>', 502)
+        return page('Sign-in didn\'t work', '<p>Google sign-in didn\'t work. <a href="/#start">Try again</a>.</p>', 502)
       }
       if (result.refused) return REFUSALS[result.refused](result)
       return redirect('/setup', { 'Set-Cookie': sessionCookie(result.token) })
     },
     'POST /auth/signout': (req) => {
       accounts.signOut(tokenOf(req))
-      return redirect('/signup', { 'Set-Cookie': sessionCookie('', 0) })
+      return redirect('/', { 'Set-Cookie': sessionCookie('', 0) })
     },
 
     // ---- Invite links (spec §3). The link is /invite?key=<token>, a shape the Caddy log masks.
@@ -378,7 +390,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     }),
     'GET /summary': managerPage('/summary'),
 
-    // The Site-wide total for the public sign-up page (spec §14): only the rounded line, from the last refresh,
+    // The Site-wide total for the homepage (spec §14, v2.1 §11): only the rounded line, from the last refresh,
     // and `live` (spec v2.1 §10): whether any counted door's Event is Live, for the homepage's wording.
     'GET /api/site': () => Response.json(nearby.site()),
 
@@ -509,7 +521,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   function managerPage(pathname) {
     return async (req) => {
       const session = accounts.session(tokenOf(req))
-      if (!session) return redirect('/signup')
+      if (!session) return redirect(SIGN_IN)
       if (ledger.isSuspended(session.householdId)) return page('Suspended', `<p>This Household is suspended by the Operator.</p><p>Questions: <a href="mailto:${esc(contact)}">${esc(contact)}</a></p>`, 403)
       return renew(await serveStatic(pathname, req, contact), session, req)
     }
@@ -727,9 +739,9 @@ function page(title, bodyHtml, status) {
 
 // Why a sign-in didn't end in /setup (Accounts' finishSignIn refusals).
 const REFUSALS = {
-  state: () => page('Start again', '<p>That sign-in link has expired or was already used. <a href="/signup">Start again</a>.</p>', 400),
+  state: () => page('Start again', '<p>That sign-in link has expired or was already used. <a href="/#start">Start again</a>.</p>', 400),
   unverified: () => page('Email not verified', '<p>Google hasn\'t verified this account\'s email yet, so it can\'t sign in.</p>', 403),
-  noHousehold: () => page('No household yet', '<p>This Google account doesn\'t run a household here yet. <a href="/signup">Sign up</a> to start one.</p>', 404),
+  noHousehold: () => page('No household yet', '<p>This Google account doesn\'t run a household here yet. <a href="/#start">Sign up</a> to start one.</p>', 404),
   paused: () => page('Sign-ups are paused', '<p>Sign-ups are paused, try again later.</p>', 503),
   alreadyManager: () => page('One household each', "<p>You already manage a household here, and a Google account can only manage one. To help this one, use another Google account.</p><p><a href=\"/setup\">Go to your household</a></p>", 409),
   invite: ({ why }) => page('Invite link', `<p>${INVITE_PROBLEMS[why] ?? INVITE_PROBLEMS.unknown}</p>`, 410),

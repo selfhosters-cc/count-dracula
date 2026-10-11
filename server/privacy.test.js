@@ -39,10 +39,10 @@ describe('/privacy', () => {
     expect(page).not.toMatch(/within a week|slower around Halloween/)
   })
 
-  test('is linked from sign-up, the Location picker and /setup, and help is offered there and on /help/tv; never on the TV', async () => {
+  test('is linked from the homepage, the Location picker and /setup, and help is offered there and on /help/tv; never on the TV', async () => {
     const app = server({ OPERATOR_CONTACT: 'help@count-dracula.example.com' })
 
-    const signup = await text(app, '/signup')
+    const signup = await text(app, '/')
     expect(signup).toMatch(/By continuing you agree to the <a href="\/privacy">Privacy notice and House rules<\/a>/)
     expect(signup).toContain('Help: <a href="mailto:help@count-dracula.example.com">email us</a>')
     expect(await text(app, '/location-picker.js')).toContain("'/privacy'")

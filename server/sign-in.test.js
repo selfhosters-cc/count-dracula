@@ -231,7 +231,7 @@ describe('/setup on a session', () => {
 
     const page = await fetch(`${app.url}/setup`, { redirect: 'manual' })
     expect(page.status).toBe(303)
-    expect(page.headers.get('Location')).toBe('/signup')
+    expect(page.headers.get('Location')).toBe('/#sign-in')
     for (const path of ['/api/household', '/api/events', '/api/batches', '/api/export?event=1']) {
       expect((await fetch(`${app.url}${path}`, as('cd_session=forged'))).status).toBe(401)
     }

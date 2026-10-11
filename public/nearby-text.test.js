@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { phoneNearby, tvNearby } from './nearby-text.js'
+import { homeSiteLine, phoneNearby, tvNearby } from './nearby-text.js'
 
 const area = { houses: 14, kids30: 90, topCostume: { name: 'Witch', emoji: '🧙' } }
 const site = { houses: 212, kids: 3140 }
@@ -25,5 +25,23 @@ describe('nearby words', () => {
     expect(tvNearby({ area: one, site })).toBe('~5 kids in the last half hour · 1 house counting')
     expect(phoneNearby({ area: one, site })).toBe('🏘️ Near you: ~5 kids in 30 min · 1 house')
     expect(phoneNearby({ area: { ...one, houses: 2 }, site })).toBe('🏘️ Near you: ~5 kids in 30 min · 2 houses')
+  })
+})
+
+describe("the homepage's site-wide line (spec v2.1 §11)", () => {
+  const witch = { ...site, topCostume: { name: 'Witch', emoji: '🧙' } }
+
+  test('"Counting now" while a counted night is Live', () => {
+    expect(homeSiteLine({ site: witch, live: true })).toEqual({ lead: '🎃 Counting now', rest: ' on Count Dracula: 212 houses · ~3,140 kids · top costume: 🧙 Witch' })
+    expect(homeSiteLine({ site, live: true })).toEqual({ lead: '🎃 Counting now', rest: ' on Count Dracula: 212 houses · ~3,140 kids' })
+  })
+
+  test('"Last night" once every counted night has Ended', () => {
+    expect(homeSiteLine({ site: witch, live: false })).toEqual({ lead: '🌙 Last night', rest: ' on Count Dracula: 212 houses · ~3,140 kids · top costume: 🧙 Witch' })
+  })
+
+  test('nothing below 5 Households, with the switch off, or with no answer', () => {
+    expect(homeSiteLine({ site: null, live: false })).toBeNull()
+    expect(homeSiteLine(null)).toBeNull()
   })
 })

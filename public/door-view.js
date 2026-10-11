@@ -79,11 +79,14 @@ export function refusedKey({ hadKey, suspended }) {
   return { forget: true, says: "This phone's link no longer works. Ask your host for a new link or QR code." }
 }
 
-// `/` with a ?key= or a remembered key goes to the door phone (spec v2.1 §11); otherwise null, and it stays.
-export function doorRedirect({ pathname, search, storedKey }) {
+// `/` with a ?key= or a remembered key goes to the door phone (spec v2.1 §11); otherwise null, and the homepage
+// stays. Every "go sign in" lands on /#sign-in or /#start: those stay too, so a Manager whose phone remembers a
+// door's key can still reach the forms (else /setup → / → /door → ☰ Setup → / would go round).
+const SIGN_IN_HASHES = new Set(['#sign-in', '#start'])
+export function doorRedirect({ pathname, search, hash = '', storedKey }) {
   if (pathname !== '/') return null
   if (new URLSearchParams(search).get('key')) return `/door${search}`
-  return storedKey ? '/door' : null
+  return storedKey && !SIGN_IN_HASHES.has(hash) ? '/door' : null
 }
 
 // Add a helper: the join link and its wording name the Household, never an Event, so a QR made for a test

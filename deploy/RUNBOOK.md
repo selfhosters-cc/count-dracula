@@ -41,7 +41,7 @@ without stopping v1.
    Caddy. Not `host-public.sh add`: that puts the host inside the wildcard site, whose shared log would keep the tokens.
 5. Check it's v2 and ours:
    - `https://$PUBLIC_HOST/healthz` says `ok`; `https://$PUBLIC_HOST/api/snapshot` says 403 (reads aren't open).
-   - Sign in at `https://$PUBLIC_HOST/signup` → **Sign in with Google** with `HOUSEHOLD1_MANAGER_EMAIL`. `/setup` shows
+   - Sign in at `https://$PUBLIC_HOST/` → **Sign in with Google** with `HOUSEHOLD1_MANAGER_EMAIL`. `/setup` shows
      the live Rehearsal racing "Halloween 2025 (counts)" in America/Toronto.
    - Pair our TV: on the TV laptop open `https://$PUBLIC_HOST/tv`, type its code in `/setup` → **Pair a TV**.
    - Journald keeps 30 days: `lxc "systemd-analyze cat-config systemd/journald.conf | grep MaxRetentionSec"`.
@@ -218,7 +218,7 @@ costume. Then `rm -rf /tmp/nearby-check`.
 
 ## 6. Support, from opening to Oct 31
 
-- **One channel: `OPERATOR_CONTACT`**, offered as "Help: email us" in `/setup`, on `/help/tv` and on the sign-up page.
+- **One channel: `OPERATOR_CONTACT`**, offered as "Help: email us" in `/setup`, on `/help/tv` and on the homepage.
   No forum, chat, status page or banner.
 - Check the inbox **once a day**, and on **Oct 31 at 3 pm and about 6 pm**. Nothing is promised during the night;
   replies come the next day.

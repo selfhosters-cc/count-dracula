@@ -33,7 +33,7 @@ $('status').addEventListener('click', () => ($('status').textContent = ''))
 // Setup is a signed-in Manager's: the session cookie rides along, and a lapsed one goes back to sign-in.
 async function get(path) {
   const res = await fetch(path)
-  if (res.status === 401) location.href = '/signup'
+  if (res.status === 401) location.href = '/#sign-in'
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -49,7 +49,7 @@ async function load() {
 
 async function admin(command, done) {
   const res = await fetch('/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(command) })
-  if (res.status === 401) location.href = '/signup'
+  if (res.status === 401) location.href = '/#sign-in'
   if (!res.ok) {
     say(await res.text(), true)
     return null
