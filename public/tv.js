@@ -5,7 +5,7 @@ import { createDirector } from '/director.js'
 import { animate } from '/vendor/motion/motion.js'
 import confettiLib, { create as createConfetti } from '/vendor/canvas-confetti/confetti.module.js'
 import { createRaceChart } from '/race-chart.js'
-import { biggestCrew, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, rush, tagColour } from '/shared/night-maths.js'
+import { biggestCrew, clockTime, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, rush, tagColour } from '/shared/night-maths.js'
 import { createSound } from '/sound.js'
 import { createWebAudio } from '/web-audio.js'
 import { createTeaser, teaserLines } from '/teaser.js'
@@ -160,7 +160,7 @@ function paceText(state) {
   const g = state.ghost
   if (inRecap(state)) return verdict(state)
   if (!g) return '' // Race against None: no ghost, no pace line
-  const now = minuteOfDay(eventNow(Date.now(), state.event.clockShiftMs ?? 0))
+  const now = minuteOfDay(eventNow(Date.now(), state.event.clockShiftMs ?? 0), state.timeZone)
   const p = pace(state.kids.length, ghost(g.buckets)(now), g.total)
   if (p.kind === 'record') return '🏆 New record!'
   if (p.kind === 'level') return "👻 Neck and neck with last year's ghost"
@@ -358,10 +358,10 @@ function renderCards(state) {
     const [h, m] = hhmm.split(':').map(Number)
     return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')}`
   }
-  const at = (ms) => new Date(ms + shift).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(' ', '').toLowerCase()
+  const at = (ms) => clockTime(ms + shift, state.timeZone).replace(/\s/, '').toLowerCase()
   const card = (k, v, s = '') => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`
   const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
-  const peak = peakHalfHour(state.kids, shift)
+  const peak = peakHalfHour(state.kids, shift, state.timeZone)
   const crew = biggestCrew(state.kids, state.event.visitWindowMs ?? 15_000)
   const top = costumeOfTheNight(state.kids, state.tags)
   const tickets = (state.recap?.tickets ?? [])
@@ -514,8 +514,8 @@ if (new URLSearchParams(location.search).has('border')) document.body.classList.
 setInterval(() => {
   if (!live) return
   $('catching-up').classList.toggle('on', !live.connected && live.disconnectedFor >= CATCHING_UP_AFTER_MS)
-  const shift = live.state?.event.clockShiftMs ?? 0 // the clock shows event time
-  $('clock').textContent = new Date(eventNow(Date.now(), shift)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const shift = live.state?.event.clockShiftMs ?? 0 // the clock shows event time, in the Household's zone
+  $('clock').textContent = clockTime(eventNow(Date.now(), shift), live.state?.timeZone)
 }, 1_000)
 
 // The ghost marker and tonight's line creep along with the clock.

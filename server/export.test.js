@@ -1,11 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import { toCsv } from './export.js'
 
-const local = (hh, mm, ss = 0) => new Date(2026, 9, 31, hh, mm, ss).getTime()
+// A Household in Vancouver (PDT, UTC-7): its rows read in its own zone, whatever the server's is.
+const p2 = (n) => String(n).padStart(2, '0')
+const local = (hh, mm, ss = 0) => Date.parse(`2026-10-31T${p2(hh)}:${p2(mm)}:${p2(ss)}-07:00`)
 
 const night = {
   name: 'Halloween 2026',
   clockShiftMs: 0,
+  timeZone: 'America/Vancouver',
   kids: [
     { number: 1, tappedAt: local(17, 42, 10), receivedAt: local(17, 42, 11), tag: null, source: 'tap', deletedAt: null, phoneName: 'Dad', late: false },
     { number: 2, tappedAt: local(17, 50), receivedAt: local(17, 50, 1), tag: 'Witch', source: 'tap', deletedAt: local(17, 51), phoneName: 'Mom', late: false },
@@ -15,7 +18,7 @@ const night = {
 }
 
 describe('export CSV', () => {
-  test('one row per kid with readable local timestamps; deleted and backfilled kids marked', () => {
+  test("one row per kid with readable timestamps in the Household's zone; deleted and backfilled kids marked", () => {
     const lines = toCsv(night).split('\n')
 
     expect(lines[0]).toBe('event,Halloween 2026')

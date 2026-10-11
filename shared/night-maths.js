@@ -37,10 +37,49 @@ export function eventNow(realMs, shiftMs = 0) {
   return realMs + shiftMs
 }
 
-// Minutes into the (local) day, with seconds as a fraction: the ghost's and the chart's x unit.
-export function minuteOfDay(ms) {
-  const d = new Date(ms)
-  return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60 + d.getMilliseconds() / 60_000
+// Time zones (v2 spec §8): every time of night is read in the Household's IANA zone (the snapshot's
+// timeZone), never the device's or the server's. Without a zone, the runtime's own.
+const formatters = new Map()
+const offsets = new Map()
+
+// The zone's offset from UTC at ms. Offsets only change on a quarter-hour, so it's looked up once per one.
+function offsetAt(ms, timeZone) {
+  const quarter = Math.floor(ms / 900_000) * 900_000
+  const key = `${timeZone}|${quarter}`
+  let offset = offsets.get(key)
+  if (offset === undefined) {
+    let format = formatters.get(timeZone)
+    if (!format) {
+      format = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' })
+      formatters.set(timeZone, format)
+    }
+    const p = Object.fromEntries(format.formatToParts(quarter).map(({ type, value }) => [type, Number(value)]))
+    offset = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - quarter
+    if (offsets.size > 10_000) offsets.clear()
+    offsets.set(key, offset)
+  }
+  return offset
+}
+
+// The wall clock in the zone at ms, as a Date whose UTC fields read it (getUTCHours() is the zone's hour).
+function wallClock(ms, timeZone) {
+  return new Date(ms + offsetAt(ms, timeZone))
+}
+
+// Minutes into the day in the zone, with seconds as a fraction: the ghost's and the chart's x unit.
+export function minuteOfDay(ms, timeZone) {
+  const d = wallClock(ms, timeZone)
+  return d.getUTCHours() * 60 + d.getUTCMinutes() + d.getUTCSeconds() / 60 + d.getUTCMilliseconds() / 60_000
+}
+
+// "7:15 PM": a time of night as the zone's wall clock shows it.
+export function clockTime(ms, timeZone) {
+  return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone })
+}
+
+// "2026-10-31 18:42:10" in the zone: readable in a spreadsheet.
+export function stamp(ms, timeZone) {
+  return wallClock(ms, timeZone).toISOString().slice(0, 19).replace('T', ' ')
 }
 
 const hhmm = (minute) => `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
@@ -48,8 +87,8 @@ const hhmm = (minute) => `${String(Math.floor(minute / 60)).padStart(2, '0')}:${
 // Half-hour buckets of an event's taps in its own event time: every ghost source becomes these
 // (modules.md §3). The first bucket starts at the first tap's minute, like 2025's 17:42; empty
 // half-hours are left out.
-export function toBuckets(tappedAts, shiftMs = 0) {
-  const minutes = tappedAts.map((t) => Math.floor(minuteOfDay(eventNow(t, shiftMs)))).sort((a, b) => a - b)
+export function toBuckets(tappedAts, shiftMs = 0, timeZone) {
+  const minutes = tappedAts.map((t) => Math.floor(minuteOfDay(eventNow(t, shiftMs), timeZone))).sort((a, b) => a - b)
   if (!minutes.length) return []
   const first = minutes[0]
   const buckets = new Map()
@@ -74,8 +113,8 @@ export function pace(count, ghostNow, ghostTotal) {
 }
 
 // "Release remaining tickets" shows in the ☰ menu from 7:45pm event time (spec §5, §9).
-export function releaseOpen(eventNowMs) {
-  return minuteOfDay(eventNowMs) >= 19 * 60 + 45
+export function releaseOpen(eventNowMs, timeZone) {
+  return minuteOfDay(eventNowMs, timeZone) >= 19 * 60 + 45
 }
 
 // The rows for the tally sheet and "Add missed kids" (spec §6): [{ start, end }] in event time.
@@ -85,12 +124,14 @@ export function slots(from, to, minutes) {
   return rows
 }
 
-// Real time (ms) of an event-time "HH:MM" on the event's current date: what a backfill row means.
-export function atEventTime(hhmmText, realNowMs, shiftMs = 0) {
-  const day = new Date(eventNow(realNowMs, shiftMs))
+// Real time (ms) of an event-time "HH:MM" on the event's current date in the zone: what a backfill row means.
+export function atEventTime(hhmmText, realNowMs, shiftMs = 0, timeZone) {
+  const day = wallClock(eventNow(realNowMs, shiftMs), timeZone)
   const [h, m] = hhmmText.split(':').map(Number)
-  day.setHours(h, m, 0, 0)
-  return day.getTime() - shiftMs
+  const wall = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), h, m)
+  // The offset at the wall time itself, found from a first guess, so a row across a DST change lands right.
+  const guess = wall - offsetAt(wall, timeZone)
+  return wall - offsetAt(guess, timeZone) - shiftMs
 }
 
 // The TV's costume leaderboard (spec §7): the top 5 costumes by count, ties by their order, in the
@@ -107,10 +148,10 @@ export function leaderboard(kids, tags, size = 5) {
 // ---- the end-of-night recap (spec §7 Ended)
 
 // The busiest aligned half-hour in event time ("7:00–7:30 · 104 kids"); the earliest wins a tie.
-export function peakHalfHour(kids, shiftMs = 0) {
+export function peakHalfHour(kids, shiftMs = 0, timeZone) {
   const counts = new Map()
   for (const k of kids) {
-    const slot = Math.floor(minuteOfDay(eventNow(k.tappedAt, shiftMs)) / 30) * 30
+    const slot = Math.floor(minuteOfDay(eventNow(k.tappedAt, shiftMs), timeZone) / 30) * 30
     counts.set(slot, (counts.get(slot) ?? 0) + 1)
   }
   if (!counts.size) return null

@@ -3,7 +3,8 @@ import { createTeaser, teaserLines } from './teaser.js'
 import { fakeClock } from '../test/fake-clock.js'
 import seed2025 from '../config/2025-counts.json'
 
-const local = (hh, mm) => new Date(2026, 9, 31, hh, mm).getTime()
+// The Household is in Vancouver (PDT, UTC-7); the TV reads its times there, wherever it is.
+const local = (hh, mm) => Date.parse(`2026-10-31T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00-07:00`)
 const on = { goldenTickets: true, milestones: true }
 const state = ({ kids = 120, left = 3, ghost = true, switches = on, shift = 0 } = {}) => ({
   event: { clockShiftMs: shift },
@@ -11,6 +12,7 @@ const state = ({ kids = 120, left = 3, ghost = true, switches = on, shift = 0 } 
   golden: switches.goldenTickets ? { left, nextIsGolden: false } : null,
   ghost: ghost ? { label: '2025', total: 346, buckets: seed2025.buckets } : null,
   settings: { switches },
+  timeZone: 'America/Vancouver',
 })
 
 describe('teaser lines', () => {

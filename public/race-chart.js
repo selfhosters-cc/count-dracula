@@ -119,8 +119,8 @@ export function createRaceChart(canvas) {
     // state: the live state; realNow: Date.now().
     update(state, realNow) {
       const shift = state.event.clockShiftMs ?? 0
-      const now = minuteOfDay(eventNow(realNow, shift))
-      const kidMinutes = state.kids.map((k) => minuteOfDay(eventNow(k.tappedAt, shift))).sort((a, b) => a - b)
+      const now = minuteOfDay(eventNow(realNow, shift), state.timeZone)
+      const kidMinutes = state.kids.map((k) => minuteOfDay(eventNow(k.tappedAt, shift), state.timeZone)).sort((a, b) => a - b)
       const count = kidMinutes.length
       const g = state.ghost
 

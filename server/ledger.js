@@ -267,6 +267,7 @@ export function openLedger(db, config) {
         : toBuckets(
             db.query('SELECT tapped_at FROM kids WHERE event_id = ? AND deleted_at IS NULL').all(against.id).map((r) => r.tapped_at),
             against.clock_shift_ms,
+            household().time_zone,
           )
       return {
         eventId: against.id,
@@ -707,7 +708,7 @@ export function openLedger(db, config) {
           `)
           .all(event.id)
           .map((k) => ({ ...k, late: k.late === 1 }))
-        return { name: event.name, clockShiftMs: event.clock_shift_ms, kids }
+        return { name: event.name, clockShiftMs: event.clock_shift_ms, timeZone: household().time_zone, kids }
       },
 
       // The live event's backfill batches, for Setup's list ("+38 kids, 6:30–7:00 · Remove").

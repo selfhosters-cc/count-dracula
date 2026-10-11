@@ -287,7 +287,7 @@ describe('ghost from a past event with taps', () => {
     const db = new Database(':memory:')
     const ledger = openV1Night(db, { ghostSeed })
     // Arranged with SQL until Setup (ticket 22) can create events: a past +3h rehearsal with 3 kids, one deleted.
-    const local = (hh, mm) => new Date(2026, 9, 24, hh, mm).getTime()
+    const local = (hh, mm) => Date.parse(`2026-10-24T${hh}:${mm}:00-04:00`) // the Household's zone, Toronto (EDT)
     const past = db
       .query("INSERT INTO events (household_id, name, frozen, clock_shift_ms) VALUES (1, 'Dress rehearsal 2026', 1, ?) RETURNING id")
       .get(3 * 3_600_000).id

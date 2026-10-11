@@ -157,3 +157,24 @@ describe('two Households', () => {
     expect(a.snapshot().kids).toEqual([])
   })
 })
+
+describe("the Household's time zone", () => {
+  test("a ghost from a past night with taps, and its export, read in the Household's zone", () => {
+    let nowMs = Date.parse('2025-10-31T17:50:00-07:00')
+    const ledger = openLedger(new Database(':memory:'), { now: () => nowMs })
+    const house = ledger.household(ledger.createHousehold({ displayName: 'Casa Ortiz', timeZone: 'America/Vancouver' }))
+    const [{ event: last }] = house.apply({ type: 'createEvent', name: 'Halloween 2025' })
+    house.apply({ type: 'goLive', eventId: last.id })
+    house.apply({ ...tap('v1'), tappedAt: Date.parse('2025-10-31T17:50:00-07:00') })
+    house.apply({ ...tap('v2'), tappedAt: Date.parse('2025-10-31T18:10:00-07:00') })
+    const [{ event: tonight }] = house.apply({ type: 'createEvent', name: 'Halloween 2026' })
+    house.apply({ type: 'settings', eventId: tonight.id, raceAgainstId: last.id })
+    house.apply({ type: 'goLive', eventId: tonight.id })
+
+    expect(house.snapshot().ghost.buckets).toEqual([
+      { start: '17:50', end: '18:00', count: 1 },
+      { start: '18:00', end: '18:30', count: 1 },
+    ])
+    expect(house.exportEvent(last.id)).toMatchObject({ name: 'Halloween 2025', timeZone: 'America/Vancouver' })
+  })
+})

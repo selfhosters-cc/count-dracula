@@ -57,7 +57,7 @@
   <div id="admin" hidden>
     <section>
       <h2>Live now: <span id="live-name"></span></h2>
-      <p class="muted"><span id="live-kids"></span> kids · join key <code id="join-key"></code></p>
+      <p class="muted"><span id="live-kids"></span> kids · join key <code id="join-key"></code> · time zone <span id="time-zone"></span></p>
       <div class="row">
         <button id="export-live">⬇ Export event</button>
         <button id="add-ticket">🎫 Add a golden ticket</button>
@@ -122,7 +122,7 @@
   </div>
 
   <script type="module">
-    import { atEventTime, eventNow, slots } from '/shared/night-maths.js'
+    import { atEventTime, clockTime as zoneClock, eventNow, minuteOfDay, slots } from '/shared/night-maths.js'
 
     const $ = (id) => document.getElementById(id)
     const HOUR = 3_600_000
@@ -132,6 +132,7 @@
     let joinKey = localStorage.getItem('cd.joinKey') ?? ''
     let events = []
     let editingId = null
+    let timeZone // the Household's: every time of night in Setup reads in it (v2 spec §8)
 
     function say(text, isError = false) {
       $('status').textContent = text
@@ -145,6 +146,7 @@
       if (res.status === 403) return false
       events = await res.json()
       batches = await (await fetch('/api/batches', { headers })).json()
+      timeZone = (await (await fetch('/api/snapshot', { headers: { 'X-Join-Key': joinKey } })).json()).timeZone
       render()
       return true
     }
@@ -200,6 +202,7 @@
       if (!editable.some((e) => e.id === editingId)) editingId = live.id
 
       $('live-name').textContent = live.name
+      $('time-zone').textContent = timeZone ?? ''
       $('live-kids').textContent = live.kids
       $('join-key').textContent = joinKey || '(not set on this phone)'
 
@@ -243,13 +246,10 @@
     }
 
     // ---- Add missed kids: rows in event time, none later than the event's "now" (spec §6).
-    const clockTime = (ms, shift) => new Date(ms + shift).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    const clockTime = (ms, shift) => zoneClock(ms + shift, timeZone)
     function renderBackfill(live) {
       const shift = live.clockShiftMs
-      const nowMinute = (() => {
-        const d = new Date(eventNow(Date.now(), shift))
-        return d.getHours() * 60 + d.getMinutes()
-      })()
+      const nowMinute = Math.floor(minuteOfDay(eventNow(Date.now(), shift), timeZone))
       const typed = new Map([...document.querySelectorAll('#backfill-rows input')].map((i) => [i.dataset.start, i.value]))
       $('backfill-rows').replaceChildren(
         ...slots('17:30', '21:00', 15).map(({ start, end }) => {
@@ -257,7 +257,7 @@
           const input = h('input', { type: 'number', min: 0, max: 1000, value: typed.get(start) ?? '', disabled: hh * 60 + mm > nowMinute })
           input.dataset.start = start
           input.dataset.end = end
-          return h('label', {}, h('span', { textContent: `${clockTime(atEventTime(start, Date.now(), shift), shift)}` }), input)
+          return h('label', {}, h('span', { textContent: `${clockTime(atEventTime(start, Date.now(), shift, timeZone), shift)}` }), input)
         }),
       )
       $('batches').replaceChildren(
@@ -279,8 +279,8 @@
       const rows = [...document.querySelectorAll('#backfill-rows input')]
         .filter((i) => !i.disabled && Number(i.value) > 0)
         .map((i) => ({
-          startMs: atEventTime(i.dataset.start, Date.now(), live.clockShiftMs),
-          endMs: atEventTime(i.dataset.end, Date.now(), live.clockShiftMs),
+          startMs: atEventTime(i.dataset.start, Date.now(), live.clockShiftMs, timeZone),
+          endMs: atEventTime(i.dataset.end, Date.now(), live.clockShiftMs, timeZone),
           count: Number(i.value),
         }))
       if (!rows.length) return say('Type a count in at least one row', true)

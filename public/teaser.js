@@ -15,7 +15,7 @@ export function teaserLines(state, realNowMs) {
     lines.push(`🎫 ${left} golden ticket${left === 1 ? '' : 's'} still hidden — could be YOU!`)
   }
   if (state.ghost) {
-    const then = Math.round(ghost(state.ghost.buckets)(minuteOfDay(eventNow(realNowMs, state.event.clockShiftMs ?? 0))))
+    const then = Math.round(ghost(state.ghost.buckets)(minuteOfDay(eventNow(realNowMs, state.event.clockShiftMs ?? 0), state.timeZone)))
     const tail = count < then ? 'help us catch up!' : count > then ? `we're ${count - then} ahead!` : "we're neck and neck!"
     lines.push(`👻 Last year had ${then} kids by now — ${tail}`)
   }

@@ -238,7 +238,7 @@
     import { createOutbox, uuid } from '/outbox.js'
     import { doorView } from '/door-view.js'
     import qrcode from '/vendor/qrcode/qrcode.js'
-    import { eventNow, releaseOpen } from '/shared/night-maths.js'
+    import { clockTime, eventNow, releaseOpen } from '/shared/night-maths.js'
 
     const $ = (id) => document.getElementById(id)
     const EMOJIS = ['🧙', '🧛', '🧟', '👻', '🎃', '🦸', '🕷️', '👑', '🦖', '🐶', '🐱', '🦄', '🤖', '🦇', '🧚', '🏴‍☠️', '🐉', '🤡', '❓']
@@ -300,7 +300,7 @@
     }
 
     const esc = (text) => String(text ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
-    const timeOf = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    const timeOf = (ms, timeZone) => clockTime(ms, timeZone) // in the Household's zone
     const label = (row) => (row.tag ? `${row.tag.emoji ?? ''} ${row.tag.name}`.trim() : 'no costume')
 
     function pillHtml(status) {
@@ -383,7 +383,7 @@
           <div class="row ${r.queued ? 'queued' : ''}">
             <span class="n">${r.number == null ? '⏳' : '#' + r.number}</span>
             <span class="who">${esc(label(r))}${r.teen ? '<span class="badge teen">teen</span>' : ''}<span class="badge ${r.mine ? 'me' : ''}">${esc(r.phoneName)}</span>
-              <div class="meta">${timeOf(r.tappedAt)}${r.queued ? ' · ⏳ not sent yet' : ''}</div></span>
+              <div class="meta">${timeOf(r.tappedAt, live.state?.timeZone)}${r.queued ? ' · ⏳ not sent yet' : ''}</div></span>
             <button class="x" data-remove="${esc(r.id)}" aria-label="Delete">✕</button>
           </div>`,
               )
@@ -484,7 +484,7 @@
         const joined = !!joinKey
         const left = live.state?.golden?.left ?? 0
         const shift = live.state?.event.clockShiftMs ?? 0
-        $('release-box').hidden = !(left > 0 && releaseOpen(eventNow(Date.now(), shift)))
+        $('release-box').hidden = !(left > 0 && releaseOpen(eventNow(Date.now(), shift), live.state?.timeZone))
         $('release').textContent = `🎫 Release remaining tickets (${left})`
         renderSounds()
         $('unjoined').hidden = joined
