@@ -111,6 +111,28 @@ const MIGRATIONS = [
   (db) => {
     db.exec('ALTER TABLE events ADD COLUMN summary_nearby TEXT')
   },
+
+  // 9 → 10: Night summary share links and Reports (v2 spec §12, §15). One link per night; turning sharing off
+  // deletes it. A Report's reason goes with it when the Operator dismisses it.
+  (db) => {
+    db.exec(`
+      CREATE TABLE share_links (
+        token TEXT PRIMARY KEY,
+        household_id INTEGER NOT NULL REFERENCES households(id),
+        event_id INTEGER NOT NULL UNIQUE REFERENCES events(id),
+        hide_name INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );
+      CREATE TABLE reports (
+        id INTEGER PRIMARY KEY,
+        household_id INTEGER NOT NULL REFERENCES households(id),
+        event_id INTEGER,
+        created_at INTEGER NOT NULL,
+        reason TEXT
+      );
+      CREATE INDEX reports_by_household ON reports (household_id);
+    `)
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

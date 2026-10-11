@@ -119,6 +119,7 @@ export const DEFAULT_SWITCHES = {
   recap: true,
   rushMeter: true, // a nice-to-have (ticket 39), switchable like the Musts
   nearby: true, // v2: nearby figures and the Site-wide total, everywhere (spec §17)
+  shareLinks: true, // v2: Night summary share links (spec §17)
 }
 
 export function openLedger(db, config) {
@@ -211,6 +212,8 @@ export function openLedger(db, config) {
         }
         db.query('DELETE FROM events WHERE household_id = ?').run(id)
         db.query('DELETE FROM paired_devices WHERE household_id = ?').run(id)
+        db.query('DELETE FROM share_links WHERE household_id = ?').run(id)
+        db.query('DELETE FROM reports WHERE household_id = ?').run(id)
         db.query('DELETE FROM households WHERE id = ?').run(id)
       })()
       opened.delete(id)
@@ -270,6 +273,29 @@ export function openLedger(db, config) {
     // When the last kid was counted anywhere, for /operator's Last tap tile.
     lastTapAt() {
       return db.query('SELECT MAX(received_at) AS at FROM kids WHERE deleted_at IS NULL').get().at
+    },
+
+    // A Night summary share link's night: { householdId, eventId, hideName }, or null.
+    byShareToken(token) {
+      if (typeof token !== 'string' || token === '') return null
+      const row = db.query('SELECT household_id, event_id, hide_name FROM share_links WHERE token = ?').get(token)
+      return row ? { householdId: row.household_id, eventId: row.event_id, hideName: row.hide_name === 1 } : null
+    },
+
+    // ---- Reports (spec §15): a stranger's flag on a share page, with an optional short reason.
+    addReport({ householdId, eventId, reason }) {
+      const text = typeof reason === 'string' ? reason.trim().slice(0, 200) : ''
+      db.query('INSERT INTO reports (household_id, event_id, created_at, reason) VALUES (?, ?, ?, ?)').run(householdId, eventId, now(), text || null)
+    },
+
+    reports(householdId) {
+      return db.query('SELECT id, event_id AS eventId, created_at AS at, reason FROM reports WHERE household_id = ? ORDER BY id').all(householdId)
+    },
+
+    // Dismissing deletes the Report, its reason with it.
+    dismissReport(householdId, reportId) {
+      const { changes } = db.query('DELETE FROM reports WHERE id = ? AND household_id = ?').run(reportId, householdId)
+      if (!changes) throw new BadCommand('No such Report')
     },
 
     // Whether a device token is a TV this Household paired by code (and hasn't rotated away since).
@@ -789,7 +815,7 @@ export function openLedger(db, config) {
         const racedByLive = live.race_against_id === event.id
         db.query('UPDATE events SET race_against_id = NULL WHERE race_against_id = ?').run(event.id)
         // All of it: SQLite can reuse a deleted event's id, so nothing may be left pointing at it.
-        for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
+        for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches', 'share_links', 'reports']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
         db.query('DELETE FROM events WHERE id = ?').run(event.id)
         return racedByLive ? [{ type: 'event.updated', eventId: live.id }] : []
       },
@@ -929,6 +955,27 @@ export function openLedger(db, config) {
           switches: settings.switches,
           nearby: event.summary_nearby ? JSON.parse(event.summary_nearby) : null,
         }
+      },
+
+      // The night's share link token, made the first time (spec §12). hideName is the share's toggle. null if
+      // the night has no summary yet.
+      share(eventId, hideName = false) {
+        if (!this.summary(eventId)) return null
+        db.query(`
+          INSERT INTO share_links (token, household_id, event_id, hide_name, created_at) VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(event_id) DO UPDATE SET hide_name = excluded.hide_name
+        `).run(randomToken(), householdId, eventId, hideName ? 1 : 0, now())
+        return db.query('SELECT token FROM share_links WHERE event_id = ?').get(eventId).token
+      },
+
+      // Turning sharing off kills the link; sharing again makes a new one.
+      unshare(eventId) {
+        db.query('DELETE FROM share_links WHERE event_id = ? AND household_id = ?').run(eventId, householdId)
+      },
+
+      shares() {
+        return db.query('SELECT event_id AS eventId, token, hide_name AS hideName FROM share_links WHERE household_id = ?').all(householdId)
+          .map((s) => ({ ...s, hideName: s.hideName === 1 }))
       },
 
       // null for an event that isn't this Household's.

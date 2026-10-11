@@ -29,7 +29,7 @@ const tvDelta = (delta) => (delta.kid ? { ...delta, kid: withoutPhone(delta.kid)
 
 const PAUSE_SIGN_UPS = 'pauseSignUps'
 const DEFAULT_CONTACT = 'privacy@count-dracula.example.com'
-const OPERATOR_ACTIONS = new Set(['rename', 'timeZone', 'suspend', 'unsuspend', 'invite'])
+const OPERATOR_ACTIONS = new Set(['rename', 'timeZone', 'suspend', 'unsuspend', 'invite', 'dismissReport'])
 
 // The sign-in cookie (spec §3): 90 days, renewed with use; the session itself lives server-side.
 const SESSION_COOKIE = 'cd_session'
@@ -181,6 +181,8 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const at = now()
       const nights = new Map(ledger.liveNights().map((n) => [n.householdId, n]))
       const streams = hub.counts()
+      const reportCounts = new Map()
+      for (const h of ledger.households()) reportCounts.set(h.id, ledger.reports(h.id).length)
       const households = ledger.households().map((h) => {
         const night = nights.get(h.id) ?? { rehearsal: false, kids: 0, lastKidAt: null }
         const s = streams.households[h.id] ?? { phone: 0, paired: 0, tvLink: 0 }
@@ -194,7 +196,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
           phones: s.phone,
           tvScreens: s.paired + s.tvLink, // the porch TV and remote viewers share the link: one number
           managers: accounts.managers(h.id).length,
-          reports: 0,
+          reports: reportCounts.get(h.id) ?? 0,
           signedUpAt: h.signedUpAt,
           suspendedSince: h.suspendedSince,
         }
@@ -234,7 +236,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
         signedUpAt: h.signedUpAt,
         suspendedSince: h.suspendedSince,
         managers: accounts.managerEmails(id),
-        reports: [],
+        reports: ledger.reports(id),
       })
     }),
     'POST /api/operator/action': operator(async (req, session) => {
@@ -247,6 +249,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
         log(`operator action=invite household=${house.id} by=${session.manager.email}`)
         return Response.json({ url })
       }
+      if (action === 'dismissReport') ledger.dismissReport(house.id, value)
       if (action === 'rename') house.apply({ type: 'rename', displayName: value })
       if (action === 'timeZone') hub.publish(house.id, house.apply({ type: 'setTimeZone', timeZone: value }))
       if (action === 'suspend' || action === 'unsuspend') {
@@ -353,6 +356,34 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       return summary ? Response.json(summary) : new Response('No summary: the night is still on, or there is no such night', { status: 404 })
     }),
     'GET /summary': managerPage('/summary'),
+
+    // ---- Share links (spec §12): /share?key=<token>, a shape the Caddy log masks. Public: no sign-in.
+    'POST /api/share': manager(async (req, house) => {
+      const { eventId, hideName } = await req.json()
+      const token = shareLinksOn() ? house.share(eventId, hideName === true) : null
+      return token ? Response.json({ url: shareUrl(req, token), hideName: hideName === true }) : new Response('No summary to share', { status: 404 })
+    }),
+    'POST /api/share/off': manager(async (req, house) => {
+      house.unshare((await req.json()).eventId)
+    }),
+    'GET /api/shares': manager((req, house) => Response.json(house.shares().map(({ token, ...s }) => ({ ...s, url: shareUrl(req, token) })))),
+    'GET /share': (req) => serveStatic('/summary', req, contact),
+    'GET /api/share': (req) => {
+      const shared = sharedNight(new URL(req.url).searchParams.get('key'))
+      if (!shared) return new Response('Not available', { status: 404 })
+      const summary = ledger.household(shared.householdId).summary(shared.eventId)
+      if (!summary) return new Response('Not available', { status: 404 })
+      return Response.json({ ...summary, displayName: shared.hideName ? '' : summary.displayName })
+    },
+    // "Report this page", from a share page: 5 per IP per day; no email, the Operator sees it on /operator.
+    'POST /api/report': async (req, server) => {
+      if (!guard.take('report', clientIp(req, server))) return tooMany()
+      const { key, reason } = await req.json().catch(() => ({}))
+      const shared = sharedNight(key)
+      if (!shared) return new Response('Not available', { status: 404 })
+      ledger.addReport({ householdId: shared.householdId, eventId: shared.eventId, reason })
+      return new Response('Thanks: the Operator will take a look.')
+    },
     // ⬇ Export event (spec §6): a CSV download.
     'GET /api/export': manager((req, house) => {
       const night = house.exportEvent(Number(new URL(req.url).searchParams.get('event')))
@@ -510,6 +541,18 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     return `${publicOrigin(req)}/auth/google/callback`
   }
 
+  function shareUrl(req, token) {
+    return `${publicOrigin(req)}/share?key=${token}`
+  }
+
+  const shareLinksOn = () => ({ ...DEFAULT_SWITCHES, ...config.switches }).shareLinks
+
+  // A share link's night, unless sharing is switched off or its Household is Suspended: then "Not available".
+  function sharedNight(token) {
+    const shared = shareLinksOn() ? ledger.byShareToken(token) : null
+    return shared && !ledger.isSuspended(shared.householdId) ? shared : null
+  }
+
   function inviteUrl(req, token) {
     return `${publicOrigin(req)}/invite?key=${token}`
   }
@@ -587,7 +630,8 @@ async function serveStatic(pathname, req, contact = DEFAULT_CONTACT) {
   // they were downloaded from (https via Caddy on the tailnet, or the LAN address).
   if (dir === KIOSK_DIR) return new Response((await file.text()).replaceAll('__ORIGIN__', originOf(req)), { headers: { 'Content-Type': file.type } })
   // Pages that offer help or the privacy contact say __CONTACT__: filled in with OPERATOR_CONTACT, never committed.
-  if (path.endsWith('.html')) return new Response((await file.text()).replaceAll('__CONTACT__', esc(contact)), { headers: { 'Content-Type': file.type } })
+  // __ORIGIN__ is this site's address, for the share page's link-preview tags, which want absolute URLs.
+  if (path.endsWith('.html')) return new Response((await file.text()).replaceAll('__CONTACT__', esc(contact)).replaceAll('__ORIGIN__', esc(originOf(req))), { headers: { 'Content-Type': file.type } })
   return new Response(file)
 }
 

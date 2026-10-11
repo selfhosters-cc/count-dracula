@@ -31,3 +31,15 @@ LXC 118 grows, and Count Dracula gets its public name on the shared Caddy, with 
 - [ ] The site block is written and reviewed by the user, with `stream_close_delay`, `request_body`, its own log and the masking rules
 - [ ] `CF-Connecting-IP` reaches the app with the visitor's IP
 - [ ] (Opening day) The public host serves v2; a stream lives past 100 s; a TV-link token, a share token and `key=` show as `REDACTED`; a 100 KB body is refused
+
+## Notes from the build (for doing this ticket)
+
+The URL shapes that carry a secret, as built (tickets 22–44). The masking needs to cover:
+
+| Shape | Carries | Where |
+|---|---|---|
+| `/tv/k/<token>` | the TV link | the TV page |
+| `?key=<…>` | a join key, the TV link token, an Invite token or a share token | `/?key=` (helper join links), `/api/stream?key=`, `/api/snapshot?key=`, `/invite?key=`, `/share?key=`, `/api/share?key=` |
+| `device=<token>` | a paired TV's device token | `/api/stream?key=…&device=…` |
+
+Nothing else puts a secret in a URL: the TV pairing wait secret and the session travel in the body or the cookie. `?pair=<code>` (a 10-minute pairing code) is harmless.

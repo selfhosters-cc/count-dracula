@@ -159,14 +159,63 @@ export function showSlides(summary, options = {}) {
   render()
 }
 
-// A Manager's own summary: /summary?event=<id>.
-const eventId = new URLSearchParams(location.search).get('event')
+const params = new URLSearchParams(location.search)
+
+// The Share button on a Manager's closing slide (spec §12): the night's one public link, the share sheet or
+// Copy, and a toggle that keeps the household's name off the link.
+function shareControls(eventId, displayName) {
+  const show = h('input', { type: 'checkbox', checked: true })
+  const status = text('note', displayName ? `"${displayName}" shows on the link unless you untick this.` : '')
+  const button = h('button', { type: 'button', textContent: 'Share' })
+  button.addEventListener('click', async (e) => {
+    e.stopPropagation()
+    const res = await fetch('/api/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId, hideName: !show.checked }) })
+    if (!res.ok) return (status.textContent = "Sharing is off right now.")
+    const { url } = await res.json()
+    if (navigator.share) {
+      try {
+        return await navigator.share({ title: 'Our Halloween night', url })
+      } catch (err) {
+        if (err.name === 'AbortError') return
+      }
+    }
+    await navigator.clipboard.writeText(url)
+    status.textContent = 'Link copied. Turn sharing off any time in Setup.'
+  })
+  show.addEventListener('click', (e) => e.stopPropagation())
+  return h('div', { className: 'share' }, h('label', {}, show, 'Show our name'), button, status)
+}
+
+// "Report this page", on a public share page only.
+function reportFooter(key) {
+  $('footer').hidden = false
+  $('report').addEventListener('click', () => ($('report-form').hidden = false))
+  $('report-form').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const res = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, reason: $('report-reason').value }) })
+    $('report-form').replaceChildren(text('', res.ok ? 'Thanks: the Operator will take a look.' : res.status === 429 ? 'Too many reports from here today.' : 'Not available.'))
+  })
+}
+
 if (location.pathname === '/summary') {
+  // A Manager's own summary: /summary?event=<id>.
+  const eventId = params.get('event')
   const res = await fetch(`/api/summary?event=${encodeURIComponent(eventId)}`)
   if (res.status === 401) location.href = '/signup'
   else if (!res.ok) $('message').textContent = "There's no summary for this night yet: it appears once the night has ended."
   else {
+    const summary = await res.json()
     await document.fonts.ready
-    showSlides(await res.json())
+    showSlides(summary, { closing: summary.switches.shareLinks === false ? [] : [shareControls(Number(eventId), summary.displayName)] })
+  }
+} else if (location.pathname === '/share') {
+  // A public share link: no sign-in. The name is off when the Household's toggle says so.
+  const key = params.get('key')
+  const res = await fetch(`/api/share?key=${encodeURIComponent(key)}`)
+  if (!res.ok) $('message').textContent = 'Not available'
+  else {
+    await document.fonts.ready
+    showSlides(await res.json(), { showName: true })
+    reportFooter(key)
   }
 }

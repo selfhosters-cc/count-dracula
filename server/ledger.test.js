@@ -101,6 +101,7 @@ describe('feature switches', () => {
       recap: true,
       rushMeter: true,
       nearby: true,
+      shareLinks: true,
     })
   })
 })

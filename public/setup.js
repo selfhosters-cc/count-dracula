@@ -12,6 +12,7 @@ let house = null // { id, displayName, timeZone, joinKey, manager, operator }
 let joinKey = ''
 let events = []
 let editingId = null
+let shares = [] // the nights shared by a public link: [{ eventId, url, hideName }]
 let timeZone // the Household's: every time of night in Setup reads in it (v2 spec §8)
 
 function say(text, isError = false) {
@@ -34,6 +35,7 @@ async function load() {
   timeZone = house.timeZone
   events = await get('/api/events')
   batches = await get('/api/batches')
+  shares = await get('/api/shares')
   render()
   return true
 }
@@ -192,6 +194,18 @@ $('check-night-skip').addEventListener('click', () => {
   renderChecklist()
 })
 
+// ---- a night shared by a public link (spec §12): turning sharing off kills the link
+function sharingOff(event) {
+  if (!shares.some((s) => s.eventId === event.id)) return []
+  return [h('button', { className: 'danger', textContent: 'Stop sharing', onclick: async () => {
+    if (!confirm(`Stop sharing "${event.name}"? Its public link stops working at once.`)) return
+    const res = await fetch('/api/share/off', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: event.id }) })
+    if (!res.ok) return say(await res.text(), true)
+    say('Sharing off')
+    await load()
+  } })]
+}
+
 // ---- Managers and invites (spec §3)
 async function loadManagers() {
   const res = await fetch('/api/managers')
@@ -307,6 +321,7 @@ function render() {
   // An ended night has its summary straight away (spec §12).
   $('summary-link').hidden = !live.ended || live.countsOnly
   $('summary-link').href = `/summary?event=${live.id}`
+  $('live-sharing').replaceChildren(...(live.ended ? sharingOff(live) : []))
   $('auto-ended-summary').href = `/summary?event=${live.id}`
   $('rehearsal-tools').hidden = !live.rehearsal
   renderChecklist()
@@ -330,6 +345,7 @@ function render() {
             h('span', { className: 'grow', textContent: `${e.name} · ${e.countsOnly ? 'counts only' : `${e.kids} kids`}` }),
             ...(e.countsOnly ? [] : [
               h('a', { href: `/summary?event=${e.id}`, textContent: '✨ Night summary', style: 'color: var(--orange); font-weight: 700' }),
+              ...sharingOff(e),
               h('a', { href: `/tv?event=${e.id}`, target: '_blank', textContent: 'View recap', style: 'color: var(--orange); font-weight: 700' }),
               h('button', { textContent: '⬇ Export', onclick: () => exportEvent(e) }),
             ]),

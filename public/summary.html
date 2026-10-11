@@ -4,6 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Count Dracula — Night summary</title>
+  <!-- One fixed preview for every shared night: never rendered per night, never naming anyone (v2 spec §12). -->
+  <meta property="og:title" content="Our Halloween night, on Count Dracula">
+  <meta property="og:description" content="How the night went: tap through the slides.">
+  <meta property="og:image" content="__ORIGIN__/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="/vendor/fonts/fonts.css">
   <style>
     :root {
@@ -57,6 +64,16 @@
     .receipt .coupon { border: .5cqw dashed #b8860b; background: #fff3c4; padding: 1.4cqw 2.2cqw; margin: 1.4cqw 0; overflow-wrap: anywhere; }
     .receipt svg { display: block; width: 100%; height: 12cqw; margin-top: 1.6cqw; }
     .receipt .tiny { font-size: 2.6cqw; color: #24201caa; }
+    body { gap: 10px; }
+    footer { color: var(--ink-dim); font-size: 13px; text-align: center; }
+    footer a, footer button { color: var(--ink-dim); background: none; border: 0; font: inherit; text-decoration: underline; cursor: pointer; }
+    #report-form { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
+    #report-form input { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid #ffffff30; background: #140f26; color: var(--ink); width: 16em; }
+    .share { display: flex; flex-direction: column; gap: 2.4cqw; margin-top: 3cqw; }
+    .share label { font-size: 4.2cqw; display: flex; gap: 2cqw; align-items: center; }
+    .share input { width: 5cqw; height: 5cqw; }
+    .share button { font: 700 5cqw var(--f-body); padding: 3cqw; border: 0; border-radius: 3cqw; background: var(--pumpkin); color: #1a0d00; cursor: pointer; }
+    .share .note { font-size: 3.4cqw; color: var(--ink-dim); }
   </style>
 </head>
 <body>
@@ -65,6 +82,10 @@
     <div class="bars" id="bars"></div>
     <div id="slide"></div>
   </div>
+  <footer id="footer" hidden>
+    <a href="/privacy">Privacy</a> · <button id="report">Report this page</button>
+    <form id="report-form" hidden><input id="report-reason" maxlength="200" placeholder="What's wrong? (optional)" aria-label="Reason"><button type="submit">Send</button></form>
+  </footer>
   <script type="module" src="/summary.js"></script>
 </body>
 </html>
