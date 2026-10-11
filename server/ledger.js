@@ -4,6 +4,7 @@ import { nextWallTime, toBuckets, zonedTime } from '../shared/night-maths.js'
 import { migrate, randomToken } from './migrations.js'
 import { isCell } from '../shared/geohash.js'
 import { isBlocked } from './blocklist.js'
+import { canRace } from '../shared/race-against.js'
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -760,12 +761,14 @@ export function openLedger(db, config) {
 
       // ---- Setup (spec §6). Creating an event doesn't make it live.
       // "Copy costumes from" brings names, emoji, order, sounds and the Visit window, with zero counts.
+      // A new Event races the Household's estimate, if it has one (spec v2.1 §7), while the switch is on.
       createEvent({ name, copyTagsFrom }) {
         const source = copyTagsFrom == null ? null : eventById(copyTagsFrom)
         if (copyTagsFrom != null && !source) throw new BadCommand('No event to copy costumes from')
+        const raceAgainst = switches.estimatedGhost ? (estimatedEvent()?.id ?? null) : null
         const row = db
-          .query('INSERT INTO events (household_id, name, visit_window_ms, golden_count) VALUES (?, ?, ?, 5) RETURNING *')
-          .get(householdId, requireName(name, 'An event'), source?.visit_window_ms ?? 15_000)
+          .query('INSERT INTO events (household_id, name, visit_window_ms, golden_count, race_against_id) VALUES (?, ?, ?, 5, ?) RETURNING *')
+          .get(householdId, requireName(name, 'An event'), source?.visit_window_ms ?? 15_000, raceAgainst)
         if (source) {
           db.query(`
             INSERT INTO tags (event_id, name, emoji, sort_order, sound)
@@ -836,9 +839,14 @@ export function openLedger(db, config) {
         const event = writableEvent(eventId)
         const columns = {
           name: ['name', (v) => requireName(v, 'An event')],
+          // Only a night there's something to race (Ended, Past, imported or estimated), never itself. The pointer
+          // it already has passes unchanged (Setup's form sends it back), so one at a reset Event is kept.
           raceAgainstId: ['race_against_id', (v) => {
             if (v == null) return null
-            if (v === event.id || !eventById(v)) throw new BadCommand('Race against another event, or None')
+            if (v === event.race_against_id) return v
+            const against = eventById(v)
+            if (v === event.id || !against) throw new BadCommand('Race against another event, or None')
+            if (!canRace(toEventSummary(against))) throw new BadCommand(`"${against.name}" isn’t over yet: race a night that’s ended`)
             return v
           }],
           clockShiftMs: ['clock_shift_ms', (v) => wholeNumber(v, 'Clock shift')],
@@ -921,14 +929,18 @@ export function openLedger(db, config) {
         return doorUpdated()
       },
 
-      // "About how many kids came last year?" (spec §14): the total spread over 2025's shape as an Estimated past
-      // event, set as the coming night's Race against. null clears it, and Race against goes back to None.
+      // "About how many kids came last year?" (spec v2.1 §7): the total spread over 2025's shape as the Estimated
+      // past event, the Household's default Race against. Entering it sets it on every Upcoming or open Event
+      // racing None (createEvent starts new ones on it); changing it reshapes the same Event; null clears it,
+      // and its racers go back to None. Nothing racing another night is touched. Open racers resync.
       setLastYear({ total }) {
-        if (!canEstimateLastYear()) throw new BadCommand('Your household already has a past night to race')
+        if (!canEstimateLastYear()) throw new BadCommand('Last year’s estimate is switched off')
         const existing = estimatedEvent()
         if (total == null) {
-          if (existing) removeEvent(existing.id)
-          return doorUpdated()
+          if (!existing) return []
+          const racers = openRacers(existing.id)
+          removeEvent(existing.id)
+          return racers
         }
         if (!Number.isInteger(total) || total < 1 || total > MAX_LAST_YEAR) throw new BadCommand('Last year needs a whole number of kids')
         const id = existing?.id ?? db
@@ -937,9 +949,13 @@ export function openLedger(db, config) {
         db.query('DELETE FROM ghost_buckets WHERE event_id = ?').run(id)
         const insert = db.query('INSERT INTO ghost_buckets (event_id, slot_start, slot_end, count) VALUES (?, ?, ?, ?)')
         for (const b of lastYearBuckets(total)) insert.run(id, b.start, b.end, b.count)
-        const night = comingNight()
-        if (night) db.query('UPDATE events SET race_against_id = ? WHERE id = ?').run(id, night.id)
-        return doorUpdated()
+        if (!existing) {
+          db.query(`
+            UPDATE events SET race_against_id = ?
+            WHERE household_id = ? AND race_against_id IS NULL AND counts_only = 0 AND state IN ('upcoming', 'live', 'ended')
+          `).run(id, householdId)
+        }
+        return openRacers(id)
       },
 
       // First-run's screen 3 was passed (paired, sent, used here or skipped): it stops showing.
@@ -980,21 +996,17 @@ export function openLedger(db, config) {
       return db.query('SELECT * FROM events WHERE household_id = ? AND estimated = 1').get(householdId)
     }
 
-    // Offered only while the Household has no past night of its own (an estimate isn't one). Ticket 55 drops
-    // this gate.
+    // Always offered, whatever nights the Household has (spec v2.1 §7), behind the Operator's switch.
     function canEstimateLastYear() {
-      if (!switches.estimatedGhost) return false
-      return !db.query("SELECT 1 FROM events WHERE household_id = ? AND (state = 'past' OR counts_only = 1) AND estimated = 0").get(householdId)
+      return !!switches.estimatedGhost
     }
 
-    // The night the estimate races: the next one scheduled to go live, else the door's Event, else any
-    // Upcoming one. Ticket 55 replaces this with the Household's default Race against.
-    function comingNight() {
-      return (
-        db.query("SELECT * FROM events WHERE household_id = ? AND state = 'upcoming' AND counts_only = 0 AND goes_live_at IS NOT NULL ORDER BY goes_live_at, id LIMIT 1").get(householdId) ??
-        doorRow() ??
-        db.query("SELECT * FROM events WHERE household_id = ? AND state = 'upcoming' AND counts_only = 0 ORDER BY id LIMIT 1").get(householdId)
-      )
+    // An event.updated for each open Event racing this one, so its screens resync (its ghost appears or goes).
+    function openRacers(id) {
+      return db
+        .query(`SELECT id FROM events WHERE household_id = ? AND race_against_id = ? AND ${OPEN} ORDER BY id`)
+        .all(householdId, id)
+        .map((r) => ({ type: 'event.updated', eventId: r.id }))
     }
 
     // Screens showing the door's Event resync (so a ghost appears or goes); none open, nobody to tell.

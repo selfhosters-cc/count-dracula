@@ -57,16 +57,16 @@ describe('last year, estimated', () => {
     expect(house.lastYear()).toBeNull()
   })
 
-  test('is only offered while the Household has no past night of its own', () => {
+  test('is still offered once the Household has a past night of its own (v2.1 ticket 55 dropped the gate)', () => {
     const { house } = signUp()
-    expect(house.canEstimateLastYear()).toBe(true)
     const [{ event }] = house.apply({ type: 'createEvent', name: 'A real night' })
     house.apply({ type: 'goLive', eventId: event.id })
     house.apply({ type: 'end', ...named(house, event.id) })
     house.apply({ type: 'close', eventId: event.id }) // "A real night" is a past night now
 
-    expect(house.canEstimateLastYear()).toBe(false)
-    expect(() => house.apply({ type: 'setLastYear', total: 100 })).toThrow(BadCommand)
+    expect(house.canEstimateLastYear()).toBe(true)
+    house.apply({ type: 'setLastYear', total: 100 })
+    expect(house.lastYear()).toBe(100)
   })
 
   test('needs a whole number of kids', () => {

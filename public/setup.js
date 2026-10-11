@@ -1,4 +1,5 @@
 // /setup (v2 spec §6): a signed-in Manager runs their Household.
+import { raceChoices } from '/shared/race-against.js'
 import { atEventTime, clockTime as zoneClock, eventNow, minuteOfDay, slots, stamp, tickNoteText, zonedTime } from '/shared/night-maths.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
 import { createLocationPicker } from '/location-picker.js'
@@ -324,10 +325,6 @@ function render() {
   $('settings-form').hidden = $('new-tag').hidden = !editing
   if (editing) renderEditing(editing)
   $('auto-ended').hidden = !(live?.ended && live.endedAutomatically)
-  // An ended night has its summary straight away (spec §12).
-  $('summary-link').hidden = !live?.ended || live.countsOnly
-  $('summary-link').href = `/summary?event=${live?.id}`
-  $('live-sharing').replaceChildren(...(live?.ended ? sharingOff(live) : []))
   $('auto-ended-summary').href = `/summary?event=${live?.id}`
   // What the tick did to each Event (ticket 53), until ticket 57 shows it on the Event itself. The door's
   // auto-end has its own section above.
@@ -339,8 +336,15 @@ function render() {
   $('tags').replaceChildren(...(editing?.tags ?? []).map(tagRow))
   $('c-copy').replaceChildren(option('', 'Nothing (start empty)', true), ...events.filter((e) => !e.countsOnly).map((e) => option(e.id, e.name)))
 
-  // Reset (spec v2.1 §6) for every open Event, the door's first, until ticket 57 gives each its own card.
-  $('resets').replaceChildren(...[live, ...others].filter(Boolean).map((e) => h('button', { className: 'danger', textContent: `↺ Reset ${e.name}`, onclick: () => resetEvent(e) })))
+  // Every open Event, the door's first, with its own tools, until ticket 57 gives each its own card: an Ended
+  // one's Night summary straight away (spec v2.1 §7), its tally sheet and CSV, and Reset (§6).
+  $('open-nights').replaceChildren(...[live, ...others].filter(Boolean).map((e) =>
+    h('div', { className: 'item' },
+      h('span', { className: 'grow', textContent: `${e.name} · ${e.state} · ${e.kids} kids` }),
+      ...(e.ended ? [summaryLink(e), ...sharingOff(e)] : []),
+      tallyLink(e),
+      h('button', { textContent: '⬇ Export', onclick: () => exportEvent(e) }),
+      h('button', { className: 'danger', textContent: '↺ Reset', ariaLabel: `Reset ${e.name}`, onclick: () => resetEvent(e) }))))
 
   renderBackfill(live)
   renderLists(upcoming, past)
@@ -350,7 +354,7 @@ function renderEditing(editing) {
   $('s-name').value = editing.name
   $('s-race').replaceChildren(
     option('', 'None', editing.raceAgainstId == null),
-    ...events.filter((e) => e.id !== editing.id).map((e) => option(e.id, e.name, e.id === editing.raceAgainstId)),
+    ...raceChoices(events, editing).map((e) => option(e.id, e.name, e.id === editing.raceAgainstId)),
   )
   $('s-shift').value = editing.clockShiftMs / HOUR
   $('s-expected').value = editing.expectedKids ?? ''
@@ -364,11 +368,16 @@ function renderEditing(editing) {
   $('s-goes').value = editing.goesLiveAt == null ? '' : stamp(editing.goesLiveAt, timeZone).slice(0, 16).replace(' ', 'T')
 }
 
+// Per Event (spec v2.1 §7): every Ended or Past Event has a Night summary; the tally sheet names its Event.
+const summaryLink = (e) => h('a', { href: `/summary?event=${e.id}`, textContent: '✨ Night summary', style: 'color: var(--orange); font-weight: 700' })
+const tallyLink = (e) => h('a', { href: `/tally?event=${e.id}`, target: '_blank', textContent: '🖨 Tally sheet', style: 'color: var(--orange); font-weight: 700' })
+
 function renderLists(upcoming, past) {
   $('upcoming').replaceChildren(
     ...upcoming.map((e) =>
       h('div', { className: 'item' },
         h('span', { className: 'grow', textContent: `${e.name} · ${e.tags.length} costumes${e.goesLiveAt == null ? '' : ` · goes live ${zoneDay(e.goesLiveAt)}`}` }),
+        tallyLink(e),
         h('button', { className: 'primary', textContent: 'Go live', onclick: () => goLive(e) })),
     ),
   )
@@ -378,7 +387,7 @@ function renderLists(upcoming, past) {
           h('div', { className: 'item' },
             h('span', { className: 'grow', textContent: `${e.name} · ${e.countsOnly ? 'counts only' : `${e.kids} kids`}` }),
             ...(e.countsOnly ? [] : [
-              h('a', { href: `/summary?event=${e.id}`, textContent: '✨ Night summary', style: 'color: var(--orange); font-weight: 700' }),
+              summaryLink(e),
               ...sharingOff(e),
               h('a', { href: `/tv?event=${e.id}`, target: '_blank', textContent: 'View recap', style: 'color: var(--orange); font-weight: 700' }),
               h('button', { textContent: '⬇ Export', onclick: () => exportEvent(e) }),

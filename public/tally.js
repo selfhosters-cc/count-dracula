@@ -1,5 +1,6 @@
 // The print tally sheet (v1 spec §6), for when every phone is dead.
 import { slots } from '/shared/night-maths.js'
+import { tallySnapshotUrl } from '/tally-view.js'
 
 const label = (hhmm) => {
   const [h, m] = hhmm.split(':').map(Number)
@@ -12,8 +13,9 @@ document.getElementById('rows').replaceChildren(
     return tr
   }),
 )
-// The door's Event's name, read with the Manager's session; the sheet works without it too.
-fetch('/api/snapshot')
+// The named Event's name (/tally?event=<id>), else the door's, read with the Manager's session; the sheet works
+// without it too.
+fetch(tallySnapshotUrl(location.search))
   .then((r) => r.json())
   .then((s) => s.event && (document.getElementById('title').textContent = `${s.event.name}: tally`)) // none with no night on
   .catch(() => {})

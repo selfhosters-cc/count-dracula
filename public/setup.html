@@ -100,8 +100,7 @@
     <section>
       <h2>Live now: <span id="live-name"></span></h2>
       <p class="muted"><span id="live-kids"></span> kids · join key <code id="join-key"></code> · time zone <span id="time-zone"></span></p>
-      <p class="row"><a href="" id="summary-link" class="link fit" hidden>✨ Tonight's Night summary</a><span id="live-sharing" class="fit"></span></p>
-      <div class="row" id="resets"></div>
+      <div id="open-nights"></div>
       <div class="row">
         <button id="count-here" class="primary">📱 Count on this device</button>
         <button id="add-helper">➕ Add a helper</button>
@@ -145,7 +144,7 @@
         <label for="s-race">Race against</label>
         <select id="s-race"></select>
         <div id="last-year" hidden>
-          <label for="s-last-year">No past night of your own? About how many kids came last year? It becomes a ghost to race, "last year (estimated)".</label>
+          <label for="s-last-year">About how many kids came last year? It becomes the ghost every night races unless you pick another, "last year (estimated)".</label>
           <div class="row"><input id="s-last-year" type="number" min="1"><button type="button" id="s-last-year-save">Save</button><button type="button" id="s-last-year-clear" class="danger">Clear</button></div>
         </div>
         <div class="row">

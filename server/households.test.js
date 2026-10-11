@@ -167,6 +167,7 @@ describe("the Household's time zone", () => {
     house.apply({ type: 'goLive', eventId: last.id })
     house.apply({ ...tap('v1'), tappedAt: Date.parse('2025-10-31T17:50:00-07:00') })
     house.apply({ ...tap('v2'), tappedAt: Date.parse('2025-10-31T18:10:00-07:00') })
+    house.apply({ type: 'end', eventId: last.id, stamp: house.events().find((e) => e.id === last.id).wentLiveAt })
     const [{ event: tonight }] = house.apply({ type: 'createEvent', name: 'Halloween 2026' })
     house.apply({ type: 'settings', eventId: tonight.id, raceAgainstId: last.id })
     house.apply({ type: 'goLive', eventId: tonight.id })

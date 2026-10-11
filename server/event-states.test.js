@@ -376,8 +376,8 @@ describe('Delete', () => {
     const { house } = signedUp()
     const test = byName(house, 'Test night').id
     const halloween = byName(house, 'Halloween 2026').id
-    house.apply({ type: 'settings', eventId: halloween, raceAgainstId: test })
     house.apply({ type: 'end', ...named(house, test) })
+    house.apply({ type: 'settings', eventId: halloween, raceAgainstId: test })
 
     house.apply({ type: 'deleteEvent', eventId: test, confirm: 'Test night' })
 

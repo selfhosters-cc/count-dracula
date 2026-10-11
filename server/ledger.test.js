@@ -461,8 +461,8 @@ describe('join key and deleting events', () => {
     ledger.apply(tap('a'))
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
     ledger.apply({ type: 'goLive', eventId: event.id })
-    ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: rehearsal })
     close(ledger, rehearsal)
+    ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: rehearsal }) // a night that's over (spec v2.1 §7)
 
     expect(() => ledger.apply({ type: 'deleteEvent', eventId: rehearsal, confirm: 'rehearsal?' })).toThrow(BadCommand)
     const deltas = ledger.apply({ type: 'deleteEvent', eventId: rehearsal, confirm: 'Rehearsal' })

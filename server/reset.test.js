@@ -222,9 +222,10 @@ describe('what screens are told', () => {
     const { clock, house } = signedUp()
     const test = byName(house, 'Test night').id
     const [{ event: party }] = house.apply({ type: 'createEvent', name: 'Party' })
+    taps(house, test, clock, 2)
+    house.apply({ type: 'end', ...named(house, test) }) // only a night that's over is raced (spec v2.1 §7)
     house.apply({ type: 'settings', eventId: party.id, raceAgainstId: test })
     house.apply({ type: 'goLive', eventId: party.id })
-    taps(house, test, clock, 2)
 
     expect(reset(house, test).map(({ seq, ...d }) => d)).toEqual([
       { type: 'event.updated', eventId: test },
