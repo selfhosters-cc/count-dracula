@@ -17,20 +17,23 @@ Done in order. Sign-up opens at step 7.
 
 ### Step 1. `v1-final` and a copy of today's database
 
-The tag is already pushed (on the last v1 code commit). Check it, then copy the v1 database and keep a copy here:
+The tag is already pushed (on the last v1 code commit). Check it, then copy the v1 database and keep a copy here.
+Not with `cp`: the database is in WAL mode, and until a checkpoint its rows live in the `-wal` file beside it, so a
+copied `.sqlite` alone can be empty. `deploy/copy-db.js` makes a `VACUUM INTO` copy, which includes them, without
+stopping v1:
 
 ```bash
 git ls-remote --tags origin v1-final                    # → the v1 commit (4f369ed…)
-stamp=$(date +%Y%m%d-%H%M)
-lxc "systemctl stop count-dracula && cp /var/lib/count-dracula/count-dracula.sqlite /var/lib/count-dracula/v1-final-$stamp.sqlite && systemctl start count-dracula"
-ssh proxmox "pct pull 118 /var/lib/count-dracula/v1-final-$stamp.sqlite /tmp/v1-final-$stamp.sqlite" && scp proxmox:/tmp/v1-final-$stamp.sqlite ~/count-dracula-backups/ && ssh proxmox rm /tmp/v1-final-$stamp.sqlite
+out=$(ssh proxmox "cat > /tmp/copy-db.js && pct push 118 /tmp/copy-db.js /tmp/copy-db.js && rm /tmp/copy-db.js && pct exec 118 -- /usr/local/bin/bun /tmp/copy-db.js /etc/count-dracula/config.json /var/lib/count-dracula/v1-final" < deploy/copy-db.js)
+ssh proxmox "pct pull 118 $out /tmp/v1-final.sqlite" && scp proxmox:/tmp/v1-final.sqlite ~/count-dracula-backups/v1-final-${out##*count-dracula-} && ssh proxmox rm /tmp/v1-final.sqlite
+ls -l ~/count-dracula-backups/                           # tens of KB, not 4096 bytes
 ```
 
 Practise the migration on that copy here (it's the ticket 17 check): a scratch copy opens as Household #1 with
 "Halloween 2025 (counts)", the Rehearsal and its Race against.
 
 ```bash
-cp ~/count-dracula-backups/v1-final-$stamp.sqlite /tmp/practice.sqlite
+cp "$(ls -1t ~/count-dracula-backups/v1-final-*.sqlite | head -n 1)" /tmp/practice.sqlite
 bun -e "
   import { Database } from 'bun:sqlite'; import { openLedger } from './server/ledger.js'
   const h = openLedger(new Database('/tmp/practice.sqlite'), {}).household(1)
