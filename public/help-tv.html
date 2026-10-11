@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Count Dracula — TV help</title>
+  <style>
+    :root { --bg: #14101c; --panel: #221a2e; --text: #f5efe6; --dim: #a99cbc; --orange: #ff7a1a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      padding: 24px 16px; max-width: 680px; margin-inline: auto; line-height: 1.55; }
+    h1 { margin: 0 0 8px; font-size: 26px; }
+    h2 { font-size: 19px; margin: 0 0 8px; }
+    section { background: var(--panel); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+    ol, ul { padding-left: 1.3em; margin: 0; }
+    li + li { margin-top: 6px; }
+    a { color: var(--orange); }
+    .muted { color: var(--dim); }
+  </style>
+</head>
+<body>
+  <h1>📺 Putting Count Dracula on your TV</h1>
+  <p class="muted">The TV faces the street and cheers every kid your phones count. Here's the setup that works best.</p>
+
+  <section>
+    <h2>What works best</h2>
+    <p>A <b>computer</b> (any laptop or mini PC) plugged into the TV by <b>HDMI</b>, running <b>Chrome or Edge</b> full-screen.</p>
+  </section>
+
+  <section>
+    <h2>Set it up</h2>
+    <ol>
+      <li>On the TV's computer, open Chrome or Edge and go to <b><span class="host"></span>/tv</b>.</li>
+      <li>The TV shows a short code and a QR. On your phone, open <b><span class="host"></span>/setup</b> → <b>Pair a TV</b> and type the code, or scan the QR with your phone's camera.</li>
+      <li>Press <b>F11</b> (or the browser's full-screen) so the board fills the TV.</li>
+      <li>Turn off <b>sleep and screen blanking</b> on the computer for the night, and keep it plugged in.</li>
+      <li>Click once or press any key so the sound starts. <b>A reload needs a click or key press for sound again</b>: the board shows a 🔇 reminder until then.</li>
+    </ol>
+    <p>The TV remembers its pairing, so next time <b>/tv</b> goes straight to your board.</p>
+  </section>
+
+  <section>
+    <h2>Other devices</h2>
+    <p>Smart-TV browsers, a tablet in landscape or a cast browser tab may work: open the browser, go to <b>/tv</b>, and pair. They're best effort, so <b>test it on your Rehearsal</b>. If the sound or the screen misbehaves, use a laptop.</p>
+  </section>
+
+  <section>
+    <h2>Test it</h2>
+    <p>Your household starts with a <b>🎭 Rehearsal</b>: count a test kid on your phone and watch the TV pop and hear it. Then <b>Reset the Rehearsal</b> in <a href="/setup">Setup</a> so the TV starts at 0. "Halloween 2026" goes live by itself on Oct 31 at 4:00 pm.</p>
+  </section>
+
+  <script type="module" src="/help-tv.js"></script>
+</body>
+</html>

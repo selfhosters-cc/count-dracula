@@ -30,6 +30,9 @@
       grid-template-columns: 34fr 66fr; grid-template-rows: auto 1fr 22vh 10vh; gap: 1.6vh 2vw; }
     .top { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 1em; }
     .title { font-family: var(--f-spooky); font-size: clamp(20px, 3.4vw, 64px); color: var(--pumpkin); letter-spacing: .03em; }
+    .rehearsal-chip { padding: .3em .8em; border-radius: 999px; background: var(--night-2); color: var(--ink-dim);
+      font-size: clamp(12px, 1.4vw, 26px); font-weight: 700; }
+    .rehearsal-chip[hidden] { display: none; }
     .golden-pill { display: inline-flex; align-items: center; gap: .4em; padding: .3em .8em; border-radius: 999px;
       border: 2px solid #ffcf3a; color: #ffcf3a; font-weight: 700; font-size: clamp(12px, 1.8vw, 30px); white-space: nowrap; }
     .golden-pill[hidden] { display: none; }
@@ -165,7 +168,7 @@
 <body>
   <section id="board" aria-label="Scoreboard">
     <div class="top">
-      <div class="title" id="title">Count Dracula</div>
+      <div style="display: flex; gap: 1.2vw; align-items: center"><div class="title" id="title">Count Dracula</div><span class="rehearsal-chip" id="rehearsal-chip" hidden>🎭 Rehearsal</span></div>
       <div style="display: flex; gap: 1.5vw; align-items: center">
         <span class="golden-pill" id="golden-pill" hidden>🎫 <b id="golden-left"></b> golden tickets left</span>
         <span class="muted" id="muted" hidden title="Sound muted from a phone">🔇</span>

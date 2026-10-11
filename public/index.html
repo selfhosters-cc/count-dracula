@@ -36,6 +36,8 @@
     @keyframes pulse { to { filter: brightness(1.25); } }
     #flash.gold { color: #ffd23f; font-size: 44px; text-align: center; padding: 0 16px; }
     .head { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px 6px; }
+    .chip { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #ffffff18; color: var(--dim); margin-left: 6px; }
+    .chip[hidden] { display: none; }
     .head b { font-size: 28px; font-variant-numeric: tabular-nums; }
     .dim { font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
 
@@ -146,7 +148,7 @@
   <div id="app">
     <div id="pill"></div>
     <div id="problem"></div>
-    <div class="head"><span><b id="total">–</b> kids tonight</span>
+    <div class="head"><span><b id="total">–</b> kids tonight <span class="chip" id="rehearsal-chip" hidden>🎭 Rehearsal</span></span>
       <span><span class="dim" id="untagged"></span><button class="menu" id="menu-open" aria-label="Menu">☰</button></span></div>
     <div class="golden" id="golden" hidden>⭐ NEXT KID IS GOLDEN — get the prize ready</div>
     <div class="nudge" id="nudge" hidden><button id="nudge-end">Quiet out there? 🌙 End the night</button><button id="nudge-dismiss" aria-label="Not yet">✕</button></div>
@@ -345,6 +347,7 @@
         view = doorView(live.state, outbox, { connected: live.connected })
         renderGolden()
         $('nudge').hidden = !quietNudge(live.state, Date.now(), nudgeDismissedAt())
+        $('rehearsal-chip').hidden = !live.state?.event.rehearsal
         $('total').textContent = view.total ?? '–'
         $('untagged').textContent = view.untagged == null ? '' : `${view.untagged} untagged`
         $('pill').innerHTML = pillHtml(outbox.status)

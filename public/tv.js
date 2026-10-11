@@ -512,6 +512,7 @@ if (pairingMode) {
 let wasDisconnected = false
 
 function renderSnapshot(state, cause) {
+  $('rehearsal-chip').hidden = !state.event.rehearsal
   // First load shows the count as is; a reconnect rolls up quietly to the new total.
   showCount(state.kids.length, wasDisconnected && shown != null ? 'roll' : 'set')
   wasDisconnected = false

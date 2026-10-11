@@ -1,7 +1,7 @@
 # First-run, the ready checklist and the Rehearsal
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 23, 24, 25, 26
 
 ## What to build
@@ -41,11 +41,20 @@ A public page with the essentials: a computer on HDMI with Chrome or Edge full-s
 
 ## Acceptance criteria
 
-- [ ] A brand-new Manager on a phone gets through all 3 screens and sees "✓ Your TV is showing your Rehearsal" when a second browser pairs (checked in the browser)
-- [ ] Skipping every screen still lands in a working `/setup`; first-run stops showing once screen 3 has been passed
-- [ ] Each checklist item ticks from real state, without a reload
-- [ ] Reset the Rehearsal clears its kids, and the TV and phones drop to 0; it's refused on a non-Rehearsal Event
-- [ ] The 🎭 chip shows on the TV, on TV-link viewers and on phones during the Rehearsal, and not on "Halloween 2026"
-- [ ] Clock shift and golden tickets are under Advanced
-- [ ] `/help/tv` is reachable signed out
-- [ ] `bun test` passes
+- [x] A brand-new Manager on a phone gets through all 3 screens and sees "✓ Your TV is showing your Rehearsal" when a second browser pairs (checked in the browser)
+- [x] Skipping every screen still lands in a working `/setup`; first-run stops showing once screen 3 has been passed
+- [x] Each checklist item ticks from real state, without a reload
+- [x] Reset the Rehearsal clears its kids, and the TV and phones drop to 0; it's refused on a non-Rehearsal Event
+- [x] The 🎭 chip shows on the TV, on TV-link viewers and on phones during the Rehearsal, and not on "Halloween 2026"
+- [x] Clock shift and golden tickets are under Advanced
+- [x] `/help/tv` is reachable signed out
+- [x] `bun test` passes
+
+## Notes from the build
+
+- **Server:** `households.first_run_passed` (migration step 6; existing Households count as passed), Setup commands `passFirstRun` and `resetRehearsal` (live Rehearsal only: deletes its kids, batches and fired moments, re-hides its tickets, un-ends it, and sends `event.updated` so screens resync to 0). `/api/household` adds `firstRunPassed` and `checklist: { tvWatching, rehearsalKids }` (TV-link or paired streams open; kids on the Household's Rehearsals).
+- **First-run** is `public/first-run.js` over `/setup`. Screen 3 is passed by Done (after the TV connects), Send the link, Use this screen or Skip; redeeming any pairing code also passes it. Arriving with `?pair=` skips first-run for that visit.
+- **The checklist** polls `/api/household` every 3 s. Item 2 stays ticked after Reset the Rehearsal (remembered on the phone); item 3 is about the next night with a Goes live at (or the live non-Rehearsal one), and ticks with Expected kids, a Race against, or Skip. Skips and the ✕ are per phone (`localStorage`). The "About how many kids came last year?" field comes with ticket 45.
+- **🎭 chip:** TV top bar (TV-link viewers too) and the door phone header, from `event.rehearsal`.
+- **`/help/tv`:** a first public page (`public/help-tv.html`); ticket 48 fills it in.
+- Checked in the browser at phone size: sign-up → 3 screens → a second tab's code → "✓ Your TV is showing your Rehearsal"; checklist items ticking without a reload; Reset the Rehearsal taking the TV to 0; the chip gone after Go live; first-run not shown again.

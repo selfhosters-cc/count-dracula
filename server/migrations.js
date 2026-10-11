@@ -79,6 +79,12 @@ const MIGRATIONS = [
     `)
     db.query('UPDATE events SET went_live_at = ? WHERE live = 1').run(now())
   },
+
+  // 5 → 6: first-run (v2 spec §6) shows until it's been through once. Households from before it have been.
+  (db) => {
+    db.exec('ALTER TABLE households ADD COLUMN first_run_passed INTEGER NOT NULL DEFAULT 0')
+    db.exec('UPDATE households SET first_run_passed = 1')
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

@@ -227,8 +227,9 @@ export function openLedger(db, config) {
 
     households() {
       return db
-        .query('SELECT id, display_name AS displayName, time_zone AS timeZone, location_cell AS location FROM households ORDER BY id')
+        .query('SELECT id, display_name AS displayName, time_zone AS timeZone, location_cell AS location, first_run_passed AS firstRunPassed FROM households ORDER BY id')
         .all()
+        .map((h) => ({ ...h, firstRunPassed: h.firstRunPassed === 1 }))
     },
   }
 
@@ -679,6 +680,22 @@ export function openLedger(db, config) {
         return []
       },
 
+      // First-run's screen 3 was passed (paired, sent, used here or skipped): it stops showing.
+      passFirstRun() {
+        db.query('UPDATE households SET first_run_passed = 1 WHERE id = ?').run(householdId)
+        return []
+      },
+
+      // Reset the Rehearsal (spec §6): only while it's live, it starts again from 0 so the TV does too.
+      resetRehearsal() {
+        const event = eventById()
+        if (!event.rehearsal) throw new BadCommand('Only a live Rehearsal can be reset')
+        for (const table of ['kids', 'backfill_batches', 'fired_moments']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
+        db.query("UPDATE golden_tickets SET state = 'hidden', kid_id = NULL, expired_from = NULL WHERE event_id = ?").run(event.id)
+        db.query('UPDATE events SET ended = 0, ended_automatically = 0 WHERE id = ?').run(event.id)
+        return [{ type: 'event.updated', eventId: event.id }] // phones and TVs take a fresh snapshot
+      },
+
       // Rotate TV link (spec §9): a new secret; the HTTP layer closes every stream on the old one.
       rotateTvLink() {
         db.query('UPDATE households SET tv_token = ? WHERE id = ?').run(randomToken(), householdId)
@@ -749,6 +766,13 @@ export function openLedger(db, config) {
 
       tvToken() {
         return household().tv_token
+      },
+
+      // Kids counted on the Household's Rehearsals: the checklist's "A phone counted a test kid".
+      rehearsalKids() {
+        return db
+          .query('SELECT COUNT(*) AS n FROM kids k JOIN events e ON e.id = k.event_id WHERE e.household_id = ? AND e.rehearsal = 1 AND k.deleted_at IS NULL')
+          .get(householdId).n
       },
 
       // A TV paired by code: its device token, which marks its streams as the Household's own TV.
