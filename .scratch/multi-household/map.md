@@ -41,10 +41,11 @@ A build-ready **v2 spec plus build tickets** for Count Dracula as one public, mu
 - [Multi-household extras shortlist](issues/13-multi-household-extras.md) — three cheap extras above the cut line, in order: last year's total typed in and shaped into an "estimated" ghost (½ day), the site-wide total on the public sign-up page, a site-wide top costume clause (≥ 3 Households); everything else after Halloween.
 - [Privacy notice and retention](issues/15-privacy-notice-and-retention.md) — a good-faith plain `/privacy` page with House rules, agreed by signing in; contact is `OPERATOR_CONTACT` (own-domain forwarder, reply within a week); nights kept until deleted, Idle Households purged after 2 years and Abandoned sign-ups after 60 days (jobs after Halloween); "backups gone within 2 months", dev-box pulls 14 days; logs 30 days with tokens masked in an own Caddy log; OSM tiles only after a tap; email requests answered by hand.
 - [v2 rehearsal and launch-day plan](issues/16-v2-rehearsal-and-launch-day.md) — no rehearsal, no fixed dates: sign-up opens as soon as the core path + public-safety set are deployed (opening-day checklist in `deploy/RUNBOOK.md`: `v1-final` + DB copy, load check on a scratch instance on LXC 118, privacy checks, publish the Google consent screen, a throwaway test Household proving auto go-live and 3 am auto-end); the rest deploys fix-forward; nearby's ≥ 5 view and the restore drill on the dev box; core bugs fixed forward (Pause sign-ups meanwhile), switch-off-able features still broken at 3 pm Oct 31 switched off; `v1-final` retired at the first stranger; help by `OPERATOR_CONTACT` only; only freeze Oct 31 3 pm–midnight with night-of moves decided in advance.
+- [Assemble the v2 spec and build tickets](issues/14-assemble-the-v2-spec.md) — [spec.md](spec.md) (23 sections, changes on top of v1) plus build tickets 17–49 in number order: 17–37 are the core path and public-safety set, [Open sign-up](issues/38-open-sign-up.md) is the opening line, and 39–49 deploy fix-forward; two contradictions between tickets were settled by following the more specific one (no display name on the TV; the summary check before ticket 43 is the "ended automatically" message).
 
 ## Not yet specified
 
-<!-- nothing left in the fog: every decision is made; only [Assemble the v2 spec and build tickets](issues/14-assemble-the-v2-spec.md) remains -->
+<!-- nothing left in the fog: the way is clear. Build from [spec.md](spec.md), tickets 17–49 in number order -->
 
 ## Out of scope
 

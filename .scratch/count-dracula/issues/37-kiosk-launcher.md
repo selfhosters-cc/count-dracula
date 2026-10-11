@@ -6,6 +6,8 @@ Blocked by: 16, 25
 
 ## What to build
 
+> **v2 (2026-10-10):** the TV is now a bare `/tv` on the public host that remembers its TV link, and the launchers are optional extras under "Advanced" on `/help/tv`. Use the public URL, not the tailnet or LAN one. See the [v2 spec §6](../../multi-household/spec.md#6-sign-up-first-run-and-the-rehearsal) and v2 ticket [48](../../multi-household/issues/48-help-tv-polish.md).
+
 The TV laptop launches into the TV page reliably and stays awake all night. See [spec §14](../spec.md#14-laptop-kiosk-setup). Full findings are on branch `research/laptop-kiosk-setup` (commit `78ac026`).
 
 - A launch script for the laptop's OS that quits any running Chrome first, then runs Chrome with a dedicated `--user-data-dir`, `--no-first-run --noerrdialogs --autoplay-policy=no-user-gesture-required --kiosk <tv-url>`. Use the HTTPS URL if the laptop has Tailscale, otherwise the LAN URL.

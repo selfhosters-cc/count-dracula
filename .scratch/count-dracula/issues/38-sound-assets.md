@@ -6,6 +6,8 @@ Blocked by: 25
 
 ## What to build
 
+> **v2 (2026-10-10):** the soundboard is one shared library that plays on every Household's TV, so **no homemade recordings**: all 6 slots are stock or shout-text, ours included. See the [v2 spec §5](../../multi-household/spec.md#5-config-split).
+
 Real sounds replace the generated fallbacks before the **Oct 24** freeze. See [spec §13](../spec.md#13-asset-task) and [§10](../spec.md#10-sound). This never blocks the build: any missing slot keeps its fallback.
 
 - **Bloops** (~5 variations): browser-generated or a Kenney.nl CC0 pack.
