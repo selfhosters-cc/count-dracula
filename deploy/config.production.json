@@ -1,6 +1,7 @@
 {
   "port": 3131,
   "dbPath": "/var/lib/count-dracula/count-dracula.sqlite",
+  "backupDir": "/var/lib/count-dracula/backups",
   "switches": {
     "milestones": true,
     "goldenTickets": true,

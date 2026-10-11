@@ -10,6 +10,8 @@ export function loadConfig(configPath) {
   return {
     port: raw.port ?? 3131,
     dbPath: fromConfigDir(raw.dbPath ?? 'count-dracula.sqlite'),
+    // Where the 15-minute VACUUM INTO copies go (spec §15); none without it.
+    backupDir: raw.backupDir ? fromConfigDir(raw.backupDir) : null,
     switches: raw.switches ?? {},
     // 6 slots (3 homemade, 3 stock): the button label, the file the TV plays, and its TV visual.
     soundboard: (raw.soundboard ?? []).map((slot) => ({ label: slot.label, file: slot.file ?? null, shout: slot.shout ?? null, emoji: slot.emoji ?? null })),

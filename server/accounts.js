@@ -89,6 +89,8 @@ export function openAccounts(db, { ledger, google, now = Date.now, household1Ema
       }
     },
 
+    pruneDeletions,
+
     // The Managers' Google emails, for the Operator's detail view (spec §13) and nowhere else.
     managerEmails(householdId) {
       return db.query('SELECT email FROM managers WHERE household_id = ? ORDER BY id').all(householdId).map((r) => r.email)
@@ -108,10 +110,15 @@ export function openAccounts(db, { ledger, google, now = Date.now, household1Ema
         db.query('DELETE FROM sessions WHERE manager_id IN (SELECT id FROM managers WHERE household_id = ?)').run(householdId)
         db.query('DELETE FROM managers WHERE household_id = ?').run(householdId)
         ledger.deleteHousehold(householdId)
-        db.query('DELETE FROM deletions WHERE deleted_at < ?').run(now() - DELETIONS_KEPT_MS)
         db.query('INSERT INTO deletions (household_id, deleted_at) VALUES (?, ?)').run(householdId, now())
       })()
+      pruneDeletions()
     },
+  }
+
+  // The deletions log keeps a row 2 months (spec §16): long enough to re-delete after restoring a backup.
+  function pruneDeletions() {
+    db.query('DELETE FROM deletions WHERE deleted_at < ?').run(now() - DELETIONS_KEPT_MS)
   }
 
   function join(householdId, identity) {

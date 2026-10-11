@@ -10,6 +10,7 @@ import { googleClient } from './google.js'
 import { createHub } from './hub.js'
 import { createPairing } from './pairing.js'
 import { LIMITS, createGuard } from './guard.js'
+import { createBackups } from './backups.js'
 import { toCsv } from './export.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
@@ -64,6 +65,10 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   }
   tick()
   const ticker = setInterval(tick, tickMs)
+
+  // A VACUUM INTO copy every 15 minutes, with the deletions prune on the same timer (spec §15).
+  const backups = config.backupDir ? createBackups({ db, dir: config.backupDir, now, log }) : null
+  const stopBackups = backups?.start({ also: () => accounts.pruneDeletions() }) ?? (() => {})
 
   const routes = {
     // The live event, for a phone or a Manager; ?event=<id> reads one of the Household's events (a past
@@ -373,8 +378,10 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     ledger,
     hub,
     guard,
+    backups,
     stop() {
       clearInterval(ticker)
+      stopBackups()
       hub.shutdown()
       server.stop(true)
     },

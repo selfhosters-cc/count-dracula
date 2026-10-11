@@ -55,3 +55,25 @@ copied from the dev machine, so the LXC runs the version the tests ran with.
 
 Tailnet phones that open the HTTPS address get the join key automatically (`/api/join`, only on the
 `autoJoinHosts` name). LAN phones join by scanning "Add a helper" in the ☰ menu.
+
+## Backups
+
+The server copies its database with `VACUUM INTO` every 15 minutes into `/var/lib/count-dracula/backups/`
+(`backupDir` in the config), keeping the last 8 copies plus the newest of each of the last 14 days. `/operator`
+shows the age of the last copy.
+
+Off the box, once a day, the dev machine pulls the newest copy into `~/count-dracula-backups/` (or
+`BACKUP_PULL_DIR`) and keeps 14 days of pulls:
+
+```bash
+deploy/pull-backup.sh             # pull now
+deploy/pull-backup.sh --dry-run   # show what it would do
+```
+
+The crontab line (`crontab -e` on the dev machine; 4:30 am, after the night's last copies):
+
+```
+30 4 * * * cd /code/count-dracula && deploy/pull-backup.sh >> ~/count-dracula-backups/pull.log 2>&1
+```
+
+The Proxmox vzdump job on LXC 118 stays as a second layer.
