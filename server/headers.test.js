@@ -52,3 +52,18 @@ describe('browser security headers', () => {
     }
   })
 })
+
+describe('/healthz', () => {
+  test('answers without a credential, for the deploy check', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
+    const configPath = join(dir, 'config.json')
+    writeFileSync(configPath, JSON.stringify({ dbPath: join(dir, 'db.sqlite') }))
+    const app = startServer({ configPath, port: 0, env: {} })
+    running.push(app)
+
+    const res = await fetch(`${app.url}/healthz`)
+
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('ok')
+  })
+})

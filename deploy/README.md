@@ -1,30 +1,32 @@
 # Deploying Count Dracula
 
 One Bun process in its own Proxmox LXC, under systemd (`Restart=always`), with the SQLite file inside the
-LXC (spec §3, §11). Everything runs from the dev machine through `ssh proxmox` + `pct`; the LXC needs no
-SSH keys of its own.
+LXC. It's public at one HTTPS host behind Cloudflare and the shared Caddy (v2 spec §15). Everything runs from
+the dev machine through `ssh proxmox` + `pct`; the LXC needs no SSH keys of its own.
 
 | | |
 |---|---|
-| LXC | **118** `count-dracula`, Debian 12, 1 core / 512 MB / 4 GB on `zstorage2`, starts on boot |
-| LAN | **http://192.168.5.31:3131** (static; the helper QR code bakes it in) |
-| Tailnet | **https://`$TAILNET_HOST`** via Caddy (LXC 117); set in `deploy/local.env` |
+| LXC | **118** `count-dracula`, Debian 12, 2 cores / 1 GB / 4 GB on `zstorage2`, starts on boot |
+| Public | **https://`$PUBLIC_HOST`** (in `deploy/local.env`; the repo says `count-dracula.example.com`) → Cloudflare → shared Caddy (LXC 117) → `192.168.5.31:3131` |
 | App | `/opt/count-dracula` (previous build kept in `/opt/count-dracula.prev`) |
-| Config | `/etc/count-dracula/config.json` (switches, soundboard; never overwritten by a deploy) |
-| Data | `/var/lib/count-dracula/count-dracula.sqlite` (WAL) |
-| Logs | `ssh proxmox pct exec 118 -- journalctl -u count-dracula -f` |
-| Time zone | America/Toronto (LXC and service): ghosts and the CSV summary bucket by local time |
+| Config | `/etc/count-dracula/config.json` (switches, soundboard, backup directory; never overwritten by a deploy) |
+| Private settings | `/etc/count-dracula/env` (mode 640), written by every deploy from `deploy/local.env` |
+| Data | `/var/lib/count-dracula/count-dracula.sqlite` (WAL), `backups/` (every 15 min), `deploy-copies/` (one per deploy, 14 days) |
+| Logs | `ssh proxmox pct exec 118 -- journalctl -u count-dracula -f` (journald keeps 30 days) |
 
-## Once: the tailnet hostname
+There's no LAN address and no tailnet name any more: phones, TVs and Setup all use the public host. If the
+home internet drops, every TV freezes and phones keep their taps until it's back.
 
-The hostname stays out of the repo. Put it in `deploy/local.env` (git-ignored):
+## Once: the private settings
+
+Never commit a real host name or secret. Copy the example and fill it in (git-ignored):
 
 ```bash
-TAILNET_HOST=count-dracula.example.com   # your own *.int name
+cp deploy/local.env.example deploy/local.env
 ```
 
-`deploy.sh` prints it, and the first deploy writes it into the config's `autoJoinHosts`. Without it, the
-deploy still works, but phones only join with the QR code.
+It needs `PUBLIC_HOST`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (v2 ticket 20), `OPERATOR_EMAILS`,
+`HOUSEHOLD1_MANAGER_EMAIL` and `OPERATOR_CONTACT`. `deploy.sh` refuses without all six.
 
 ## Once: create the LXC
 
@@ -32,29 +34,44 @@ deploy still works, but phones only join with the QR code.
 deploy/create-lxc.sh          # VMID=118 IP=192.168.5.31 by default; override with env vars
 ```
 
-It refuses if the VMID exists or the IP answers ping, creates and starts the LXC, adds the
+It refuses if the VMID exists or the IP answers ping, creates and starts the LXC (2 cores, 1 GB), adds the
 `countdracula` system user, and adds the LXC to every scheduled Proxmox backup job that lists guests.
+Reserve 192.168.5.31 on the router (or keep it outside the DHCP range).
 
-Then make it reachable over the tailnet (the `caddy-int` tooling):
+An LXC made before v2 has 1 core / 512 MB. Raise it once:
 
 ```bash
-/opt/docker-compose/caddy-int/host.sh add count-dracula 192.168.5.31:3131
+ssh proxmox pct set 118 --cores 2 --memory 1024
 ```
 
-Reserve 192.168.5.31 on the router (or keep it outside the DHCP range).
+The public host on the shared Caddy (a subdomain under an existing wildcard, with its own masked access log)
+is v2 ticket 35.
 
 ## Every time: deploy
 
 ```bash
-deploy/deploy.sh              # tests, pack, push, swap, restart, health check
-deploy/deploy.sh --rollback   # put the previous build back
+deploy/deploy.sh                # tests, pack, push, copy the database, swap, restart, health check
+deploy/deploy.sh --rollback     # put the previous build back
+deploy/deploy.sh --check-freeze # is it the Oct 31 change freeze right now?
 ```
 
-The first deploy writes `/etc/count-dracula/config.json` from `deploy/config.production.json`. Later deploys leave the config and the database alone. Bun is
-copied from the dev machine, so the LXC runs the version the tests ran with.
+Each deploy:
 
-Tailnet phones that open the HTTPS address get the join key automatically (`/api/join`, only on the
-`autoJoinHosts` name). LAN phones join by scanning "Add a helper" in the ☰ menu.
+- refuses if a key is missing from `deploy/local.env`, or if the tests fail
+- takes a timestamped `VACUUM INTO` copy of the database into `/var/lib/count-dracula/deploy-copies/` first, and
+  stops if it can't
+- writes `/etc/count-dracula/env` (the six private keys, mode 640, group `countdracula`)
+- writes `/etc/count-dracula/config.json` from `deploy/config.production.json` on the first deploy only; on a
+  v1 server it removes the dead keys once (`adminPin`, `ghostSeed`, `lanUrl`, `autoJoinHosts`), adds
+  `backupDir`, and says what it changed
+- installs the journald drop-in that keeps logs 30 days
+- checks `/healthz`, which needs no credential
+
+**Change freeze:** Oct 31, 3 pm to midnight (Toronto). Inside it, `deploy.sh` and `--rollback` print a loud
+warning and ask before going on: a deploy drops every TV and phone stream on the site. Only deploy then if
+the site is down.
+
+Bun is copied from the dev machine, so the LXC runs the version the tests ran with.
 
 ## Backups
 

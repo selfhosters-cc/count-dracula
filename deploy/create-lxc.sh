@@ -6,7 +6,7 @@ set -euo pipefail
 
 PVE=${PVE:-proxmox}            # ssh host alias for the Proxmox node (root@192.168.5.1)
 VMID=${VMID:-118}
-IP=${IP:-192.168.5.31}         # static, like the other LXCs; the helper QR code bakes it in
+IP=${IP:-192.168.5.31}         # static, like the other LXCs; the shared Caddy proxies the public host to it
 GW=${GW:-192.168.1.1}
 STORAGE=${STORAGE:-zstorage2}
 TEMPLATE=${TEMPLATE:-local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst}
@@ -59,7 +59,7 @@ else
   echo "==> Creating LXC $VMID (count-dracula, $IP)"
   pve pct create "$VMID" "$TEMPLATE" \
     --hostname count-dracula \
-    --cores 1 --memory 512 --swap 256 \
+    --cores 2 --memory 1024 --swap 256 \
     --rootfs "$STORAGE:4" \
     --net0 "name=eth0,bridge=vmbr0,gw=$GW,ip=$IP/20,type=veth" \
     --nameserver "$NAMESERVER" --searchdomain lan \

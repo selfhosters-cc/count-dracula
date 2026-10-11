@@ -122,6 +122,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const { kidId } = await req.json()
       hub.publish(house.id, house.apply({ type: 'remove', kidId }))
     }),
+    // The deploy's health check: the server is up and its database answers. Needs no credential.
+    'GET /healthz': () => {
+      ledger.households()
+      return new Response('ok')
+    },
+
     // ---- The Operator (spec §13): a Manager on OPERATOR_EMAILS.
     'GET /operator': async (req) => {
       const session = accounts.session(tokenOf(req))

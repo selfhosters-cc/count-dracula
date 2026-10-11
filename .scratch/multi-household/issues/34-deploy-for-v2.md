@@ -1,7 +1,7 @@
 # Deploy scripts, config and logs for v2
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 21, 32
 
 ## What to build
@@ -37,8 +37,18 @@ Blocked by: 21, 32
 ## Acceptance criteria
 
 - [ ] A deploy to LXC 118 (only after [Open sign-up](38-open-sign-up.md) step 1, or to a scratch LXC) takes a DB copy, ships, and answers its health check
+  - **Opening day ([ticket 38](38-open-sign-up.md) step 2).** Not run here: LXC 118 isn't deployed before Open sign-up. `copy-db.js` and `upgrade-config.js` were run locally on a copy of a v1 database and a v1-shaped config.
 - [ ] `/etc/count-dracula/env` holds the six keys from `local.env`, mode 640, and nothing secret is in the repo
-- [ ] The freeze warning appears for a faked date inside the window, and not outside it
+  - Nothing secret is in the repo (checked). The file itself is checked on opening day.
+- [x] The freeze warning appears for a faked date inside the window, and not outside it
 - [ ] `journalctl` on LXC 118 reports a 30-day retention
-- [ ] `grep -r` finds no real host name, PIN or `TAILNET_HOST` in `deploy/` or `config/`
-- [ ] `bun test` passes
+  - Opening day: the deploy installs the drop-in; check with `journalctl -u systemd-journald | grep -i retention` or `systemd-analyze cat-config systemd/journald.conf`.
+- [x] `grep -r` finds no real host name, PIN or `TAILNET_HOST` in `deploy/` or `config/`
+- [x] `bun test` passes
+
+## Notes from the build
+
+- `deploy.sh` now: checks the freeze (also for `--rollback`; `--check-freeze` just answers; `DEPLOY_NOW` fakes the time), refuses without all six keys in `deploy/local.env`, writes `/etc/count-dracula/env` from only those keys, copies the database with `deploy/copy-db.js` before the swap (14 days kept in `/var/lib/count-dracula/deploy-copies/`; no copy, no deploy), upgrades a v1 config once with `deploy/upgrade-config.js` and reports the change, installs `deploy/journald-count-dracula.conf`, and checks the new `GET /healthz`.
+- The unit reads `EnvironmentFile=/etc/count-dracula/env` and drops `TZ`. The tarball no longer ships `config/2025-counts.json`.
+- `create-lxc.sh` makes 2 cores / 1 GB; the README has the one-off `pct set 118 --cores 2 --memory 1024` for the existing LXC (an opening-day step for the runbook, ticket 37).
+- **For the user:** your git-ignored `deploy/local.env` still has `TAILNET_HOST` and only `PUBLIC_HOST` of the six keys. `deploy/local.env.example` lists them all; ticket 20 fills in the Google ones.
