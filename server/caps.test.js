@@ -7,6 +7,7 @@ import { LIMITS } from './guard.js'
 import { fakeGoogle } from '../test/fake-google.js'
 import { cookieOf, signIn } from '../test/sign-in.js'
 import { readFrames } from '../test/sse.js'
+import { doorNamed } from '../test/v1-night.js'
 
 const running = []
 const aborts = []
@@ -82,7 +83,7 @@ describe('stream caps', () => {
 describe('rate limits on the routes', () => {
   test('taps, per Household: refused past the burst, kept by the phone to send again', async () => {
     const { app, info } = await server({ taps: { count: 3, perMs: 60_000 } })
-    const tap = (id) => fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': info.joinKey }, body: JSON.stringify({ id, tagId: null, tappedAt: Date.now(), phoneName: 'Dad' }) })
+    const tap = (id) => fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': info.joinKey }, body: JSON.stringify({ ...doorNamed(app.ledger, info.id), id, tagId: null, tappedAt: Date.now(), phoneName: 'Dad' }) })
 
     const statuses = []
     for (const id of ['a', 'b', 'c', 'd']) statuses.push((await tap(id)).status)

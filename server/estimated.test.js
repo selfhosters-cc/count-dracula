@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { BadCommand, openLedger } from './ledger.js'
+import { named, namingTheDoor } from '../test/v1-night.js'
 
 function signUp(config = {}) {
   const ledger = openLedger(new Database(':memory:'), { now: () => Date.parse('2026-10-15T15:00:00Z'), random: () => 0.5, ...config })
-  const house = ledger.household(ledger.createHousehold({ displayName: 'New house', timeZone: 'America/Vancouver' }))
+  const house = namingTheDoor(ledger.household(ledger.createHousehold({ displayName: 'New house', timeZone: 'America/Vancouver' })))
   return { ledger, house, halloween: () => house.events().find((e) => e.name === 'Halloween 2026') }
 }
 
@@ -61,8 +62,8 @@ describe('last year, estimated', () => {
     expect(house.canEstimateLastYear()).toBe(true)
     const [{ event }] = house.apply({ type: 'createEvent', name: 'A real night' })
     house.apply({ type: 'goLive', eventId: event.id })
-    const [{ event: next }] = house.apply({ type: 'createEvent', name: 'Next' })
-    house.apply({ type: 'goLive', eventId: next.id }) // "A real night" is a past night now
+    house.apply({ type: 'end', ...named(house, event.id) })
+    house.apply({ type: 'close', eventId: event.id }) // "A real night" is a past night now
 
     expect(house.canEstimateLastYear()).toBe(false)
     expect(() => house.apply({ type: 'setLastYear', total: 100 })).toThrow(BadCommand)

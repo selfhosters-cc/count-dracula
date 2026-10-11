@@ -9,10 +9,10 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
-    live INTEGER NOT NULL DEFAULT 0, -- exactly one per Household
-    frozen INTEGER NOT NULL DEFAULT 0,
+    live INTEGER NOT NULL DEFAULT 0, -- v1's live, frozen, ended and join_key: migration step 12 replaces
+    frozen INTEGER NOT NULL DEFAULT 0, -- them with one state column (spec v2.1 §3)
     ended INTEGER NOT NULL DEFAULT 0,
-    join_key TEXT, -- v1's; the key lives on households since v2
+    join_key TEXT,
     clock_shift_ms INTEGER NOT NULL DEFAULT 0,
     race_against_id INTEGER REFERENCES events(id),
     expected_kids INTEGER,
@@ -78,7 +78,7 @@ const SCHEMA = `
   );
 `
 
-// What a new Household's Rehearsal and nights start with (spec §6): site-wide, in code.
+// What a new Household's Test night and nights start with (spec §6): site-wide, in code.
 const STARTER_COSTUMES = [
   ['Witch', '🧙'],
   ['Superhero', '🦸'],
@@ -92,14 +92,26 @@ const STARTER_COSTUMES = [
 
 // The night sign-up schedules (spec §6): Oct 31, 4:00 pm in the Household's zone.
 const HALLOWEEN = { name: 'Halloween 2026', date: '2026-10-31', goesLiveAt: '16:00' }
-// The safety net (spec §7): a live, non-Rehearsal night still on at 3:00 am local is ended.
+// The safety net (spec §7): a Live night still on at 3:00 am local is ended.
 const AUTO_END_AT = '03:00'
+// An Ended night goes Past by itself at noon local after that 3:00 am (spec v2.1 §3).
+const PAST_AT = '12:00'
+const TEST_NIGHT = 'Test night'
+
+// Event states (spec v2.1 §3): upcoming → live → ended → past. Live or Ended is open, at most 3 at once.
+const OPEN = "state IN ('live', 'ended')"
+const MAX_OPEN = 3
+const isOpen = (event) => event.state === 'live' || event.state === 'ended'
+// An events row `e` that is its Household's door's Event: open, with the latest go-live stamp.
+const DOOR_ROW = `e.state IN ('live', 'ended') AND e.id = (
+  SELECT d.id FROM events d WHERE d.household_id = e.household_id AND d.state IN ('live', 'ended')
+  ORDER BY d.went_live_at DESC, d.id DESC LIMIT 1)`
 
 // A command the Ledger refuses; the HTTP layer answers 400.
 export class BadCommand extends Error {}
 
 // The TV's volume and mutes from the ☰ menu. Per Household, not per event: a level tuned at the
-// rehearsal should survive Go live (builder's latitude, v1 spec §16).
+// test night should survive Go live (builder's latitude, v1 spec §16).
 // The soundboard's shared cooldown: one sound per 3 s across every button and phone of a Household (spec §10).
 const SOUNDBOARD_COOLDOWN_MS = 3_000
 
@@ -154,10 +166,10 @@ export function openLedger(db, config) {
   const opened = new Map() // household id → its Ledger, so seq and the soundboard cooldown live on
 
   return {
-    // Sign-up (spec §6): the Household with its join key and TV link, a Rehearsal (starter costumes, no
-    // golden tickets) and "Halloween 2026" (starter costumes, 5 golden tickets, going live Oct 31 at 4:00 pm
-    // local). The Rehearsal is live, unless Halloween's moment has passed: then Halloween is.
-    // Returns the new Household's id.
+    // Sign-up (spec §6): the Household with its join key and TV link, a "Test night" (an ordinary Event:
+    // starter costumes, no golden tickets) and "Halloween 2026" (starter costumes, 5 golden tickets, going live
+    // Oct 31 at 4:00 pm local). The Test night is live, unless Halloween's moment has passed: then Halloween is.
+    // Returns the new Household's id. (Ticket 58 reshapes this by date.)
     createHousehold({ displayName, timeZone }) {
       const name = displayNameOf(displayName)
       if (!isTimeZone(timeZone)) throw new BadCommand('A household needs its time zone')
@@ -169,40 +181,60 @@ export function openLedger(db, config) {
           .query('INSERT INTO households (display_name, time_zone, join_key, tv_token, signed_up_at) VALUES (?, ?, ?, ?, ?) RETURNING id')
           .get(name, timeZone, randomKey(), randomToken(), at)
         const insertEvent = db.query(`
-          INSERT INTO events (household_id, name, live, rehearsal, golden_count, goes_live_at, went_live_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id
+          INSERT INTO events (household_id, name, state, golden_count, goes_live_at, went_live_at)
+          VALUES (?, ?, ?, ?, ?, ?) RETURNING id
         `)
-        const rehearsal = insertEvent.get(id, 'Rehearsal', late ? 0 : 1, 1, 0, null, late ? null : at)
+        const testNight = insertEvent.get(id, TEST_NIGHT, late ? 'upcoming' : 'live', 0, null, late ? null : at)
         // Live at once when late: with no ghost and no Expected kids yet, there are no golden tickets to draw.
-        const halloween = insertEvent.get(id, HALLOWEEN.name, late ? 1 : 0, 0, 5, late ? null : halloweenAt, late ? at : null)
+        const halloween = insertEvent.get(id, HALLOWEEN.name, late ? 'live' : 'upcoming', 5, late ? null : halloweenAt, late ? at : null)
         const insertTag = db.query('INSERT INTO tags (event_id, name, emoji, sort_order) VALUES (?, ?, ?, ?)')
-        for (const event of [rehearsal, halloween]) STARTER_COSTUMES.forEach(([costume, emoji], i) => insertTag.run(event.id, costume, emoji, i + 1))
+        for (const event of [testNight, halloween]) STARTER_COSTUMES.forEach(([costume, emoji], i) => insertTag.run(event.id, costume, emoji, i + 1))
         return id
       })()
     },
 
-    // The minute tick (spec §7): any Event whose Goes live at has passed goes live, and any live,
-    // non-Rehearsal night still on at 3:00 am local the morning after it went live is ended. After a
-    // restart, the first tick catches up. Returns [{ householdId, deltas }] to publish.
+    // The minute tick (spec §7, v2.1 §3): any Upcoming Event whose Goes live at has passed goes live (at the
+    // 3-open cap it waits: ticket 53 makes room), any Live night still on at 3:00 am local the morning after it
+    // went live is ended, by name, and any Ended night is Past from noon that day. After a restart, the first
+    // tick catches up on all three. Returns [{ householdId, deltas }] to publish.
     // nearbyFor(householdId): the Area figures to keep on a night the tick ends, for its summary.
     tick({ nearbyFor = () => null } = {}) {
       const at = now()
       const done = []
       const due = db
-        .query('SELECT id, household_id FROM events WHERE goes_live_at <= ? AND live = 0 AND frozen = 0 AND counts_only = 0 ORDER BY goes_live_at')
+        .query("SELECT id, household_id FROM events WHERE goes_live_at <= ? AND state = 'upcoming' AND counts_only = 0 ORDER BY goes_live_at")
         .all(at)
-      for (const event of due) done.push({ householdId: event.household_id, deltas: householdOf(event.household_id).apply({ type: 'goLive', eventId: event.id }) })
-      const nights = db
-        .query(`
-          SELECT e.household_id, e.went_live_at, h.time_zone FROM events e JOIN households h ON h.id = e.household_id
-          WHERE e.live = 1 AND e.rehearsal = 0 AND e.ended = 0 AND e.went_live_at IS NOT NULL
-        `)
-        .all()
-      for (const night of nights) {
-        if (at < nextWallTime(night.went_live_at, AUTO_END_AT, night.time_zone)) continue
-        done.push({ householdId: night.household_id, deltas: householdOf(night.household_id).apply({ type: 'end', automatically: true, nearby: nearbyFor(night.household_id) }) })
+      for (const event of due) {
+        try {
+          done.push({ householdId: event.household_id, deltas: householdOf(event.household_id).apply({ type: 'goLive', eventId: event.id }) })
+        } catch (err) {
+          if (!(err instanceof BadCommand)) throw err // at the cap: it stays Upcoming and tries again next tick
+        }
+      }
+      const nightsIn = (state) =>
+        db
+          .query(`
+            SELECT e.id, e.household_id, e.went_live_at, h.time_zone FROM events e JOIN households h ON h.id = e.household_id
+            WHERE e.state = ? AND e.went_live_at IS NOT NULL
+          `)
+          .all(state)
+      const autoEndAt = (night) => nextWallTime(night.went_live_at, AUTO_END_AT, night.time_zone)
+      for (const night of nightsIn('live')) {
+        if (at < autoEndAt(night)) continue
+        const house = householdOf(night.household_id)
+        done.push({ householdId: night.household_id, deltas: house.apply({ type: 'end', eventId: night.id, stamp: night.went_live_at, automatically: true, nearby: nearbyFor(night.household_id) }) })
+      }
+      for (const night of nightsIn('ended')) {
+        if (at < nextWallTime(autoEndAt(night), PAST_AT, night.time_zone)) continue
+        done.push({ householdId: night.household_id, deltas: householdOf(night.household_id).apply({ type: 'close', eventId: night.id }) })
       }
       return done
+    },
+
+    // The door's Event (spec v2.1 §2): the Household's open Event with the latest go-live stamp, as Setup's
+    // event summary, or null with none open. TV links, door phones, nearby and the Operator follow it.
+    doorEvent(householdId) {
+      return householdOf(householdId)?.doorEvent() ?? null
     },
 
     // One Household's Ledger, or null if there's no such Household.
@@ -251,21 +283,22 @@ export function openLedger(db, config) {
       db.query('INSERT OR REPLACE INTO site_switches (key, value) VALUES (?, ?)').run(key, on ? 'on' : 'off')
     },
 
-    // Every Household's live night, for /operator and nearby: [{ householdId, eventId, rehearsal, ended,
-    // kids, lastKidAt }]. lastKidAt is the latest tap time; only a counted kid is activity.
+    // Every Household's door's Event, for /operator and nearby: [{ householdId, eventId, ended, kids,
+    // lastKidAt }], one per Household with an open Event. lastKidAt is the latest tap time; only a counted
+    // kid is activity.
     liveNights() {
       return db
         .query(`
-          SELECT e.household_id AS householdId, e.id AS eventId, e.rehearsal, e.ended,
+          SELECT e.household_id AS householdId, e.id AS eventId, e.state = 'ended' AS ended,
             COUNT(k.id) AS kids, MAX(k.tapped_at) AS lastKidAt
           FROM events e LEFT JOIN kids k ON k.event_id = e.id AND k.deleted_at IS NULL
-          WHERE e.live = 1 GROUP BY e.id
+          WHERE ${DOOR_ROW} GROUP BY e.id
         `)
         .all()
-        .map((n) => ({ ...n, rehearsal: n.rehearsal === 1, ended: n.ended === 1 }))
+        .map((n) => ({ ...n, ended: n.ended === 1 }))
     },
 
-    // Every live night with what Nearby needs (spec §11): its Household's cell, whether it's a Rehearsal or
+    // Every Household's door's Event with what Nearby needs (spec §11): its Household's cell, whether it's
     // Suspended, its kids, its kids in the 30 minutes before `at`, and its costumes' counts.
     nearbyNights(at) {
       const costumes = db.query(`
@@ -274,14 +307,14 @@ export function openLedger(db, config) {
       `)
       return db
         .query(`
-          SELECT e.id AS eventId, e.household_id AS householdId, h.location_cell AS cell, e.rehearsal,
+          SELECT e.id AS eventId, e.household_id AS householdId, h.location_cell AS cell,
             h.suspended_since IS NOT NULL AS suspended,
             (SELECT COUNT(*) FROM kids k WHERE k.event_id = e.id AND k.deleted_at IS NULL) AS kids,
             (SELECT COUNT(*) FROM kids k WHERE k.event_id = e.id AND k.deleted_at IS NULL AND k.tapped_at > ?) AS kids30
-          FROM events e JOIN households h ON h.id = e.household_id WHERE e.live = 1
+          FROM events e JOIN households h ON h.id = e.household_id WHERE ${DOOR_ROW}
         `)
         .all(at - 30 * 60_000)
-        .map((n) => ({ ...n, rehearsal: n.rehearsal === 1, suspended: n.suspended === 1, costumes: costumes.all(n.eventId) }))
+        .map((n) => ({ ...n, suspended: n.suspended === 1, costumes: costumes.all(n.eventId) }))
     },
 
     // When the last kid was counted anywhere, for /operator's Last tap tile.
@@ -365,9 +398,9 @@ export function openLedger(db, config) {
     }
 
     // The recap's golden card (spec §7 Ended): every number revealed, but only once the night is over —
-    // ended, or a frozen past event. While the night is on, the numbers never leave the Ledger.
+    // Ended or Past. While the night is on, the numbers never leave the Ledger.
     function recapOf(event) {
-      if (!(event.ended || event.frozen) || event.counts_only) return null
+      if (!(event.state === 'ended' || event.state === 'past') || event.counts_only) return null
       const tickets = db
         .query(`
           SELECT t.number, t.state, k.number AS kidNumber
@@ -389,10 +422,31 @@ export function openLedger(db, config) {
       return { left, nextIsGolden }
     }
 
+    // One of this Household's events by id, or null. There's no default: a command names its Event.
     function eventById(id) {
-      return id == null
-        ? db.query('SELECT * FROM events WHERE household_id = ? AND live = 1').get(householdId)
-        : db.query('SELECT * FROM events WHERE id = ? AND household_id = ?').get(id, householdId)
+      if (id == null) return null
+      return db.query('SELECT * FROM events WHERE id = ? AND household_id = ?').get(id, householdId) ?? null
+    }
+
+    // The door's Event's row (spec v2.1 §2), or null with none open.
+    function doorRow() {
+      return db.query(`SELECT * FROM events WHERE household_id = ? AND ${OPEN} ORDER BY went_live_at DESC, id DESC LIMIT 1`).get(householdId) ?? null
+    }
+
+    // The open Event a night command names, checked against the go-live stamp the device saw (spec v2.1 §4):
+    // a missing, Upcoming or Past Event, or a stamp from before a reset, is refused (400).
+    function openNight({ eventId, stamp }) {
+      const event = eventById(eventId)
+      if (!event) throw new BadCommand('Name the night: no such event')
+      if (!isOpen(event)) throw new BadCommand(`"${event.name}" isn't on`)
+      if (stamp !== event.went_live_at) throw new BadCommand(`"${event.name}" has gone live again since`)
+      return event
+    }
+
+    // Go live stamps strictly later than any earlier go-live of the Household, so the door's Event is never a tie.
+    function nextStamp() {
+      const last = db.query('SELECT MAX(went_live_at) AS at FROM events WHERE household_id = ?').get(householdId).at
+      return Math.max(now(), last == null ? -Infinity : last + 1)
     }
 
     // The Race-against event as half-hour buckets: stored for a counts-only event, else from its own taps.
@@ -542,19 +596,20 @@ export function openLedger(db, config) {
     }
 
     const commands = {
+      // Every night command names its open Event and the go-live stamp it was tapped under (spec v2.1 §4).
       tap(command) {
-        const event = eventById()
+        const event = openNight(command)
         const kid = addKid(event, command)
         return kid ? referee(event, kid) : []
       },
 
       // "+ New" costume: creates the tag and counts the kid at the door with it (spec §2 Catch-up).
       // N is capped by the untagged kids there are; timestamps are untouched.
-      catchUp({ tag, n = 0, kid }) {
+      catchUp({ tag, n = 0, kid, ...night }) {
+        const event = openNight(night)
         const name = costumeName(tag?.name)
         if (!Number.isInteger(n) || n < 0) throw new BadCommand('Catch-up needs a whole number of kids')
         if (kidExists.get(kid?.id)) return [] // a retry: the door kid already landed, so all of it did
-        const event = eventById()
         const tagRow = insertTag.get({ $eventId: event.id, $name: name, $emoji: tag.emoji ?? null })
         const kidIds = mostRecentUntagged.all(event.id, n).map((r) => r.id)
         for (const id of kidIds) setTag.run(tagRow.id, id)
@@ -569,15 +624,16 @@ export function openLedger(db, config) {
       },
 
       // A won ticket stays won, even if its winner is removed (spec §9).
-      remove({ kidId }) {
-        const event = eventById()
+      remove({ kidId, ...night }) {
+        const event = openNight(night)
         const row = softDeleteKid.get(now(), kidId, event.id)
         return row ? [{ type: 'kid.removed', kidId, golden: goldenSummary(event) }] : []
       },
 
       // "Add missed kids" (spec §6): each row's count spread evenly across its slot (up to now), as
       // untagged backfill kids in one batch, numbered in tap-time order. Late taps: they never celebrate.
-      backfill({ rows }) {
+      backfill({ rows, ...night }) {
+        const event = openNight(night)
         if (!Array.isArray(rows) || !rows.length) throw new BadCommand('Nothing to add')
         const at = now()
         const times = rows.flatMap(({ startMs, endMs, count }) => {
@@ -587,7 +643,6 @@ export function openLedger(db, config) {
           const end = Math.min(endMs, at)
           return Array.from({ length: count }, (_, i) => startMs + ((i + 0.5) * (end - startMs)) / count)
         })
-        const event = eventById()
         const batch = db
           .query('INSERT INTO backfill_batches (event_id, rows, created_at) VALUES (?, ?, ?) RETURNING id')
           .get(event.id, JSON.stringify(rows.map(({ startMs, endMs, count }) => ({ startMs, endMs, count }))), at)
@@ -600,8 +655,8 @@ export function openLedger(db, config) {
       },
 
       // A batch comes off as a whole (soft delete): the TV dips quietly.
-      removeBatch({ batchId }) {
-        const event = eventById()
+      removeBatch({ batchId, ...night }) {
+        const event = openNight(night)
         const kidIds = db
           .query('UPDATE kids SET deleted_at = ? WHERE backfill_batch_id = ? AND event_id = ? AND deleted_at IS NULL RETURNING id')
           .all(now(), batchId, event.id)
@@ -612,7 +667,8 @@ export function openLedger(db, config) {
       },
 
       // ☰ soundboard (Must #7): plays on the TV straight away, at most once per 3 s across all phones.
-      soundboard({ slot }) {
+      soundboard({ slot, ...night }) {
+        openNight(night)
         if (!switches.soundboard) throw new BadCommand('The soundboard is switched off')
         const entry = soundboard.find((s) => s.slot === slot)
         if (!entry) throw new BadCommand('No such soundboard button')
@@ -622,14 +678,14 @@ export function openLedger(db, config) {
         return [{ type: 'soundboard', slot, label: entry.label }]
       },
 
-      // "🌙 End the night" (spec §2 Ended): the event stays live, so stragglers still count; only the next
-      // Go live freezes it. Tickets nobody won expire, remembering what they were for Resume.
+      // "🌙 End the night" (spec v2.1 §3): Live → Ended. It stays open, so stragglers still count, until it's
+      // Past at noon or by Close now. Tickets nobody won expire, remembering what they were for Resume.
       // The 3:00 am safety net ends it `automatically`, which /setup tells the Manager about.
       // `nearby`, the Area's figures at this moment (or null), is kept for the Night summary's nearby slide.
-      end({ automatically = false, nearby = null } = {}) {
-        const event = eventById()
-        if (event.ended) return []
-        db.query('UPDATE events SET ended = 1, ended_automatically = ?, summary_nearby = ? WHERE id = ?').run(automatically ? 1 : 0, nearby ? JSON.stringify(nearby) : null, event.id)
+      end({ automatically = false, nearby = null, ...night }) {
+        const event = openNight(night)
+        if (event.state === 'ended') return []
+        db.query("UPDATE events SET state = 'ended', ended_automatically = ?, summary_nearby = ? WHERE id = ?").run(automatically ? 1 : 0, nearby ? JSON.stringify(nearby) : null, event.id)
         db.query(`
           UPDATE golden_tickets SET expired_from = state, state = 'expired'
           WHERE event_id = ? AND kid_id IS NULL AND state IN ('hidden', 'rolled', 'released')
@@ -637,13 +693,23 @@ export function openLedger(db, config) {
         return [{ type: 'event.ended', ended: true, golden: goldenSummary(event), recap: recapOf(eventById(event.id)) }]
       },
 
-      // "Resume the night": expired tickets come back exactly as they were.
-      resume() {
-        const event = eventById()
-        if (!event.ended) return []
-        db.query('UPDATE events SET ended = 0, ended_automatically = 0 WHERE id = ?').run(event.id)
+      // "Resume the night": Ended → Live, keeping its go-live stamp. Expired tickets come back exactly as they were.
+      resume(night) {
+        const event = openNight(night)
+        if (event.state === 'live') return []
+        db.query("UPDATE events SET state = 'live', ended_automatically = 0 WHERE id = ?").run(event.id)
         db.query("UPDATE golden_tickets SET state = expired_from, expired_from = NULL WHERE event_id = ? AND state = 'expired'").run(event.id)
         return [{ type: 'event.ended', ended: false, golden: goldenSummary(event), recap: null }]
+      },
+
+      // "Close now" (Setup, spec v2.1 §3): Ended → Past early. The tick does the same at noon.
+      close({ eventId }) {
+        const event = eventById(eventId)
+        if (!event) throw new BadCommand('No such event')
+        if (event.state === 'live') throw new BadCommand('End the night first')
+        if (event.state !== 'ended') throw new BadCommand('Only an ended night can be closed')
+        db.query("UPDATE events SET state = 'past' WHERE id = ?").run(event.id)
+        return []
       },
 
       // ---- The ☰ menu's TV controls (spec §5): any phone with the join key.
@@ -656,8 +722,8 @@ export function openLedger(db, config) {
 
       // "Add a ticket" (Setup, after Go live): one number between tonight's count + 5 and the top of the
       // range, never one another hidden ticket already holds.
-      addTicket() {
-        const event = eventById()
+      addTicket(night) {
+        const event = openNight(night)
         const base = ghostOf(event)?.total ?? event.expected_kids
         if (!switches.goldenTickets || !base) throw new BadCommand('Golden tickets need Race against or Expected kids')
         const taken = new Set(db.query("SELECT number FROM golden_tickets WHERE event_id = ? AND state = 'hidden'").all(event.id).map((r) => r.number))
@@ -669,8 +735,8 @@ export function openLedger(db, config) {
       },
 
       // "Release remaining" (☰, from 7:45pm event time): the next K live kids win the K tickets left.
-      release() {
-        const event = eventById()
+      release(night) {
+        const event = openNight(night)
         db.query("UPDATE golden_tickets SET state = 'released' WHERE event_id = ? AND state = 'hidden'").run(event.id)
         return [{ type: 'golden.changed', golden: goldenSummary(event) }]
       },
@@ -692,18 +758,18 @@ export function openLedger(db, config) {
         return [{ type: 'event.created', event: toEventSummary(row) }]
       },
 
-      // Exactly one event is live per Household, never zero: Go live freezes the old one. The join key is
-      // the Household's, so phones keep working.
+      // Upcoming → Live (spec v2.1 §3), stamped with its go-live time. It never changes another Event; at 3
+      // open (Live or Ended) it's refused. It becomes the door's Event, so apply() tells screens to switch.
       goLive({ eventId }) {
         const next = eventById(eventId)
         if (!next) throw new BadCommand('No such event')
-        if (next.live) return []
-        if (next.counts_only || next.frozen) throw new BadCommand("A past event can't go live again")
-        const old = eventById()
-        db.query('UPDATE events SET live = 0, frozen = 1 WHERE id = ?').run(old.id)
-        db.query('UPDATE events SET live = 1, goes_live_at = NULL, went_live_at = ? WHERE id = ?').run(now(), next.id)
+        if (isOpen(next)) return []
+        if (next.counts_only || next.state === 'past') throw new BadCommand("A past event can't go live again")
+        const open = db.query(`SELECT COUNT(*) AS n FROM events WHERE household_id = ? AND ${OPEN}`).get(householdId).n
+        if (open >= MAX_OPEN) throw new BadCommand('End or close one of your live nights first')
+        db.query("UPDATE events SET state = 'live', goes_live_at = NULL, went_live_at = ? WHERE id = ?").run(nextStamp(), next.id)
         drawGoldenTickets(eventById(next.id))
-        return [{ type: 'event.switched', eventId: next.id }]
+        return []
       },
 
       // Per-event settings (spec §6). Only the fields given change.
@@ -720,9 +786,9 @@ export function openLedger(db, config) {
           expectedKids: ['expected_kids', (v) => (v == null ? null : wholeNumber(v, 'Expected kids', 0))],
           visitWindowMs: ['visit_window_ms', (v) => wholeNumber(v, 'Visit window', 1)],
           goldenCount: ['golden_count', (v) => wholeNumber(v, 'Golden tickets', 0)],
-          // Only a night that isn't live yet can be scheduled; null clears it.
+          // Only an Upcoming night can be scheduled; null clears it.
           goesLiveAt: ['goes_live_at', (v) => {
-            if (event.live) throw new BadCommand('This night is already live')
+            if (event.state !== 'upcoming') throw new BadCommand('This night is already live')
             if (v != null && !Number.isFinite(v)) throw new BadCommand('Goes live at needs a time')
             return v
           }],
@@ -732,14 +798,14 @@ export function openLedger(db, config) {
           const [column, check] = columns[key]
           db.query(`UPDATE events SET ${column} = ? WHERE id = ?`).run(check(value), event.id)
         }
-        return event.live && sets.length ? [{ type: 'event.updated', eventId: event.id }] : []
+        return isOpen(event) && sets.length ? [{ type: 'event.updated', eventId: event.id }] : []
       },
 
-      // ---- Costume presets. Deltas only for the live event: nobody is watching the others.
+      // ---- Costume presets. Deltas only for an open event: nobody is watching the others.
       createTag({ eventId, name, emoji }) {
         const event = writableEvent(eventId)
         const row = insertTag.get({ $eventId: event.id, $name: costumeName(name), $emoji: emoji ?? null })
-        return event.live ? [{ type: 'tag.added', tag: toTag(row) }] : []
+        return isOpen(event) ? [{ type: 'tag.added', tag: toTag(row) }] : []
       },
 
       updateTag({ tagId, name, emoji, order, sound }) {
@@ -753,7 +819,7 @@ export function openLedger(db, config) {
             sound === undefined ? tag.sound : sound,
             tag.id,
           )
-        return event.live ? [{ type: 'tag.updated', tag: toTag(row) }] : []
+        return isOpen(event) ? [{ type: 'tag.updated', tag: toTag(row) }] : []
       },
 
       // Its kids become untagged (spec §2); the page asks for confirmation first.
@@ -764,7 +830,7 @@ export function openLedger(db, config) {
           .all(tag.id)
           .map((r) => r.id)
         db.query('DELETE FROM tags WHERE id = ?').run(tag.id)
-        if (!event.live) return []
+        if (!isOpen(event)) return []
         return [
           ...(kidIds.length ? [{ type: 'kid.retagged', kidIds, tagId: null }] : []),
           { type: 'tag.removed', tagId: tag.id },
@@ -789,7 +855,7 @@ export function openLedger(db, config) {
       setTimeZone({ timeZone }) {
         if (!isTimeZone(timeZone)) throw new BadCommand('Pick a time zone from the list')
         db.query('UPDATE households SET time_zone = ? WHERE id = ?').run(timeZone, householdId)
-        return [{ type: 'event.updated', eventId: eventById().id }]
+        return doorUpdated()
       },
 
       // "About how many kids came last year?" (spec §14): the total spread over 2025's shape as an Estimated past
@@ -799,34 +865,24 @@ export function openLedger(db, config) {
         const existing = estimatedEvent()
         if (total == null) {
           if (existing) removeEvent(existing.id)
-          return liveUpdated()
+          return doorUpdated()
         }
         if (!Number.isInteger(total) || total < 1 || total > MAX_LAST_YEAR) throw new BadCommand('Last year needs a whole number of kids')
         const id = existing?.id ?? db
-          .query('INSERT INTO events (household_id, name, counts_only, frozen, estimated) VALUES (?, ?, 1, 1, 1) RETURNING id')
+          .query("INSERT INTO events (household_id, name, counts_only, state, estimated) VALUES (?, ?, 1, 'past', 1) RETURNING id")
           .get(householdId, ESTIMATED_NAME).id
         db.query('DELETE FROM ghost_buckets WHERE event_id = ?').run(id)
         const insert = db.query('INSERT INTO ghost_buckets (event_id, slot_start, slot_end, count) VALUES (?, ?, ?, ?)')
         for (const b of lastYearBuckets(total)) insert.run(id, b.start, b.end, b.count)
         const night = comingNight()
         if (night) db.query('UPDATE events SET race_against_id = ? WHERE id = ?').run(id, night.id)
-        return liveUpdated()
+        return doorUpdated()
       },
 
       // First-run's screen 3 was passed (paired, sent, used here or skipped): it stops showing.
       passFirstRun() {
         db.query('UPDATE households SET first_run_passed = 1 WHERE id = ?').run(householdId)
         return []
-      },
-
-      // Reset the Rehearsal (spec §6): only while it's live, it starts again from 0 so the TV does too.
-      resetRehearsal() {
-        const event = eventById()
-        if (!event.rehearsal) throw new BadCommand('Only a live Rehearsal can be reset')
-        for (const table of ['kids', 'backfill_batches', 'fired_moments']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
-        db.query("UPDATE golden_tickets SET state = 'hidden', kid_id = NULL, expired_from = NULL WHERE event_id = ?").run(event.id)
-        db.query('UPDATE events SET ended = 0, ended_automatically = 0 WHERE id = ?').run(event.id)
-        return [{ type: 'event.updated', eventId: event.id }] // phones and TVs take a fresh snapshot
       },
 
       // Rotate TV link (spec §9): a new secret; the HTTP layer closes every stream on the old one.
@@ -842,19 +898,17 @@ export function openLedger(db, config) {
         return []
       },
 
-      // Past events only, after typing the name to confirm. Anything racing against it goes to None.
+      // Any Event but a Live one (spec v2.1 §3), after typing the name to confirm. Anything racing against it
+      // goes to None. Deleting the door's Event moves the door (apply() tells screens).
       deleteEvent({ eventId, confirm }) {
         const event = eventById(eventId)
         if (!event) return []
-        if (event.live) throw new BadCommand("The live event can't be deleted")
+        if (event.state === 'live') throw new BadCommand('End the night first')
         if (confirm !== event.name) throw new BadCommand(`Type "${event.name}" to delete it`)
-        const live = eventById()
-        const racedByLive = live.race_against_id === event.id
-        db.query('UPDATE events SET race_against_id = NULL WHERE race_against_id = ?').run(event.id)
-        // All of it: SQLite can reuse a deleted event's id, so nothing may be left pointing at it.
-        for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches', 'share_links', 'reports']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
-        db.query('DELETE FROM events WHERE id = ?').run(event.id)
-        return racedByLive ? [{ type: 'event.updated', eventId: live.id }] : []
+        const door = doorRow()
+        const racedByDoor = door != null && door.id !== event.id && door.race_against_id === event.id
+        removeEvent(event.id) // all of it: SQLite can reuse a deleted event's id, so nothing may be left pointing at it
+        return racedByDoor ? [{ type: 'event.updated', eventId: door.id }] : []
       },
     }
 
@@ -863,24 +917,27 @@ export function openLedger(db, config) {
       return db.query('SELECT * FROM events WHERE household_id = ? AND estimated = 1').get(householdId)
     }
 
-    // Offered only while the Household has no past night of its own (a Rehearsal or an estimate isn't one).
+    // Offered only while the Household has no past night of its own (an estimate isn't one). Ticket 55 drops
+    // this gate.
     function canEstimateLastYear() {
       if (!switches.estimatedGhost) return false
-      return !db.query('SELECT 1 FROM events WHERE household_id = ? AND (frozen = 1 OR counts_only = 1) AND rehearsal = 0 AND estimated = 0').get(householdId)
+      return !db.query("SELECT 1 FROM events WHERE household_id = ? AND (state = 'past' OR counts_only = 1) AND estimated = 0").get(householdId)
     }
 
-    // The night the estimate races: the live non-Rehearsal one, or else the next one to go live.
+    // The night the estimate races: the next one scheduled to go live, else the door's Event, else any
+    // Upcoming one. Ticket 55 replaces this with the Household's default Race against.
     function comingNight() {
-      return db
-        .query(`
-          SELECT * FROM events WHERE household_id = ? AND frozen = 0 AND counts_only = 0 AND rehearsal = 0
-          ORDER BY live DESC, goes_live_at IS NULL, goes_live_at, id LIMIT 1
-        `)
-        .get(householdId)
+      return (
+        db.query("SELECT * FROM events WHERE household_id = ? AND state = 'upcoming' AND counts_only = 0 AND goes_live_at IS NOT NULL ORDER BY goes_live_at, id LIMIT 1").get(householdId) ??
+        doorRow() ??
+        db.query("SELECT * FROM events WHERE household_id = ? AND state = 'upcoming' AND counts_only = 0 ORDER BY id LIMIT 1").get(householdId)
+      )
     }
 
-    function liveUpdated() {
-      return [{ type: 'event.updated', eventId: eventById().id }] // screens resync, so the ghost appears or goes
+    // Screens showing the door's Event resync (so a ghost appears or goes); none open, nobody to tell.
+    function doorUpdated() {
+      const door = doorRow()
+      return door ? [{ type: 'event.updated', eventId: door.id }] : []
     }
 
     // An event and everything it holds; anything racing it goes to None.
@@ -911,18 +968,30 @@ export function openLedger(db, config) {
     function writableEvent(eventId) {
       const event = eventById(eventId)
       if (!event) throw new BadCommand('No such event')
-      if (event.frozen || event.counts_only) throw new BadCommand('Past events are read-only')
+      if (event.state === 'past' || event.counts_only) throw new BadCommand('Past events are read-only')
       return event
     }
 
     return {
       id: householdId,
 
+      // When a command moves the door's Event (Go live, Close now, the noon Past, Delete), screens are told to
+      // switch: event.switched names the new door's Event, or null with none open.
       apply(command) {
         const run = commands[command.type]
         if (!run) throw new BadCommand(`Unknown command: ${command.type}`)
-        const deltas = db.transaction(() => run(command))()
+        const deltas = db.transaction(() => {
+          const before = doorRow()?.id ?? null
+          const out = run(command)
+          const after = doorRow()?.id ?? null
+          return after === before ? out : [...out.filter((d) => d.type !== 'event.updated'), { type: 'event.switched', eventId: after }]
+        })()
         return deltas.map((delta) => ({ ...delta, seq: ++seq }))
+      },
+
+      doorEvent() {
+        const row = doorRow()
+        return row && toEventSummary(row)
       },
 
       joinKey() {
@@ -941,10 +1010,10 @@ export function openLedger(db, config) {
         return event ? db.query('SELECT SUM(count) AS n FROM ghost_buckets WHERE event_id = ?').get(event.id).n : null
       },
 
-      // Kids counted on the Household's Rehearsals: the checklist's "A phone counted a test kid".
-      rehearsalKids() {
+      // Kids counted on any of the Household's Events: the checklist's "A phone counted a test kid".
+      anyKids() {
         return db
-          .query('SELECT COUNT(*) AS n FROM kids k JOIN events e ON e.id = k.event_id WHERE e.household_id = ? AND e.rehearsal = 1 AND k.deleted_at IS NULL')
+          .query('SELECT COUNT(*) AS n FROM kids k JOIN events e ON e.id = k.event_id WHERE e.household_id = ? AND k.deleted_at IS NULL')
           .get(householdId).n
       },
 
@@ -960,7 +1029,7 @@ export function openLedger(db, config) {
       addPastCounts({ name, buckets }) {
         return db.transaction(() => {
           const { id } = db
-            .query('INSERT INTO events (household_id, name, counts_only, frozen) VALUES (?, ?, 1, 1) RETURNING id')
+            .query("INSERT INTO events (household_id, name, counts_only, state) VALUES (?, ?, 1, 'past') RETURNING id")
             .get(householdId, requireName(name, 'An event'))
           const insert = db.query('INSERT INTO ghost_buckets (event_id, slot_start, slot_end, count) VALUES (?, ?, ?, ?)')
           for (const b of buckets) insert.run(id, b.start, b.end, wholeNumber(b.count, 'A half-hour count', 0))
@@ -984,9 +1053,11 @@ export function openLedger(db, config) {
         return { name: event.name, clockShiftMs: event.clock_shift_ms, timeZone: household().time_zone, kids }
       },
 
-      // The live event's backfill batches, for Setup's list ("+38 kids, 6:30–7:00 · Remove").
-      batches() {
-        const event = eventById()
+      // An event's backfill batches, for Setup's list ("+38 kids, 6:30–7:00 · Remove"): the named one, or the
+      // door's Event's; none with nothing open.
+      batches(eventId) {
+        const event = eventId == null ? doorRow() : eventById(eventId)
+        if (!event) return []
         return db
           .query(`
             SELECT b.id, b.rows, b.created_at AS createdAt,
@@ -1014,11 +1085,11 @@ export function openLedger(db, config) {
           .map((row) => ({ ...toEventSummary(row), kids: kidCount.get(row.id).n, tags: tagsOf.all(row.id).map(toTag) }))
       },
 
-      // The Night summary (spec §12): one ended or past night, from stored data, with no phone names. null while
+      // The Night summary (spec §12): one Ended or Past night, from stored data, with no phone names. null while
       // the night is still running, for a counts-only night, or for another Household's.
       summary(eventId) {
         const event = eventById(eventId)
-        if (!event || event.counts_only || !(event.ended || event.frozen)) return null
+        if (!event || event.counts_only || !(event.state === 'ended' || event.state === 'past')) return null
         const { event: e, tags, kids, ghost, recap, settings } = this.snapshot(event.id)
         const h = household()
         return {
@@ -1055,7 +1126,7 @@ export function openLedger(db, config) {
           .map((s) => ({ ...s, hideName: s.hideName === 1 }))
       },
 
-      // null for an event that isn't this Household's.
+      // One named event's board. null with no id, or for an event that isn't this Household's.
       snapshot(eventId) {
         const event = eventById(eventId)
         if (!event) return null
@@ -1063,11 +1134,8 @@ export function openLedger(db, config) {
           event: {
             id: event.id,
             name: event.name,
-            live: event.live === 1,
+            ...stateFlags(event),
             countsOnly: event.counts_only === 1,
-            ended: event.ended === 1,
-            frozen: event.frozen === 1,
-            rehearsal: event.rehearsal === 1,
             endedAutomatically: event.ended_automatically === 1,
             clockShiftMs: event.clock_shift_ms,
             visitWindowMs: event.visit_window_ms,
@@ -1085,6 +1153,12 @@ export function openLedger(db, config) {
           seq,
         }
       },
+
+      // What a screen with no open Event gets (spec v2.1 §4, "No night on right now"): no board, the
+      // Household's settings, and seq, so the stream's deltas still line up.
+      idleSnapshot() {
+        return { event: null, tags: [], kids: [], ghost: null, golden: null, recap: null, settings: { switches, mix: currentMix(), soundboard: switches.soundboard ? soundboard : [] }, timeZone: household().time_zone, seq }
+      },
     }
   }
 }
@@ -1095,12 +1169,24 @@ function requireName(name, what) {
   return trimmed
 }
 
+// An event's state for clients: `state` itself, plus flags. `open` is Live or Ended; `wentLiveAt` is the
+// go-live stamp every night command sends back.
+function stateFlags(row) {
+  return {
+    state: row.state,
+    open: isOpen(row),
+    live: row.state === 'live',
+    ended: row.state === 'ended',
+    past: row.state === 'past',
+    wentLiveAt: row.went_live_at,
+  }
+}
+
 function toEventSummary(row) {
   return {
     id: row.id,
     name: row.name,
-    live: row.live === 1,
-    frozen: row.frozen === 1,
+    ...stateFlags(row),
     countsOnly: row.counts_only === 1,
     raceAgainstId: row.race_against_id,
     clockShiftMs: row.clock_shift_ms,
@@ -1108,9 +1194,7 @@ function toEventSummary(row) {
     goldenCount: row.golden_count,
     visitWindowMs: row.visit_window_ms,
     goesLiveAt: row.goes_live_at,
-    ended: row.ended === 1,
     endedAutomatically: row.ended_automatically === 1,
-    rehearsal: row.rehearsal === 1,
     estimated: row.estimated === 1,
   }
 }

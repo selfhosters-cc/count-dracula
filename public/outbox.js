@@ -109,9 +109,10 @@ export function createOutbox({ send, storage, clock, phoneName }) {
       return 'ok'
     },
 
-    // { teen: true }: counted, but can't win a golden ticket.
-    tap(tagId, { teen = false } = {}) {
-      const entry = { id: uuid(), tagId: tagId ?? null, tappedAt: clock.now(), phoneName, ...(teen && { teen: true }) }
+    // { teen: true }: counted, but can't win a golden ticket. night: { eventId, stamp }, the Event the phone
+    // shows and its go-live stamp (spec v2.1 §4): the entry keeps them, so it lands there or is refused.
+    tap(tagId, { teen = false, night = {} } = {}) {
+      const entry = { id: uuid(), tagId: tagId ?? null, tappedAt: clock.now(), phoneName, ...(teen && { teen: true }), ...night }
       pending = [...pending, entry]
       claim(entry.id)
       flush()
@@ -120,14 +121,14 @@ export function createOutbox({ send, storage, clock, phoneName }) {
 
     // Undo and Recent's ✕. An unsent tap is simply dropped, so it never gets a number;
     // anything the server may have is removed by a queued (idempotent) soft delete.
-    remove(kidId) {
+    remove(kidId, night = {}) {
       const tap = pending.find((e) => e.id === kidId && e.type !== 'remove')
       if (tap && tap.id !== inFlightId) {
         pending = pending.filter((e) => e !== tap)
         save()
         return { local: tap }
       }
-      pending = [...pending, { type: 'remove', id: uuid(), kidId, queuedAt: clock.now() }]
+      pending = [...pending, { type: 'remove', id: uuid(), kidId, queuedAt: clock.now(), ...night }]
       save()
       flush()
       return { server: kidId }

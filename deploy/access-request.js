@@ -22,7 +22,7 @@ const household = db
   .get(manager.household_id)
 const events = db
   .query(`
-    SELECT e.id, e.name, e.live, e.ended, e.rehearsal,
+    SELECT e.id, e.name, e.state,
       (SELECT COUNT(*) FROM kids k WHERE k.event_id = e.id AND k.deleted_at IS NULL) AS kids,
       (SELECT GROUP_CONCAT(DISTINCT k.phone_name) FROM kids k WHERE k.event_id = e.id) AS phone_names,
       (SELECT GROUP_CONCAT(t.name, ', ') FROM tags t WHERE t.event_id = e.id) AS costumes

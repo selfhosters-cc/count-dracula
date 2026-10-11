@@ -119,11 +119,13 @@ describe('snapshot', () => {
       event: {
         id: expect.any(Number),
         name: 'Rehearsal',
+        state: 'live',
+        open: true,
         live: true,
-        countsOnly: false,
         ended: false,
-        frozen: false,
-        rehearsal: false,
+        past: false,
+        wentLiveAt: expect.any(Number),
+        countsOnly: false,
         endedAutomatically: false,
         clockShiftMs: 0,
         visitWindowMs: 15_000,
@@ -295,13 +297,13 @@ describe('ghost from a past event with taps', () => {
     // Arranged with SQL until Setup (ticket 22) can create events: a past +3h rehearsal with 3 kids, one deleted.
     const local = (hh, mm) => Date.parse(`2026-10-24T${hh}:${mm}:00-04:00`) // the Household's zone, Toronto (EDT)
     const past = db
-      .query("INSERT INTO events (household_id, name, frozen, clock_shift_ms) VALUES (1, 'Dress rehearsal 2026', 1, ?) RETURNING id")
+      .query("INSERT INTO events (household_id, name, state, clock_shift_ms) VALUES (1, 'Dress rehearsal 2026', 'past', ?) RETURNING id")
       .get(3 * 3_600_000).id
     const addKid = db.query('INSERT INTO kids (id, event_id, number, tapped_at, received_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?)')
     addKid.run('r1', past, 1, local(14, 50), local(14, 50), null)
     addKid.run('r2', past, 2, local(15, 10), local(15, 10), null)
     addKid.run('r3', past, 3, local(15, 20), local(15, 20), local(15, 21))
-    db.query('UPDATE events SET race_against_id = ? WHERE live = 1').run(past)
+    db.query("UPDATE events SET race_against_id = ? WHERE state = 'live'").run(past)
 
     expect(ledger.snapshot().ghost).toEqual({
       eventId: past,
@@ -316,6 +318,13 @@ describe('ghost from a past event with taps', () => {
   })
 })
 
+// End the night, then Close now: Past (spec v2.1 §3).
+function close(ledger, eventId) {
+  const { wentLiveAt } = ledger.events().find((e) => e.id === eventId)
+  ledger.apply({ type: 'end', eventId, stamp: wentLiveAt })
+  ledger.apply({ type: 'close', eventId })
+}
+
 describe('events and Go live', () => {
   const liveEvents = (ledger) => ledger.events().filter((e) => e.live)
 
@@ -324,12 +333,12 @@ describe('events and Go live', () => {
 
     const [created] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
 
-    expect(created).toMatchObject({ type: 'event.created', event: { name: 'Halloween 2026', live: false, frozen: false } })
+    expect(created).toMatchObject({ type: 'event.created', event: { name: 'Halloween 2026', state: 'upcoming', live: false, open: false } })
     expect(ledger.snapshot().event.name).toBe('Rehearsal')
     expect(liveEvents(ledger).map((e) => e.name)).toEqual(['Rehearsal'])
   })
 
-  test('Go live switches the live event, freezes the old one and keeps the join key', () => {
+  test("Go live moves the door to the new event, leaves the old one Live and keeps the join key", () => {
     const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const key = ledger.joinKey()
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
@@ -338,8 +347,7 @@ describe('events and Go live', () => {
 
     expect(deltas).toMatchObject([{ type: 'event.switched', eventId: event.id }])
     expect(ledger.snapshot().event).toMatchObject({ name: 'Halloween 2026', live: true })
-    expect(liveEvents(ledger).map((e) => e.name)).toEqual(['Halloween 2026'])
-    expect(ledger.events().find((e) => e.name === 'Rehearsal')).toMatchObject({ live: false, frozen: true })
+    expect(liveEvents(ledger).map((e) => e.name)).toEqual(['Halloween 2026', 'Rehearsal'])
     expect(ledger.joinKey()).toBe(key)
   })
 
@@ -357,10 +365,11 @@ describe('events and Go live', () => {
 
   test.each([
     ['the counts-only 2025 event', (ledger) => ledger.snapshot().ghost.eventId],
-    ['a frozen past event', (ledger) => {
+    ['a Past event', (ledger) => {
       const rehearsal = ledger.snapshot().event.id
       const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Next' })
       ledger.apply({ type: 'goLive', eventId: event.id })
+      close(ledger, rehearsal)
       return rehearsal
     }],
   ])("can't go live with %s", (_, pick) => {
@@ -420,8 +429,7 @@ describe('event settings', () => {
   test('past events are read-only: settings and costume changes are rejected', () => {
     const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const rehearsal = ledger.snapshot().event.id
-    const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
-    ledger.apply({ type: 'goLive', eventId: event.id })
+    close(ledger, rehearsal)
 
     expect(() => ledger.apply({ type: 'settings', eventId: rehearsal, name: 'Renamed' })).toThrow(BadCommand)
     expect(() => ledger.apply({ type: 'createTag', eventId: rehearsal, name: 'Ghost', emoji: '👻' })).toThrow(BadCommand)
@@ -430,7 +438,7 @@ describe('event settings', () => {
 })
 
 describe('join key and deleting events', () => {
-  test('Change key replaces the live event\'s key', () => {
+  test("Change key replaces the Household's key", () => {
     const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const old = ledger.joinKey()
 
@@ -454,6 +462,7 @@ describe('join key and deleting events', () => {
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
     ledger.apply({ type: 'goLive', eventId: event.id })
     ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: rehearsal })
+    close(ledger, rehearsal)
 
     expect(() => ledger.apply({ type: 'deleteEvent', eventId: rehearsal, confirm: 'rehearsal?' })).toThrow(BadCommand)
     const deltas = ledger.apply({ type: 'deleteEvent', eventId: rehearsal, confirm: 'Rehearsal' })
@@ -638,7 +647,7 @@ describe('golden tickets: the draw', () => {
     expect(off.ledger.snapshot().golden).toBeNull()
   })
 
-  test('the first install draws for the live Rehearsal too (the rehearsal draws for real)', () => {
+  test('the first install draws for its live night too (it draws for real)', () => {
     const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
 
     expect(ledger.tickets(ledger.snapshot().event.id)).toHaveLength(5)
@@ -733,7 +742,7 @@ describe('TV mix (☰ volume and mutes)', () => {
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
     ledger.apply({ type: 'goLive', eventId: event.id })
 
-    expect(openLedger(db, {}).household(1).snapshot().settings.mix).toEqual(quiet)
+    expect(openLedger(db, {}).household(1).snapshot(event.id).settings.mix).toEqual(quiet)
   })
 
   test.each([
@@ -1016,7 +1025,7 @@ describe('End and Resume the night', () => {
     return { ledger, live, late, eventId: event.id }
   }
 
-  test('ending keeps the event live, so a straggler still counts and celebrates', () => {
+  test('ending keeps the event open, so a straggler still counts and celebrates', () => {
     const { ledger, live } = night()
     live()
 
@@ -1024,7 +1033,7 @@ describe('End and Resume the night', () => {
     const [straggler] = live()
 
     expect(ended).toMatchObject({ type: 'event.ended', ended: true })
-    expect(ledger.snapshot().event).toMatchObject({ live: true, ended: true })
+    expect(ledger.snapshot().event).toMatchObject({ state: 'ended', open: true, ended: true })
     expect(straggler.kid.number).toBe(2)
   })
 
@@ -1097,14 +1106,13 @@ describe('the recap reveals the golden numbers, and only after the night', () =>
 
   test("a past event's recap renders from stored data", () => {
     const { ledger, eventId } = night()
-    const [{ event: next }] = ledger.apply({ type: 'createEvent', name: 'Next year' })
-    ledger.apply({ type: 'goLive', eventId: next.id })
+    close(ledger, eventId)
 
     const past = ledger.snapshot(eventId)
 
-    expect(past.event).toMatchObject({ name: 'Night', live: false, frozen: true })
+    expect(past.event).toMatchObject({ name: 'Night', state: 'past', past: true, open: false })
     expect(past.kids).toHaveLength(11)
-    expect(past.recap.tickets.map((t) => t.state)).toEqual(['won', 'rolled', 'hidden'])
+    expect(past.recap.tickets.map((t) => t.state)).toEqual(['won', 'rolled', 'expired'])
   })
 })
 

@@ -9,6 +9,7 @@ import { setUpV1Night } from '../test/v1-night.js'
 import { fakeGoogle } from '../test/fake-google.js'
 import { readFrames } from '../test/sse.js'
 import { cookieOf, signIn } from '../test/sign-in.js'
+import { doorNamed } from '../test/v1-night.js'
 
 const DAY = 86_400_000
 const running = []
@@ -52,7 +53,7 @@ function admin(app, cookie, command) {
 }
 
 describe('signing up', () => {
-  test('a new Google account signs up and lands in /setup of a new Household with a live Rehearsal', async () => {
+  test('a new Google account signs up and lands in /setup of a new Household with a live Test night', async () => {
     const server = start()
 
     const res = await signIn(server, ALICE, { displayName: '  The Smiths ' })
@@ -65,7 +66,7 @@ describe('signing up', () => {
     expect(house).toMatchObject({ displayName: 'The Smiths', timeZone: 'America/Vancouver', manager: { email: 'alice@example.com' }, operator: false })
     expect(house.id).not.toBe(1)
     const events = await (await fetch(`${server.app.url}/api/events`, as(cookie))).json()
-    expect(events.filter((e) => e.live)).toMatchObject([{ name: 'Rehearsal', rehearsal: true }])
+    expect(events.filter((e) => e.live)).toMatchObject([{ name: 'Test night', state: 'live' }])
   })
 
   test('the same account signing in again reaches the same Household and never makes a second', async () => {
@@ -249,7 +250,7 @@ describe('/setup on a session', () => {
     expect((await fetch(`${server.app.url}/api/export?event=${aliceEvent.id}`, as(bob))).status).toBe(404)
 
     const aliceEvents = await (await fetch(`${server.app.url}/api/events`, as(alice))).json()
-    expect(aliceEvents.map((e) => e.name)).toEqual(['Halloween 2026', 'Rehearsal'])
+    expect(aliceEvents.map((e) => e.name)).toEqual(['Halloween 2026', 'Test night'])
   })
 
   test('a Manager can set the display name, at most 40 characters', async () => {
@@ -276,7 +277,7 @@ describe('Delete my Household', () => {
     const server = start()
     const cookie = cookieOf(await signIn(server, ALICE, { displayName: 'The Smiths' }))
     const { id, joinKey } = await household(server.app, cookie)
-    const tap = (kid) => fetch(`${server.app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': joinKey }, body: JSON.stringify({ id: kid, tagId: null, tappedAt: server.clock.now, phoneName: 'Dad' }) })
+    const tap = (kid) => fetch(`${server.app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': joinKey }, body: JSON.stringify({ ...doorNamed(server.app.ledger, id), id: kid, tagId: null, tappedAt: server.clock.now, phoneName: 'Dad' }) })
     await tap('k1')
     await tap('k2')
     await admin(server.app, cookie, { type: 'createEvent', name: 'Halloween 2026', copyTagsFrom: (await (await fetch(`${server.app.url}/api/events`, as(cookie))).json())[0].id })
@@ -284,7 +285,7 @@ describe('Delete my Household', () => {
     await stream.next()
     await signIn(server, BOB, { displayName: 'Casa Bob' })
     const owned = ownedBy(server.db(), id)
-    expect(owned.events.length).toBe(3) // the Rehearsal, "Halloween 2026" and the new one
+    expect(owned.events.length).toBe(3) // the Test night, "Halloween 2026" and the new one
 
     const res = await fetch(`${server.app.url}/api/household/delete`, as(cookie, { method: 'POST', body: JSON.stringify({ confirm: 'The Smiths' }) }))
 

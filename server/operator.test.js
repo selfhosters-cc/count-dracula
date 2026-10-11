@@ -6,6 +6,7 @@ import { startServer } from './app.js'
 import { fakeGoogle } from '../test/fake-google.js'
 import { cookieOf, signIn } from '../test/sign-in.js'
 import { readFrames } from '../test/sse.js'
+import { doorNamed } from '../test/v1-night.js'
 
 const running = []
 const aborts = []
@@ -124,7 +125,7 @@ describe('Suspend', () => {
 
   test('Unsuspend restores everything, with nothing lost', async () => {
     const { app, op, manager, info } = await setUp()
-    await fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': info.joinKey }, body: JSON.stringify({ id: 'kept', tagId: null, tappedAt: Date.now(), phoneName: 'Dad' }) })
+    await fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': info.joinKey }, body: JSON.stringify({ ...doorNamed(app.ledger, info.id), id: 'kept', tagId: null, tappedAt: Date.now(), phoneName: 'Dad' }) })
     await act(app, op, { householdId: info.id, action: 'suspend' })
 
     await act(app, op, { householdId: info.id, action: 'unsuspend' })

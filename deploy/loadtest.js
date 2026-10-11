@@ -49,7 +49,8 @@ try {
   const ledger = openLedger(db, {})
   const homes = Array.from({ length: households }, (_, i) => {
     const house = ledger.household(ledger.createHousehold({ displayName: `Load ${i + 1}`, timeZone: 'UTC' }))
-    return { tvToken: house.tvToken(), joinKey: house.joinKey() }
+    const door = house.doorEvent() // its Test night: every tap names it and its go-live stamp
+    return { tvToken: house.tvToken(), joinKey: house.joinKey(), night: { eventId: door.id, stamp: door.wentLiveAt } }
   })
   db.close()
 
@@ -69,7 +70,7 @@ try {
   const big = await openViewers(homes[0].tvToken, viewers)
   const others = await Promise.all(homes.slice(1, 4).map((h) => openViewers(h.tvToken, 5)))
   console.log(`\n1. ${big.length} TV-link viewers on one Household (+ ${others.flat().length} on others). RSS ${rssMb()} MB`)
-  const fanouts = await tapAndTime(homes[0].joinKey, big, taps)
+  const fanouts = await tapAndTime(homes[0], big, taps)
   const median = percentile(fanouts, 0.5)
   const worst = Math.max(...fanouts)
   console.log(`   fan-out per tap to the last viewer: median ${median.toFixed(1)} ms, p90 ${percentile(fanouts, 0.9).toFixed(1)} ms, worst ${worst.toFixed(1)} ms`)
@@ -87,7 +88,7 @@ try {
   }
   await Bun.sleep(1_000)
   const rss = rssMb()
-  const siteFanouts = await tapAndTime(homes[0].joinKey, big, 5)
+  const siteFanouts = await tapAndTime(homes[0], big, 5)
   console.log(`\n2. ${open} streams site-wide. RSS ${rss} MB; a tap still reaches ${big.length} viewers in ${percentile(siteFanouts, 0.5).toFixed(1)} ms`)
   const rssPass = open >= site && rss < PASS_RSS_MB
   console.log(`   ${rssPass ? 'PASS' : 'FAIL'}: ${site} streams under ~${PASS_RSS_MB} MB${open < site ? ` (only ${open} opened)` : ''}`)
@@ -160,14 +161,14 @@ async function openViewer(tvToken) {
 }
 
 // Taps n times, 300 ms apart; for each, the time from the POST to the last viewer getting its delta.
-async function tapAndTime(joinKey, group, n) {
+async function tapAndTime({ joinKey, night }, group, n) {
   const times = []
   for (let i = 0; i < n; i++) {
     const t0 = performance.now()
     const res = await fetch(`${base}/api/taps`, {
       method: 'POST',
       headers: { 'X-Join-Key': joinKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: crypto.randomUUID(), tagId: null, tappedAt: Date.now(), phoneName: 'Load' }),
+      body: JSON.stringify({ ...night, id: crypto.randomUUID(), tagId: null, tappedAt: Date.now(), phoneName: 'Load' }),
     })
     if (!res.ok) throw new Error(`Tap refused: ${res.status}`)
     const seq = await currentSeq(group[0], t0)

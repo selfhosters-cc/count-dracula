@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { BadCommand, openLedger } from './ledger.js'
+import { namingTheDoor } from '../test/v1-night.js'
 
 const V1_DUMP = readFileSync(new URL('../test/fixtures/v1.sql', import.meta.url), 'utf8')
 
@@ -17,17 +18,16 @@ describe('the Household #1 migration', () => {
   test("a v1 database becomes Household #1 with every night, tap and the TV mix", () => {
     const ledger = openLedger(v1Database(), {})
 
-    const one = ledger.household(1)
+    const one = namingTheDoor(ledger.household(1))
     const snap = one.snapshot()
-    expect(snap.event.name).toBe('Rehearsal')
-    expect(snap.event.ended).toBe(true)
+    expect(snap.event).toMatchObject({ name: 'Rehearsal', state: 'ended' }) // v1's live, ended night: just an Event now
     expect(snap.kids.map((k) => k.id)).toContain('r4')
     expect(snap.kids).toHaveLength(56) // 57 rows, one removed
     expect(snap.ghost.total).toBe(346)
     expect(snap.settings.mix).toEqual({ volume: 0.4, mutes: { ambience: true, bloops: false, everything: false } })
     expect(snap.timeZone).toBe('America/Toronto')
     expect(one.joinKey()).toBe('NhLuiKG9MD')
-    expect(one.events().map((e) => e.name)).toEqual(['Spare night', 'Rehearsal', 'Halloween 2025 (counts)'])
+    expect(one.events().map((e) => [e.name, e.state])).toEqual([['Spare night', 'upcoming'], ['Rehearsal', 'ended'], ['Halloween 2025 (counts)', 'past']])
     expect(one.tickets(snap.event.id)).toHaveLength(5)
     expect(one.batches()).toHaveLength(1)
     expect(ledger.households().map((h) => ({ id: h.id, displayName: h.displayName }))).toEqual([{ id: 1, displayName: '' }])
@@ -35,13 +35,13 @@ describe('the Household #1 migration', () => {
 
   test('runs once: opening the database again changes nothing', () => {
     const db = v1Database()
-    const first = openLedger(db, {}).household(1)
+    const first = namingTheDoor(openLedger(db, {}).household(1))
     const before = { snap: first.snapshot(), events: first.events(), key: first.joinKey() }
 
     const again = openLedger(db, {})
 
     expect(again.households()).toHaveLength(1)
-    const one = again.household(1)
+    const one = namingTheDoor(again.household(1))
     expect({ snap: one.snapshot(), events: one.events(), key: one.joinKey() }).toEqual(before)
     expect(db.query('PRAGMA user_version').get().user_version).toBeGreaterThanOrEqual(1)
   })
@@ -69,22 +69,22 @@ describe('the Household #1 migration', () => {
 
 function twoHouseholds() {
   const ledger = openLedger(new Database(':memory:'), {})
-  const a = ledger.household(ledger.createHousehold({ displayName: 'The Smiths', timeZone: 'America/Toronto' }))
-  const b = ledger.household(ledger.createHousehold({ displayName: 'Casa Ortiz', timeZone: 'America/Vancouver' }))
+  const a = namingTheDoor(ledger.household(ledger.createHousehold({ displayName: 'The Smiths', timeZone: 'America/Toronto' })))
+  const b = namingTheDoor(ledger.household(ledger.createHousehold({ displayName: 'Casa Ortiz', timeZone: 'America/Vancouver' })))
   return { ledger, a, b }
 }
 
 const tap = (id) => ({ type: 'tap', id, tagId: null, tappedAt: 1_000, phoneName: 'Dad' })
 
 describe('create Household (sign-up)', () => {
-  test('gives a live Rehearsal with the starter costumes, its own join key and no golden tickets', () => {
+  test('gives a live Test night with the starter costumes, its own join key and no golden tickets', () => {
     const ledger = openLedger(new Database(':memory:'), { random: () => 0.5 })
 
     const id = ledger.createHousehold({ displayName: '  The Smiths ', timeZone: 'America/Vancouver' })
 
     const house = ledger.household(id)
-    const snap = house.snapshot()
-    expect(snap.event).toMatchObject({ name: 'Rehearsal', live: true, rehearsal: true, ended: false })
+    const snap = house.snapshot(ledger.doorEvent(id).id)
+    expect(snap.event).toMatchObject({ name: 'Test night', state: 'live', ended: false })
     expect(snap.tags.map((t) => `${t.emoji} ${t.name}`)).toContain('🎃 Other')
     expect(snap.tags.length).toBeGreaterThanOrEqual(6)
     expect(snap.timeZone).toBe('America/Vancouver')
@@ -106,15 +106,15 @@ describe('create Household (sign-up)', () => {
 })
 
 describe('two Households', () => {
-  test('each has exactly one live Event, and Go live in one never touches the other', () => {
+  test('Go live in one never touches the other', () => {
     const { a, b } = twoHouseholds()
     const [{ event }] = a.apply({ type: 'createEvent', name: 'Halloween 2026' })
 
     a.apply({ type: 'goLive', eventId: event.id })
 
-    expect(a.events().filter((e) => e.live).map((e) => e.name)).toEqual(['Halloween 2026'])
-    expect(b.events().filter((e) => e.live).map((e) => e.name)).toEqual(['Rehearsal'])
-    expect(b.events().map((e) => e.name)).toEqual(['Halloween 2026', 'Rehearsal'])
+    expect(a.events().filter((e) => e.live).map((e) => e.name)).toEqual(['Halloween 2026', 'Test night'])
+    expect(b.events().filter((e) => e.live).map((e) => e.name)).toEqual(['Test night'])
+    expect(b.events().map((e) => e.name)).toEqual(['Halloween 2026', 'Test night'])
   })
 
   test("keep their own taps, seq, join key and TV mix", () => {
@@ -151,7 +151,7 @@ describe('two Households', () => {
     expect(a.snapshot(bEvent.id)).toBeNull()
     expect(a.tickets(bEvent.id)).toEqual([])
 
-    expect(b.snapshot().event.name).toBe('Rehearsal')
+    expect(b.snapshot().event.name).toBe('Test night')
     expect(b.snapshot().tags[0]).toEqual(bTag)
     expect(b.snapshot().kids.map((k) => k.id)).toEqual(['b1'])
     expect(a.snapshot().kids).toEqual([])
@@ -162,7 +162,7 @@ describe("the Household's time zone", () => {
   test("a ghost from a past night with taps, and its export, read in the Household's zone", () => {
     let nowMs = Date.parse('2025-10-31T17:50:00-07:00')
     const ledger = openLedger(new Database(':memory:'), { now: () => nowMs })
-    const house = ledger.household(ledger.createHousehold({ displayName: 'Casa Ortiz', timeZone: 'America/Vancouver' }))
+    const house = namingTheDoor(ledger.household(ledger.createHousehold({ displayName: 'Casa Ortiz', timeZone: 'America/Vancouver' })))
     const [{ event: last }] = house.apply({ type: 'createEvent', name: 'Halloween 2025' })
     house.apply({ type: 'goLive', eventId: last.id })
     house.apply({ ...tap('v1'), tappedAt: Date.parse('2025-10-31T17:50:00-07:00') })
@@ -217,7 +217,7 @@ describe('the blocklist on names', () => {
 
   function house() {
     const ledger = openLedger(new Database(':memory:'), {})
-    const h = ledger.household(ledger.createHousehold({ displayName: 'The Smiths', timeZone: 'America/Toronto' }))
+    const h = namingTheDoor(ledger.household(ledger.createHousehold({ displayName: 'The Smiths', timeZone: 'America/Toronto' })))
     return { ledger, h, live: h.snapshot().event, tag: h.snapshot().tags[0] }
   }
   const refused = (fn) => {

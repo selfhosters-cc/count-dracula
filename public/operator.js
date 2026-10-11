@@ -3,7 +3,7 @@
 // Polled every 30 s. Every name is set with textContent, never as HTML.
 const $ = (id) => document.getElementById(id)
 const POLL_MS = 30_000
-const STATUSES = ['Counting', 'Stale', 'Waiting', 'Rehearsal']
+const STATUSES = ['Counting', 'Stale', 'Waiting'] // ticket 56 adds Ended and No night
 let data = { pauseSignUps: false, health: [], households: [], now: Date.now() }
 let detail = null // the open Household's /api/operator/household answer
 let filter = null // a status chip, or null for all
@@ -63,7 +63,7 @@ function render() {
       el('button', { textContent: `${status ?? 'All'} ${status ? count(status) : data.households.length}`, ariaPressed: String(filter === status), onclick: () => ((filter = status), render()) })),
   )
   const q = $('search').value.trim().toLowerCase()
-  // Counting → Stale → Waiting → Rehearsal, the most kids first within each.
+  // Counting → Stale → Waiting, the most kids first within each.
   const rows = data.households
     .filter((h) => (filter == null || h.status === filter) && h.displayName.toLowerCase().includes(q))
     .sort((a, b) => STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status) || b.kids - a.kids)

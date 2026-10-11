@@ -31,7 +31,7 @@ function post(path, body) {
 }
 
 async function send(entry) {
-  const res = entry.type === 'remove' ? await post('/api/remove', { kidId: entry.kidId }) : await post('/api/taps', entry)
+  const res = entry.type === 'remove' ? await post('/api/remove', { kidId: entry.kidId, eventId: entry.eventId, stamp: entry.stamp }) : await post('/api/taps', entry)
   problem = res.status === 403 ? 'Wrong join key: taps are kept until it is fixed' : ''
   if (res.status === 400) return // the server will never take it; don't block the queue behind it
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -77,6 +77,12 @@ function start(phoneName) {
   const outbox = createOutbox({ send, storage: localStorage, clock, phoneName })
   const live = connectLive(`/api/stream?key=${encodeURIComponent(joinKey)}`) // EventSource can't send headers
   let view = doorView(null, outbox)
+  // Every write names the Event this phone shows and the go-live stamp it saw (spec v2.1 §4). With no night
+  // on, there's none to name, and the server refuses the write.
+  const night = () => {
+    const event = live.state?.event
+    return event ? { eventId: event.id, stamp: event.wentLiveAt } : {}
+  }
   // The optimistic "#N" just shown; corrected if the server numbers that kid differently.
   let lastFlash = null
   let teenArmed = false
@@ -104,14 +110,13 @@ function start(phoneName) {
     view = doorView(live.state, outbox, { connected: live.connected })
     renderGolden()
     $('nudge').hidden = !quietNudge(live.state, Date.now(), nudgeDismissedAt())
-    $('rehearsal-chip').hidden = !live.state?.event.rehearsal
     const nearbyText = phoneNearby(live.state?.nearby) // the Area, or else the Site-wide total
     $('nearby').hidden = !nearbyText
     $('nearby').textContent = nearbyText ?? ''
     $('total').textContent = view.total ?? '–'
     $('untagged').textContent = view.untagged == null ? '' : `${view.untagged} untagged`
     $('pill').innerHTML = pillHtml(outbox.status)
-    $('problem').textContent = problem
+    $('problem').textContent = problem || (live.state && !live.state.event ? 'No night on right now' : '') // ticket 52's screen
     const wanted = view.tags.map(tileFor)
     const grid = $('grid')
     for (const [id, tile] of tiles) {
@@ -129,7 +134,7 @@ function start(phoneName) {
 
   // ---- Undo and Recent: both go through the outbox, so they work offline too
   function removeKid(row) {
-    outbox.remove(row.id)
+    outbox.remove(row.id, night())
     const number = row.number == null ? 'an unsent kid' : `#${row.number}`
     toast(`Removed ${number} · ${label(row)}${row.mine ? '' : ` (${row.phoneName}'s)`}`)
     render()
@@ -195,7 +200,7 @@ function start(phoneName) {
 
   function tap(tagId) {
     const teen = teenArmed
-    const entry = outbox.tap(tagId, { teen })
+    const entry = outbox.tap(tagId, { teen, night: night() })
     if (teen) armTeen(false)
     render()
     const tag = view.tags.find((t) => t.id === tagId)
@@ -249,12 +254,12 @@ function start(phoneName) {
     for (const b of $('menu').querySelectorAll('[data-mute]')) b.setAttribute('aria-pressed', String(!!m.mutes[b.dataset.mute]))
     const joined = !!joinKey
     const left = live.state?.golden?.left ?? 0
-    const shift = live.state?.event.clockShiftMs ?? 0
+    const shift = live.state?.event?.clockShiftMs ?? 0
     $('release-box').hidden = !(left > 0 && releaseOpen(eventNow(Date.now(), shift), live.state?.timeZone))
     $('release').textContent = `🎫 Release remaining tickets (${left})`
     renderSounds()
     $('unjoined').hidden = joined
-    const ended = !!live.state?.event.ended
+    const ended = !!live.state?.event?.ended
     $('end-night').textContent = ended ? '☀️ Resume the night' : '🌙 End the night'
     for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release, #end-night')) c.disabled = !joined
   }
@@ -337,7 +342,7 @@ function start(phoneName) {
   $('board').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-slot]')
     if (!b) return
-    const res = await post('/api/soundboard', { slot: Number(b.dataset.slot) }).catch(() => null)
+    const res = await post('/api/soundboard', { slot: Number(b.dataset.slot), ...night() }).catch(() => null)
     if (!res?.ok) return toast("Couldn't reach the TV")
     if (!(await res.json()).played) return toast('Cooling down: one sound every 3 s')
     navigator.vibrate?.(15)
@@ -367,7 +372,7 @@ function start(phoneName) {
     const house = await fetch('/api/household').then((r) => (r.ok ? r.json() : null)).catch(() => null)
     if (house?.joinKey !== joinKey) return
     const events = await fetch('/api/events').then((r) => (r.ok ? r.json() : [])).catch(() => [])
-    scheduled = events.filter((e) => e.goesLiveAt != null && !e.live && !e.frozen).sort((a, b) => a.goesLiveAt - b.goesLiveAt)[0] ?? null
+    scheduled = events.filter((e) => e.goesLiveAt != null && e.state === 'upcoming').sort((a, b) => a.goesLiveAt - b.goesLiveAt)[0] ?? null
   }
   async function renderGoLiveNow() {
     await findScheduled()
@@ -384,11 +389,11 @@ function start(phoneName) {
   // 🌙 End the night / Resume. With tickets left, the spec's three choices instead of a plain yes/no.
   const nightCall = async (path, done) => {
     $('end-choices').hidden = true
-    const res = await post(path, {}).catch(() => null)
+    const res = await post(path, night()).catch(() => null)
     toast(res?.ok ? done : "Couldn't reach the server")
   }
   $('end-night').addEventListener('click', () => {
-    if (live.state?.event.ended) return nightCall('/api/resume', '☀️ The night is back on')
+    if (live.state?.event?.ended) return nightCall('/api/resume', '☀️ The night is back on')
     const left = live.state?.golden?.left ?? 0
     if (left > 0) {
       $('end-question').textContent = `🎫 ${left} golden ticket${left === 1 ? '' : 's'} never found. Release ${left === 1 ? 'it' : 'them'} to the next ${left === 1 ? 'kid' : `${left} kids`} instead?`
@@ -403,7 +408,7 @@ function start(phoneName) {
   $('release').addEventListener('click', async () => {
     const left = live.state?.golden?.left ?? 0
     if (!confirm(`Release the ${left} golden ticket${left === 1 ? '' : 's'} left? The next ${left} kid${left === 1 ? '' : 's'} at the door will win.`)) return
-    const res = await post('/api/release', {}).catch(() => null)
+    const res = await post('/api/release', night()).catch(() => null)
     toast(res?.ok ? `🎫 Released: the next ${left} kid${left === 1 ? '' : 's'} win` : "Couldn't release: check the connection")
   })
 
@@ -485,6 +490,7 @@ function start(phoneName) {
     renderSheet()
     try {
       const res = await post('/api/catch-up', {
+        ...night(),
         tag: { name, emoji: draft.emoji },
         n: draft.n,
         kid: { id: draft.kidId, tappedAt: draft.tappedAt, phoneName, ...(draft.teen && { teen: true }) },

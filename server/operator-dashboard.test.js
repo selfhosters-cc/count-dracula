@@ -12,10 +12,9 @@ const NOW = Date.parse('2026-10-31T23:00:00Z')
 
 describe('Household status (the 30-minute rule)', () => {
   test.each([
-    ['a Rehearsal, whatever its kids', { rehearsal: true, kids: 40, lastKidAt: NOW - MINUTE }, 'Rehearsal'],
-    ['a live night with no kids yet', { rehearsal: false, kids: 0, lastKidAt: null }, 'Waiting'],
-    ['a kid 29 minutes ago', { rehearsal: false, kids: 12, lastKidAt: NOW - 29 * MINUTE }, 'Counting'],
-    ['quiet for 31 minutes', { rehearsal: false, kids: 12, lastKidAt: NOW - 31 * MINUTE }, 'Stale'],
+    ['a live night with no kids yet', { kids: 0, lastKidAt: null }, 'Waiting'],
+    ['a kid 29 minutes ago', { kids: 12, lastKidAt: NOW - 29 * MINUTE }, 'Counting'],
+    ['quiet for 31 minutes', { kids: 12, lastKidAt: NOW - 31 * MINUTE }, 'Stale'],
   ])('%s → %s', (_, live, status) => {
     expect(householdStatus(live, NOW)).toBe(status)
   })
@@ -23,7 +22,7 @@ describe('Household status (the 30-minute rule)', () => {
 
 describe('health strip', () => {
   const quiet = {
-    statusCounts: { Counting: 0, Stale: 0, Waiting: 0, Rehearsal: 0 },
+    statusCounts: { Counting: 0, Stale: 0, Waiting: 0 },
     connections: { phones: 0, tvScreens: 0, total: 0 },
     cap: 3_000,
     refusals: { total: 0, lastAt: null },
@@ -102,7 +101,7 @@ describe('/api/operator', () => {
     const body = await (await fetch(`${app.url}/api/operator`, { headers: { Cookie: op } })).text()
     const data = JSON.parse(body)
 
-    expect(data.households.find((h) => h.id === info.id)).toMatchObject({ displayName: 'The Smiths', area: 'dpz8', status: 'Rehearsal', managers: 1, reports: 0 })
+    expect(data.households.find((h) => h.id === info.id)).toMatchObject({ displayName: 'The Smiths', area: 'dpz8', status: 'Waiting', managers: 1, reports: 0 })
     expect(body).not.toContain('dpz83')
     expect(body).not.toContain('@example.com')
     expect(data.health.map((t) => t.key)).toEqual(['live', 'connections', 'refused', 'errors', 'lastTap', 'backup', 'server'])

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createBackups } from './backups.js'
 import { openLedger } from './ledger.js'
+import { namingTheDoor } from '../test/v1-night.js'
 
 const MINUTE = 60_000
 const DAY = 24 * 60 * MINUTE
@@ -14,7 +15,7 @@ function setUp(start = Date.parse('2026-10-01T00:00:00Z')) {
   const db = new Database(join(dir, 'live.sqlite'), { create: true })
   const clock = { now: start }
   const ledger = openLedger(db, { now: () => clock.now })
-  const house = ledger.household(ledger.createHousehold({ displayName: 'A', timeZone: 'UTC' }))
+  const house = namingTheDoor(ledger.household(ledger.createHousehold({ displayName: 'A', timeZone: 'UTC' })))
   const backups = createBackups({ db, dir: join(dir, 'backups'), now: () => clock.now })
   return { db, clock, house, backups, dir: join(dir, 'backups') }
 }

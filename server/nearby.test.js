@@ -6,12 +6,13 @@ import { computeNearby } from './nearby.js'
 import { isBlocked } from './blocklist.js'
 import { startServer } from './app.js'
 import { readFrames } from '../test/sse.js'
+import { namingTheDoor } from '../test/v1-night.js'
 
-// A live night as the Ledger reports it. Defaults: an active, non-Rehearsal night in Area "dpz8".
+// A Household's door's Event as the Ledger reports it. Defaults: an active night in Area "dpz8".
 let nextId = 1
 function night(overrides = {}) {
   const id = nextId++
-  return { householdId: id, cell: 'dpz83', rehearsal: false, suspended: false, kids: 20, kids30: 6, costumes: [], ...overrides }
+  return { householdId: id, cell: 'dpz83', suspended: false, kids: 20, kids30: 6, costumes: [], ...overrides }
 }
 const area = (result, a) => result.areas.get(a) ?? null
 const compute = (nights) => computeNearby(nights, { isBlocked })
@@ -24,10 +25,10 @@ describe('Area figures', () => {
     expect(area(compute([...four, night()]), 'dpz8')).toMatchObject({ houses: 5, kids30: 30 })
   })
 
-  test("Rehearsals, Suspended Households and nights with no kid in 30 minutes don't count", () => {
+  test("Suspended Households and nights with no kid in 30 minutes don't count", () => {
     const four = Array.from({ length: 4 }, () => night())
 
-    for (const sixth of [night({ rehearsal: true }), night({ suspended: true }), night({ kids30: 0 }), night({ cell: null })]) {
+    for (const sixth of [night({ suspended: true }), night({ kids30: 0 }), night({ cell: null })]) {
       expect(area(compute([...four, sixth]), 'dpz8')).toBeNull()
     }
   })
@@ -116,10 +117,10 @@ describe('the site-wide top costume', () => {
 })
 
 describe('the Site-wide total', () => {
-  test("every live, non-Rehearsal night's Household and kids, rounded, from 5 Households", () => {
-    const nights = [night({ kids: 100, kids30: 0 }), night({ kids: 3, kids30: 0 }), night({ kids: 0, kids30: 0 }), night({ kids: 9 }), night({ rehearsal: true, kids: 500 })]
+  test("every open night's Household and kids, rounded, from 5 Households", () => {
+    const nights = [night({ kids: 100, kids30: 0 }), night({ kids: 3, kids30: 0 }), night({ kids: 0, kids30: 0 }), night({ kids: 9 }), night({ suspended: true, kids: 500 })]
 
-    expect(compute(nights).site).toBeNull() // 4 live non-Rehearsal Households
+    expect(compute(nights).site).toBeNull() // 4 Households that aren't Suspended
     expect(compute([...nights, night({ kids: 0, cell: null })]).site).toEqual({ houses: 5, kids: 110 }) // 112 → 110
     expect(compute([...nights, night({ suspended: true })]).site).toBeNull()
   })
@@ -142,7 +143,7 @@ describe('on the screens', () => {
     const app = startServer({ configPath, port: 0, env: {}, now: () => clock.now })
     running.push(app)
     const houses = Array.from({ length: 6 }, (_, i) => {
-      const house = app.ledger.household(app.ledger.createHousehold({ displayName: `House ${i}`, timeZone: 'America/Toronto' }))
+      const house = namingTheDoor(app.ledger.household(app.ledger.createHousehold({ displayName: `House ${i}`, timeZone: 'America/Toronto' })))
       house.apply({ type: 'setLocation', cell: 'dpz83' })
       return house
     })
@@ -198,7 +199,7 @@ describe('the Site-wide total on the sign-up page', () => {
     const app = startServer({ configPath, port: 0, env: {}, now: () => Date.parse('2026-10-31T23:00:00Z') })
     running46.push(app)
     for (let i = 0; i < households; i++) {
-      const house = app.ledger.household(app.ledger.createHousehold({ displayName: `House ${i}`, timeZone: 'America/Toronto' }))
+      const house = namingTheDoor(app.ledger.household(app.ledger.createHousehold({ displayName: `House ${i}`, timeZone: 'America/Toronto' })))
       for (let k = 0; k < 3; k++) house.apply({ type: 'tap', id: `h${i}k${k}`, tagId: null, tappedAt: Date.parse('2026-10-31T22:59:00Z'), phoneName: 'Secret' })
     }
     app.refreshNearby()

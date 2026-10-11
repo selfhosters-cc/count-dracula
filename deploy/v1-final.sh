@@ -36,7 +36,7 @@ bun -e "
   import { openLedger } from './server/ledger.js'
   const ledger = openLedger(new Database('$practice/practice.sqlite'), {})
   const h = ledger.household(1)
-  const snap = h.snapshot()
+  const snap = h.snapshot(h.doorEvent()?.id) ?? {}
   console.log('    Households:', ledger.households().length)
-  for (const e of h.events()) console.log('   ', e.live ? '●' : ' ', e.name, e.countsOnly ? '(counts only)' : '', e.kids ?? '')
-  console.log('    Live:', snap.event?.name, '| racing:', snap.ghost?.label ?? 'nothing', '| zone:', snap.timeZone)"
+  for (const e of h.events()) console.log('   ', e.open ? '●' : ' ', e.name, e.countsOnly ? '(counts only)' : '', e.kids ?? '')
+  console.log('    Door:', snap.event?.name, '| racing:', snap.ghost?.label ?? 'nothing', '| zone:', snap.timeZone)"

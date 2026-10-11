@@ -6,12 +6,13 @@ import { startServer } from './app.js'
 import { fakeGoogle } from '../test/fake-google.js'
 import { cookieOf, signIn } from '../test/sign-in.js'
 import { readFrames } from '../test/sse.js'
+import { named, namingTheDoor } from '../test/v1-night.js'
 
 const running = []
 afterEach(() => running.splice(0).forEach((app) => app.stop()))
 
-// Two Households, A and B, each with a Manager signed in. A has a past night, a live one with a kid, and a
-// costume, so every route has something of A's to name.
+// Two Households, A and B, each with a Manager signed in. A has a past night (its Test night, closed), a live
+// one with a kid, and a costume, so every route has something of A's to name.
 async function twoHouseholds() {
   const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
   const configPath = join(dir, 'config.json')
@@ -24,11 +25,13 @@ async function twoHouseholds() {
   for (const h of [a, b]) {
     const info = await (await fetch(`${app.url}/api/household`, { headers: { Cookie: h.cookie } })).json()
     h.id = info.id
-    h.house = app.ledger.household(info.id)
+    h.house = namingTheDoor(app.ledger.household(info.id))
   }
   const past = a.house.snapshot().event.id
   const [{ event }] = a.house.apply({ type: 'createEvent', name: 'A night' })
   a.house.apply({ type: 'goLive', eventId: event.id })
+  a.house.apply({ type: 'end', ...named(a.house, past) })
+  a.house.apply({ type: 'close', eventId: past })
   a.house.apply({ type: 'tap', id: 'a-kid', tagId: null, tappedAt: Date.now(), phoneName: 'A phone' })
   a.past = past
   a.live = event.id
@@ -69,7 +72,7 @@ function request(app, a, [method, path, body], credential) {
     else headers['X-Join-Key'] = credential.key
   }
   if (credential?.cookie) headers.Cookie = credential.cookie
-  const payload = body?.()
+  const payload = body && { ...named(a.house, a.live), ...body() } // every night write names A's live night
   if (payload?.tagId === 'TAG') payload.tagId = a.tag
   const controller = new AbortController()
   return fetch(target, { method, headers, body: payload && JSON.stringify(payload), redirect: 'manual', signal: controller.signal }).then((res) => {
@@ -131,18 +134,18 @@ describe('the join key', () => {
     const { joinKey } = await res.json()
 
     expect(await stream.closed()).toBe(true)
-    const write = (key) => fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': key }, body: JSON.stringify(tap('after')) })
+    const write = (key) => fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': key }, body: JSON.stringify({ ...tap('after'), ...named(a.house, a.live) }) })
     expect((await write(old)).status).toBe(403)
     expect((await write(joinKey)).status).toBe(200)
   })
 
-  test('a phone joined on the Rehearsal keeps working after Go live', async () => {
+  test("a phone joined on the Test night keeps working on the next night", async () => {
     const { app, b } = await twoHouseholds()
     const key = b.house.joinKey()
     const [{ event }] = b.house.apply({ type: 'createEvent', name: 'Halloween 2026' })
     b.house.apply({ type: 'goLive', eventId: event.id })
 
-    const res = await fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': key }, body: JSON.stringify(tap('night-kid')) })
+    const res = await fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': key }, body: JSON.stringify({ ...tap('night-kid'), ...named(b.house, event.id) }) })
 
     expect(res.status).toBe(200)
     expect(b.house.snapshot().event.name).toBe('Halloween 2026')

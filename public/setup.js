@@ -138,13 +138,11 @@ $('tv-rotate').addEventListener('click', async () => {
   if (await admin({ type: 'rotateTvLink' }, 'TV link rotated')) render()
 })
 
-// ---- the Rehearsal (spec §6): reset it to 0 while it's live, so the TV starts the night clean
-async function resetRehearsal() {
-  if (!confirm('Reset the Rehearsal? Its kids are cleared, and the TV and phones go back to 0.')) return
-  await admin({ type: 'resetRehearsal' }, 'Rehearsal reset to 0')
-}
-$('reset-rehearsal').addEventListener('click', resetRehearsal)
-$('check-reset').addEventListener('click', resetRehearsal)
+// The door's Event (spec v2.1 §2): the open Event that went live most recently, or null with none open.
+// "Live now" shows it; tickets 57 and 58 give every open Event its own place.
+const doorEvent = () => events.filter((e) => e.open).sort((a, b) => b.wentLiveAt - a.wentLiveAt)[0] ?? null
+// What a night command names: the Event and its go-live stamp.
+const named = (event) => ({ eventId: event?.id, stamp: event?.wentLiveAt })
 
 // ---- the ready-for-Halloween checklist (spec §6): ticks itself from real state, hides when done or dismissed.
 // A tick, a skip and the dismissal are remembered on this phone.
@@ -160,13 +158,12 @@ const remember = (what) => {
     localStorage.setItem(`cd.checklist.${house.id}.${what}`, '1')
   } catch {}
 }
-// The night the checklist is about: the next one that goes live by itself, or the live non-Rehearsal one.
+// The night the checklist is about: the next one that goes live by itself, or else the door's Event.
 const halloweenNight = () =>
-  events.filter((e) => e.goesLiveAt != null && !e.live && !e.frozen).sort((a, b) => a.goesLiveAt - b.goesLiveAt)[0] ??
-  events.find((e) => e.live && !e.rehearsal)
+  events.filter((e) => e.goesLiveAt != null && e.state === 'upcoming').sort((a, b) => a.goesLiveAt - b.goesLiveAt)[0] ?? doorEvent()
 
 function renderChecklist() {
-  if (house.checklist.rehearsalKids > 0) remember('kid')
+  if (house.checklist.anyKids > 0) remember('kid')
   const night = halloweenNight()
   const tv = house.checklist.tvWatching
   const kid = remembered('kid')
@@ -177,7 +174,7 @@ function renderChecklist() {
   $('check-night').classList.toggle('done', nightDone)
   $('check-night-when').textContent = !night
     ? 'Create it below, under Create an event.'
-    : night.live ? `${night.name} is live.` : `${night.name} goes live ${zoneDay(night.goesLiveAt)}. How many kids do you expect?`
+    : night.open ? `${night.name} is live.` : `${night.name} goes live ${zoneDay(night.goesLiveAt)}. How many kids do you expect?`
   $('check-night-form').hidden = !night || nightDone
   $('checklist').hidden = remembered('hidden') || (tv && kid && nightDone)
 }
@@ -303,23 +300,42 @@ const h = (tag, props, ...children) => appendAll(Object.assign(document.createEl
 const option = (value, text, selected) => h('option', { value, textContent: text, selected })
 
 function render() {
-  const live = events.find((e) => e.live)
-  const upcoming = events.filter((e) => !e.live && !e.frozen && !e.countsOnly)
-  const past = events.filter((e) => e.frozen || e.countsOnly)
-  const editable = [live, ...upcoming]
-  if (!editable.some((e) => e.id === editingId)) editingId = live.id
+  const live = doorEvent() // null with no night on
+  const others = events.filter((e) => e.open && e !== live)
+  const upcoming = events.filter((e) => e.state === 'upcoming' && !e.countsOnly)
+  const past = events.filter((e) => e.past || e.countsOnly)
+  const editable = [live, ...others, ...upcoming].filter(Boolean)
+  if (!editable.some((e) => e.id === editingId)) editingId = editable[0]?.id ?? null
 
-  $('live-name').textContent = live.name
+  $('live-name').textContent = !live ? 'no night on right now' : others.length ? `${live.name} (also open: ${others.map((e) => e.name).join(', ')})` : live.name
   $('time-zone').textContent = timeZone ?? ''
   if (document.activeElement !== $('h-name')) $('h-name').value = house.displayName
   $('signed-in').textContent = house.manager.email
   $('tv-link').textContent = tvUrl()
   $('h-zone').textContent = timeZone
-  $('live-kids').textContent = live.kids
+  $('live-kids').textContent = live?.kids ?? 0
   $('join-key').textContent = joinKey || '(not set on this phone)'
 
-  $('editing').replaceChildren(...editable.map((e) => option(e.id, e.live ? `${e.name} (live)` : e.name, e.id === editingId)))
+  $('editing').replaceChildren(...editable.map((e) => option(e.id, e.open ? `${e.name} (${e.state})` : e.name, e.id === editingId)))
   const editing = events.find((e) => e.id === editingId)
+  $('settings-form').hidden = $('new-tag').hidden = !editing
+  if (editing) renderEditing(editing)
+  $('auto-ended').hidden = !(live?.ended && live.endedAutomatically)
+  // An ended night has its summary straight away (spec §12).
+  $('summary-link').hidden = !live?.ended || live.countsOnly
+  $('summary-link').href = `/summary?event=${live?.id}`
+  $('live-sharing').replaceChildren(...(live?.ended ? sharingOff(live) : []))
+  $('auto-ended-summary').href = `/summary?event=${live?.id}`
+  renderChecklist()
+
+  $('tags').replaceChildren(...(editing?.tags ?? []).map(tagRow))
+  $('c-copy').replaceChildren(option('', 'Nothing (start empty)', true), ...events.filter((e) => !e.countsOnly).map((e) => option(e.id, e.name)))
+
+  renderBackfill(live)
+  renderLists(upcoming, past)
+}
+
+function renderEditing(editing) {
   $('s-name').value = editing.name
   $('s-race').replaceChildren(
     option('', 'None', editing.raceAgainstId == null),
@@ -329,31 +345,20 @@ function render() {
   $('s-expected').value = editing.expectedKids ?? ''
   $('s-visit').value = editing.visitWindowMs / 1000
   $('s-golden').value = editing.goldenCount
-  $('goes-row').hidden = editing.live
+  $('goes-row').hidden = editing.state !== 'upcoming'
   $('last-year').hidden = !house.canEstimateLastYear
   if (document.activeElement !== $('s-last-year')) $('s-last-year').value = house.lastYear ?? ''
   $('s-last-year-clear').hidden = house.lastYear == null
   $('goes-zone').textContent = timeZone
   $('s-goes').value = editing.goesLiveAt == null ? '' : stamp(editing.goesLiveAt, timeZone).slice(0, 16).replace(' ', 'T')
-  $('auto-ended').hidden = !(live.ended && live.endedAutomatically)
-  // An ended night has its summary straight away (spec §12).
-  $('summary-link').hidden = !live.ended || live.countsOnly
-  $('summary-link').href = `/summary?event=${live.id}`
-  $('live-sharing').replaceChildren(...(live.ended ? sharingOff(live) : []))
-  $('auto-ended-summary').href = `/summary?event=${live.id}`
-  $('rehearsal-tools').hidden = !live.rehearsal
-  renderChecklist()
+}
 
-  $('tags').replaceChildren(...editing.tags.map(tagRow))
-  $('c-copy').replaceChildren(option('', 'Nothing (start empty)', true), ...events.filter((e) => !e.countsOnly).map((e) => option(e.id, e.name)))
-
-  renderBackfill(live)
-
+function renderLists(upcoming, past) {
   $('upcoming').replaceChildren(
     ...upcoming.map((e) =>
       h('div', { className: 'item' },
         h('span', { className: 'grow', textContent: `${e.name} · ${e.tags.length} costumes${e.goesLiveAt == null ? '' : ` · goes live ${zoneDay(e.goesLiveAt)}`}` }),
-        h('button', { className: 'primary', textContent: 'Go live', onclick: () => goLive(e, live) })),
+        h('button', { className: 'primary', textContent: 'Go live', onclick: () => goLive(e) })),
     ),
   )
   $('past').replaceChildren(
@@ -378,7 +383,7 @@ const clockTime = (ms, shift) => zoneClock(ms + shift, timeZone)
 // "Sat Oct 31, 4:00 PM" in the Household's zone.
 const zoneDay = (ms) => `${new Date(ms).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', timeZone })}, ${zoneClock(ms, timeZone)}`
 function renderBackfill(live) {
-  const shift = live.clockShiftMs
+  const shift = live?.clockShiftMs ?? 0
   const nowMinute = Math.floor(minuteOfDay(eventNow(Date.now(), shift), timeZone))
   const typed = new Map([...document.querySelectorAll('#backfill-rows input')].map((i) => [i.dataset.start, i.value]))
   $('backfill-rows').replaceChildren(
@@ -397,7 +402,7 @@ function renderBackfill(live) {
       return h('div', { className: 'item' },
         h('span', { className: 'grow', textContent: `+${b.kids} kids, ${clockTime(from, shift)}–${clockTime(to, shift)}` }),
         h('button', { className: 'danger', textContent: 'Remove', onclick: () => {
-          if (confirm(`Remove these ${b.kids} added kids?`)) admin({ type: 'removeBatch', batchId: b.id }, `Removed ${b.kids} kids`)
+          if (confirm(`Remove these ${b.kids} added kids?`)) admin({ type: 'removeBatch', batchId: b.id, ...named(live) }, `Removed ${b.kids} kids`)
         } }))
     }),
   )
@@ -405,7 +410,8 @@ function renderBackfill(live) {
 
 $('backfill-form').addEventListener('submit', async (e) => {
   e.preventDefault()
-  const live = events.find((ev) => ev.live)
+  const live = doorEvent()
+  if (!live) return say('No night on right now', true)
   const rows = [...document.querySelectorAll('#backfill-rows input')]
     .filter((i) => !i.disabled && Number(i.value) > 0)
     .map((i) => ({
@@ -416,7 +422,7 @@ $('backfill-form').addEventListener('submit', async (e) => {
   if (!rows.length) return say('Type a count in at least one row', true)
   const total = rows.reduce((n, r) => n + r.count, 0)
   document.querySelectorAll('#backfill-rows input').forEach((i) => (i.value = ''))
-  await admin({ type: 'backfill', rows }, `Added ${total} kids`)
+  await admin({ type: 'backfill', rows, ...named(live) }, `Added ${total} kids`)
 })
 
 function tagRow(tag) {
@@ -457,7 +463,7 @@ $('settings-form').addEventListener('submit', (e) => {
     visitWindowMs: Math.round(Number($('s-visit').value || 15) * 1000),
     goldenCount: Number($('s-golden').value || 0),
     // The wall time typed is the Household's, whatever zone this phone is in.
-    ...(editingId === events.find((ev) => ev.live).id
+    ...(events.find((ev) => ev.id === editingId)?.state !== 'upcoming'
       ? {}
       : { goesLiveAt: $('s-goes').value ? zonedTime($('s-goes').value.slice(0, 10), $('s-goes').value.slice(11, 16), timeZone) : null }),
   }, 'Settings saved')
@@ -492,10 +498,10 @@ async function exportEvent(event) {
   URL.revokeObjectURL(link.href)
   say(`Exported ${name}`)
 }
-$('export-live').addEventListener('click', () => exportEvent(events.find((e) => e.live)))
+$('export-live').addEventListener('click', () => (doorEvent() ? exportEvent(doorEvent()) : say('No night on right now', true)))
 
-function goLive(event, live) {
-  if (!confirm(`Go live with "${event.name}"?\n\n"${live.name}" will be frozen as a past event. Phones and the TV switch over by themselves.`)) return
+function goLive(event) {
+  if (!confirm(`Go live with "${event.name}"?\n\nPhones and the TV switch to it by themselves. Any other live night stays open.`)) return
   admin({ type: 'goLive', eventId: event.id }, `${event.name} is live`)
 }
 
@@ -509,7 +515,7 @@ function deleteEvent(event) {
 // Draws one more number between tonight's count + 5 and the top of the range (spec §9).
 $('add-ticket').addEventListener('click', async () => {
   if (!confirm('Add a golden ticket to tonight? Its number is drawn secretly from the rest of the range.')) return
-  const done = await admin({ type: 'addTicket' })
+  const done = await admin({ type: 'addTicket', ...named(doorEvent()) })
   if (done) say(`Ticket added: ${done.deltas[0].golden.left} left`)
 })
 

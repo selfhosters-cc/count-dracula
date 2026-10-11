@@ -218,8 +218,8 @@ describe('golden banner', () => {
 describe('the quiet nudge', () => {
   // Toronto, Oct 31 2026: EDT, UTC-4.
   const local = (hh, mm) => Date.parse(`2026-10-31T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00-04:00`)
-  const night = ({ lastTap = local(20, 0), rehearsal = false, ended = false, shift = 0 } = {}) => ({
-    event: { live: true, rehearsal, ended, clockShiftMs: shift },
+  const night = ({ lastTap = local(20, 0), ended = false, shift = 0 } = {}) => ({
+    event: { state: ended ? 'ended' : 'live', live: !ended, ended, clockShiftMs: shift },
     kids: lastTap == null ? [] : [{ id: 'a', tappedAt: lastTap - 3_600_000 }, { id: 'b', tappedAt: lastTap }],
     timeZone: 'America/Toronto',
   })
@@ -238,9 +238,9 @@ describe('the quiet nudge', () => {
     expect(quietNudge(night({ lastTap: local(16, 0), shift: 4 * 60 * MIN }), local(16, 45))).toBe(true) // 8:45 pm event time
   })
 
-  test('never on a Rehearsal, an ended night, or no snapshot', () => {
-    expect(quietNudge(night({ rehearsal: true }), local(21, 0))).toBe(false)
+  test('never on an ended night, with no night on, or with no snapshot', () => {
     expect(quietNudge(night({ ended: true }), local(21, 0))).toBe(false)
+    expect(quietNudge({ ...night(), event: null }, local(21, 0))).toBe(false)
     expect(quietNudge(null, local(21, 0))).toBe(false)
   })
 

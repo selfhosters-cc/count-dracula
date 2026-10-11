@@ -17,10 +17,11 @@ function ledgerAt(iso, config = {}) {
 }
 
 const signUp = (ledger, timeZone, name = 'House') => ledger.household(ledger.createHousehold({ displayName: name, timeZone }))
-const live = (house) => house.snapshot().event
+// The door's Event: what the Household's TV and phones show.
+const live = (house) => house.doorEvent()
 const byName = (house, name) => house.events().find((e) => e.name === name)
-// The Households a tick took live (it may also end other nights).
-const wentLive = (done) => done.filter((t) => t.deltas.some((d) => d.type === 'event.switched')).map((t) => t.householdId)
+// The Households a tick took live (it may also end and close other nights).
+const wentLive = (done) => done.filter((t) => t.deltas.some((d) => d.type === 'event.switched' && d.eventId != null)).map((t) => t.householdId)
 
 describe('sign-up makes "Halloween 2026"', () => {
   test('not live, with the starter costumes, 5 golden tickets, no ghost, going live Oct 31 at 4:00 pm in its zone', () => {
@@ -29,18 +30,18 @@ describe('sign-up makes "Halloween 2026"', () => {
     const house = signUp(ledger, 'America/Toronto')
 
     const night = byName(house, 'Halloween 2026')
-    expect(night).toMatchObject({ live: false, frozen: false, goldenCount: 5, raceAgainstId: null, goesLiveAt: at('2026-10-31T16:00:00-04:00') })
-    expect(night.tags.map((t) => t.name)).toEqual(byName(house, 'Rehearsal').tags.map((t) => t.name))
-    expect(live(house)).toMatchObject({ name: 'Rehearsal', rehearsal: true })
+    expect(night).toMatchObject({ state: 'upcoming', goldenCount: 5, raceAgainstId: null, goesLiveAt: at('2026-10-31T16:00:00-04:00') })
+    expect(night.tags.map((t) => t.name)).toEqual(byName(house, 'Test night').tags.map((t) => t.name))
+    expect(live(house)).toMatchObject({ name: 'Test night', state: 'live' })
   })
 
-  test('after that moment, "Halloween 2026" is live at once and the Rehearsal is made but not live', () => {
+  test('after that moment, "Halloween 2026" is live at once and the Test night is made but Upcoming', () => {
     const { ledger } = ledgerAt('2026-10-31T21:30:00Z') // 5:30 pm in Toronto
 
     const house = signUp(ledger, 'America/Toronto')
 
     expect(live(house).name).toBe('Halloween 2026')
-    expect(byName(house, 'Rehearsal')).toMatchObject({ live: false, frozen: false })
+    expect(byName(house, 'Test night')).toMatchObject({ state: 'upcoming' })
     expect(byName(house, 'Halloween 2026').goesLiveAt).toBeNull()
     expect(house.tickets(live(house).id)).toEqual([]) // no ghost and no Expected kids: nothing to draw from
   })
@@ -48,7 +49,7 @@ describe('sign-up makes "Halloween 2026"', () => {
 
 describe('the minute tick: going live', () => {
   test('each Household goes live at its own 4:00 pm', () => {
-    const { clock, ledger } = ledgerAt('2026-10-20T12:00:00Z')
+    const { clock, ledger } = ledgerAt('2026-10-31T01:00:00Z') // 9 pm Oct 30 in Toronto, 2 pm Oct 31 in Auckland
     const toronto = signUp(ledger, 'America/Toronto', 'Toronto')
     const auckland = signUp(ledger, 'Pacific/Auckland', 'Auckland')
 
@@ -59,12 +60,13 @@ describe('the minute tick: going live', () => {
     expect(first.map((t) => t.householdId)).toEqual([auckland.id])
     expect(first[0].deltas.map((d) => d.type)).toContain('event.switched')
     expect(live(auckland).name).toBe('Halloween 2026')
-    expect(live(toronto).name).toBe('Rehearsal')
+    expect(byName(auckland, 'Test night').state).toBe('live') // Go live never changes another Event
+    expect(live(toronto).name).toBe('Test night')
 
     clock.now = at('2026-10-31T20:00:00Z') // 4:00 pm in Toronto (EDT, UTC-4); 9:00 am Nov 1 in Auckland
     expect(wentLive(ledger.tick())).toEqual([toronto.id])
     expect(live(toronto).name).toBe('Halloween 2026')
-    expect(byName(toronto, 'Rehearsal')).toMatchObject({ live: false, frozen: true })
+    expect(byName(toronto, 'Test night').state).toBe('past') // ended at 3 am, Past at noon
     expect(wentLive(ledger.tick())).toEqual([]) // once
   })
 
@@ -80,7 +82,7 @@ describe('the minute tick: going live', () => {
     expect(live(early).name).toBe('Halloween 2026')
     clock.now = at('2026-11-02T12:00:00Z')
     ledger.tick()
-    expect(live(never).name).toBe('Rehearsal')
+    expect(byName(never, 'Halloween 2026').state).toBe('upcoming')
   })
 
   test("Goes live at can't be set on a live or past Event, and must be a time", () => {
@@ -101,8 +103,7 @@ describe('the minute tick: going live', () => {
     clock.now = at('2026-10-31T20:00:00Z')
 
     expect(wentLive(ledger.tick())).toEqual([])
-    expect(byName(house, 'Halloween 2026').goesLiveAt).toBeNull()
-    expect(live(house).name).toBe('Halloween 2026')
+    expect(byName(house, 'Halloween 2026')).toMatchObject({ goesLiveAt: null, state: 'past' }) // its own 3 am and noon, long ago
     expect(other).toBeTruthy()
   })
 })
@@ -127,19 +128,20 @@ describe('the minute tick: the 3:00 am safety net', () => {
     expect(ledger.tick()).toEqual([])
   })
 
-  test('never touches a Rehearsal, or a night ended by hand', () => {
+  test('ends a Test night too, by name, but never a night already ended by hand', () => {
     const { clock, ledger } = ledgerAt('2026-10-20T20:00:00Z')
-    const rehearsing = signUp(ledger, 'America/Toronto', 'Rehearsing')
+    const testing = signUp(ledger, 'America/Toronto', 'Testing')
     const done = signUp(ledger, 'America/Toronto', 'Done')
-    const [{ event }] = done.apply({ type: 'createEvent', name: 'Test night' })
+    const [{ event }] = done.apply({ type: 'createEvent', name: 'Practice' })
     done.apply({ type: 'goLive', eventId: event.id })
-    done.apply({ type: 'end' })
+    done.apply({ type: 'end', eventId: event.id, stamp: byName(done, 'Practice').wentLiveAt })
 
-    clock.now = at('2026-10-21T12:00:00Z')
+    clock.now = at('2026-10-21T12:00:00Z') // 8 am: past 3 am, before noon
 
-    expect(ledger.tick()).toEqual([])
-    expect(live(rehearsing)).toMatchObject({ name: 'Rehearsal', ended: false })
-    expect(live(done)).toMatchObject({ ended: true, endedAutomatically: false })
+    expect(ledger.tick().map((t) => t.householdId)).toEqual([testing.id, done.id])
+    expect(byName(testing, 'Test night')).toMatchObject({ state: 'ended', endedAutomatically: true })
+    expect(byName(done, 'Test night')).toMatchObject({ state: 'ended', endedAutomatically: true })
+    expect(byName(done, 'Practice')).toMatchObject({ state: 'ended', endedAutomatically: false })
   })
 })
 
@@ -165,7 +167,7 @@ describe('the server runs the tick', () => {
 
     const { app } = serverAt(dir, '2026-10-31T23:00:00Z')
 
-    expect(app.ledger.household(id).snapshot().event.name).toBe('Halloween 2026')
+    expect(app.ledger.doorEvent(id).name).toBe('Halloween 2026')
   })
 
   test('a 3 am end missed while the server was down happens as it starts', () => {
@@ -176,7 +178,7 @@ describe('the server runs the tick', () => {
 
     const { app } = serverAt(dir, '2026-11-01T12:00:00Z')
 
-    expect(app.ledger.household(id).snapshot().event).toMatchObject({ name: 'Halloween 2026', ended: true, endedAutomatically: true })
+    expect(app.ledger.doorEvent(id)).toMatchObject({ name: 'Halloween 2026', state: 'ended', endedAutomatically: true })
   })
 
   test('TVs and phones follow a go-live without a reload', async () => {

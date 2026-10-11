@@ -7,11 +7,11 @@ const REFRESH_MS = 10 * 60_000
 
 const round5 = (n) => Math.round(n / 5) * 5
 
-// nights: [{ householdId, cell, rehearsal, suspended, kids, kids30, costumes: [{ name, emoji, count }] }], one per
-// Household's live Event. Returns { areas: Map(area → { houses, kids30, topCostume }), site: { houses, kids, topCostume? } | null }.
+// nights: [{ householdId, cell, suspended, kids, kids30, costumes: [{ name, emoji, count }] }], one per
+// Household: its door's Event. Returns { areas: Map(area → { houses, kids30, topCostume }), site: { houses, kids, topCostume? } | null }.
 // siteTopCostume adds the site line's top costume, under its own switch (spec §14).
 export function computeNearby(nights, { isBlocked, siteTopCostume = false }) {
-  const counting = nights.filter((n) => !n.rehearsal && !n.suspended)
+  const counting = nights.filter((n) => !n.suspended)
   const byArea = new Map()
   for (const n of counting) {
     if (!n.cell || n.kids30 < 1) continue // an Active Household: a kid in the last 30 minutes

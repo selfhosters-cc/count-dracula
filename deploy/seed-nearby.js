@@ -26,16 +26,17 @@ for (const [i, cell] of CELLS.entries()) {
   const id = ledger.createHousehold({ displayName: `Seed house ${i + 1}`, timeZone: 'America/Toronto' })
   const house = ledger.household(id)
   house.apply({ type: 'setLocation', cell })
-  const night = house.events().find((e) => e.name === 'Halloween 2026')
-  if (!night.live) house.apply({ type: 'goLive', eventId: night.id })
-  const tags = Object.fromEntries(house.snapshot().tags.map((t) => [t.name, t.id]))
+  const halloween = () => house.events().find((e) => e.name === 'Halloween 2026')
+  if (!halloween().open) house.apply({ type: 'goLive', eventId: halloween().id })
+  const night = halloween() // with its go-live stamp, which every tap names
+  const tags = Object.fromEntries(house.snapshot(night.id).tags.map((t) => [t.name, t.id]))
   const extra = (name) => db.query('INSERT INTO tags (event_id, name, emoji, sort_order) VALUES (?, ?, ?, 99) RETURNING id').get(night.id, name, name === RUDE ? '💩' : '🐶').id
   const plan = [['Witch', 4], ...(i < 2 ? [['Bluey', 20]] : []), ...(i < 3 ? [[RUDE, 30]] : [])]
   let k = 0
   for (const [name, count] of plan) {
     const tagId = tags[name] ?? extra(name)
     for (let n = 0; n < count; n++) {
-      house.apply({ type: 'tap', id: `seed-${id}-${k++}`, tagId, tappedAt: now - (n % 25) * 60_000, phoneName: 'Seed' })
+      house.apply({ type: 'tap', eventId: night.id, stamp: night.wentLiveAt, id: `seed-${id}-${k++}`, tagId, tappedAt: now - (n % 25) * 60_000, phoneName: 'Seed' })
     }
   }
   console.log(`Seed house ${i + 1} (${cell}): ${k} kids · TV /tv/k/${house.tvToken()} · phone /?key=${house.joinKey()}`)

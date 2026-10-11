@@ -138,6 +138,29 @@ const MIGRATIONS = [
   (db) => {
     db.exec('ALTER TABLE events ADD COLUMN estimated INTEGER NOT NULL DEFAULT 0')
   },
+
+  // 11 → 12: Event states (spec v2.1 §3). One `state` column, upcoming | live | ended | past, replaces v1's
+  // live, frozen and ended flags; went_live_at is the go-live stamp. The v2 starter flag and v1's per-event
+  // join key go. A rewriting step, allowed until sign-up opens (spec v2.1 §12): a v2 starter row just
+  // becomes an ordinary Event.
+  (db, { now }) => {
+    db.exec(`
+      ALTER TABLE events ADD COLUMN state TEXT NOT NULL DEFAULT 'upcoming';
+      UPDATE events SET state = CASE
+        WHEN counts_only = 1 OR frozen = 1 THEN 'past'
+        WHEN live = 1 AND ended = 1 THEN 'ended'
+        WHEN live = 1 THEN 'live'
+        ELSE 'upcoming' END;
+      DROP INDEX IF EXISTS events_by_household;
+      ALTER TABLE events DROP COLUMN live;
+      ALTER TABLE events DROP COLUMN frozen;
+      ALTER TABLE events DROP COLUMN ended;
+      ALTER TABLE events DROP COLUMN rehearsal;
+      ALTER TABLE events DROP COLUMN join_key;
+      CREATE INDEX events_by_household ON events (household_id, state);
+    `)
+    db.query("UPDATE events SET went_live_at = ? WHERE state IN ('live', 'ended') AND went_live_at IS NULL").run(now())
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

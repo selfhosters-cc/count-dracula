@@ -7,11 +7,11 @@ const BACKUP_LATE_MS = 30 * MINUTE // 2× the 15-minute interval
 const RSS_LIMIT = 1024 * 1024 * 1024 // LXC 118's 1 GB
 const RSS_AMBER = 800 * 1024 * 1024
 
-export const STATUSES = ['Counting', 'Stale', 'Waiting', 'Rehearsal']
+// Ticket 56 adds Ended and No night (spec v2.1 §10).
+export const STATUSES = ['Counting', 'Stale', 'Waiting']
 
-// live: { rehearsal, kids, lastKidAt } for the Household's live Event.
-export function householdStatus({ rehearsal, kids, lastKidAt }, now) {
-  if (rehearsal) return 'Rehearsal'
+// night: { kids, lastKidAt } for the Household's door's Event.
+export function householdStatus({ kids, lastKidAt }, now) {
   if (!kids) return 'Waiting'
   return lastKidAt != null && now - lastKidAt <= ACTIVE_MS ? 'Counting' : 'Stale'
 }

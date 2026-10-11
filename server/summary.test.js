@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { startServer } from './app.js'
 import { fakeGoogle } from '../test/fake-google.js'
 import { cookieOf, signIn } from '../test/sign-in.js'
+import { doorNamed, named, namingTheDoor } from '../test/v1-night.js'
 
 const MINUTE = 60_000
 const running = []
@@ -21,12 +22,13 @@ async function town() {
   running.push(app)
   const cookie = cookieOf(await signIn({ app, google }, { sub: 'a', email: 'a@example.com' }, { displayName: 'The Smiths', timeZone: 'America/Toronto' }))
   const info = await (await fetch(`${app.url}/api/household`, { headers: { Cookie: cookie } })).json()
-  const ours = app.ledger.household(info.id)
-  const neighbours = Array.from({ length: 5 }, (_, i) => app.ledger.household(app.ledger.createHousehold({ displayName: `N${i}`, timeZone: 'America/Toronto' })))
+  const ours = namingTheDoor(app.ledger.household(info.id))
+  const neighbours = Array.from({ length: 5 }, (_, i) => namingTheDoor(app.ledger.household(app.ledger.createHousehold({ displayName: `N${i}`, timeZone: 'America/Toronto' }))))
   for (const h of [ours, ...neighbours]) h.apply({ type: 'setLocation', cell: 'dpz83' })
   const tap = (h, id, extra = {}) => h.apply({ type: 'tap', id, tagId: null, tappedAt: clock.now, phoneName: 'Grandma', ...extra })
   const summary = (eventId) => fetch(`${app.url}/api/summary?event=${eventId}`, { headers: { Cookie: cookie } })
-  const phone = (path) => fetch(`${app.url}${path}`, { method: 'POST', headers: { 'X-Join-Key': info.joinKey }, body: '{}' })
+  // The door phone's ☰ End and Resume name the door's Event and its go-live stamp.
+  const phone = (path) => fetch(`${app.url}${path}`, { method: 'POST', headers: { 'X-Join-Key': info.joinKey }, body: JSON.stringify(doorNamed(app.ledger, info.id)) })
   return { app, clock, cookie, info, ours, neighbours, tap, summary, phone }
 }
 
@@ -70,7 +72,9 @@ describe('the night summary', () => {
     ours.apply({ type: 'goLive', eventId: early.id })
     tap(ours, 'k1')
     const [{ event: later }] = ours.apply({ type: 'createEvent', name: 'Later night' })
-    ours.apply({ type: 'goLive', eventId: later.id }) // the early night is frozen now: a past night
+    ours.apply({ type: 'goLive', eventId: later.id })
+    ours.apply({ type: 'end', ...named(ours, early.id) })
+    ours.apply({ type: 'close', eventId: early.id }) // Close now: a Past night
     const ghost = ours.addPastCounts({ name: 'Halloween 2025 (counts)', buckets: [{ start: '18:00', end: '18:30', count: 40 }] })
 
     expect((await summary(early.id)).status).toBe(200)

@@ -6,6 +6,7 @@ import { startServer } from './app.js'
 import { fakeGoogle } from '../test/fake-google.js'
 import { cookieOf, signIn } from '../test/sign-in.js'
 import { Database } from 'bun:sqlite'
+import { doorNamed, namingTheDoor } from '../test/v1-night.js'
 
 const running = []
 afterEach(() => running.splice(0).forEach((app) => app.stop()))
@@ -21,9 +22,9 @@ async function setUp(switches = {}) {
   const cookie = cookieOf(await signIn({ app, google }, { sub: 'a', email: 'a@example.com' }, { displayName: 'The Smiths' }))
   const op = cookieOf(await signIn({ app, google }, { sub: 'op', email: 'op@example.com' }, { displayName: 'Ops' }))
   const info = await (await fetch(`${app.url}/api/household`, { headers: { Cookie: cookie } })).json()
-  const house = app.ledger.household(info.id)
+  const house = namingTheDoor(app.ledger.household(info.id))
   house.apply({ type: 'tap', id: 'k1', tagId: null, tappedAt: Date.now(), phoneName: 'Grandma' })
-  await fetch(`${app.url}/api/end`, { method: 'POST', headers: { 'X-Join-Key': info.joinKey }, body: '{}' })
+  await fetch(`${app.url}/api/end`, { method: 'POST', headers: { 'X-Join-Key': info.joinKey }, body: JSON.stringify(doorNamed(app.ledger, info.id)) })
   const eventId = house.snapshot().event.id
   const post = (path, body, cookieFor = cookie, headers = {}) => fetch(`${app.url}${path}`, { method: 'POST', headers: { Cookie: cookieFor ?? '', ...headers }, body: JSON.stringify(body) })
   const share = async (hideName = false) => (await (await post('/api/share', { eventId, hideName })).json()).url

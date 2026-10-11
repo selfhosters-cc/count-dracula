@@ -33,7 +33,11 @@ async function stream(app, key) {
 }
 
 const snapshot = (app, key, query = '') => fetch(`${app.url}/api/snapshot?key=${encodeURIComponent(key)}${query}`)
-const tap = (app, key, id) => fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': key }, body: JSON.stringify({ id, tagId: null, tappedAt: Date.now(), phoneName: 'Grandma' }) })
+// A phone's tap names its Household's door's Event and that Event's go-live stamp.
+const tap = (app, key, id) => {
+  const door = app.ledger.doorEvent(app.ledger.householdByJoinKey(key))
+  return fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': key }, body: JSON.stringify({ id, tagId: null, tappedAt: Date.now(), phoneName: 'Grandma', eventId: door?.id, stamp: door?.wentLiveAt }) })
+}
 const admin = (app, cookie, command) => fetch(`${app.url}/api/admin`, { method: 'POST', headers: { Cookie: cookie }, body: JSON.stringify(command) })
 
 describe('the TV link', () => {
@@ -70,9 +74,9 @@ describe('the TV link', () => {
     expect(JSON.stringify(plain)).not.toContain('House A')
   })
 
-  test('reads only the live Event, follows Go live, and never writes', async () => {
+  test("reads only the door's Event, follows Go live, and never writes", async () => {
     const { app, cookie, info, house } = await household()
-    const rehearsal = house.snapshot().event.id
+    const testNight = house.doorEvent().id
     const tv = await stream(app, info.tvToken)
     await tv.next()
     const created = await (await admin(app, cookie, { type: 'createEvent', name: 'Halloween 2026' })).json()
@@ -82,7 +86,7 @@ describe('the TV link', () => {
     expect((await tv.next()).data.type).toBe('event.created')
     expect((await tv.next()).data.type).toBe('event.switched')
     expect((await (await snapshot(app, info.tvToken)).json()).event.name).toBe('Halloween 2026')
-    expect((await snapshot(app, info.tvToken, `&event=${rehearsal}`)).status).toBe(401)
+    expect((await snapshot(app, info.tvToken, `&event=${testNight}`)).status).toBe(401)
     expect((await tap(app, info.tvToken, 'sneaky')).status).toBe(403)
   })
 

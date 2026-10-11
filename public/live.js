@@ -69,7 +69,7 @@ export function connectLive(url = '/api/stream') {
       const delta = JSON.parse(e.data)
       if (!live.state || delta.seq <= live.state.seq) return
       if (delta.seq !== live.state.seq + 1) return reopen() // missed one: the new snapshot resyncs us
-      if (RESYNC.has(delta.type)) return reopen() // Go live or new settings: take a fresh snapshot
+      if (RESYNC.has(delta.type)) return reopen() // the door's Event moved, or new settings: take a fresh snapshot
       live.state = applyDelta(live.state, delta)
       if ('golden' in delta) live.state = { ...live.state, golden: delta.golden } // just the count and the banner flag
       emit('delta', delta)
@@ -140,7 +140,7 @@ function applyDelta(state, delta) {
       return { ...state, seq: delta.seq, kids }
     }
     case 'event.ended':
-      return { ...state, seq: delta.seq, event: { ...state.event, ended: delta.ended }, recap: delta.recap }
+      return { ...state, seq: delta.seq, event: { ...state.event, ended: delta.ended, live: !delta.ended, state: delta.ended ? 'ended' : 'live' }, recap: delta.recap }
     case 'mix.changed':
       return { ...state, seq: delta.seq, settings: { ...state.settings, mix: delta.mix } }
     case 'tag.added':

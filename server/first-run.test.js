@@ -4,10 +4,11 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startServer } from './app.js'
-import { BadCommand, openLedger } from './ledger.js'
+import { openLedger } from './ledger.js'
 import { fakeGoogle } from '../test/fake-google.js'
 import { cookieOf, signIn } from '../test/sign-in.js'
 import { readFrames } from '../test/sse.js'
+import { doorNamed } from '../test/v1-night.js'
 
 const running = []
 const aborts = []
@@ -37,7 +38,7 @@ async function open(app, query) {
   return frames
 }
 
-const tap = (app, key, id) => fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': key }, body: JSON.stringify({ id, tagId: null, tappedAt: Date.now(), phoneName: 'Dad' }) })
+const tap = (app, key, id) => fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': key }, body: JSON.stringify({ ...doorNamed(app.ledger, app.ledger.householdByJoinKey(key)), id, tagId: null, tappedAt: Date.now(), phoneName: 'Dad' }) })
 
 describe('first-run', () => {
   test('shows until screen 3 has been passed once', async () => {
@@ -72,43 +73,13 @@ describe('the ready checklist', () => {
     expect((await household()).checklist.tvWatching).toBe(true)
   })
 
-  test('"A phone counted a test kid" ticks with any kid on the Rehearsal', async () => {
+  test('"A phone counted a test kid" ticks with any kid, on any Event', async () => {
     const { app, household, info } = await newManager()
-    expect((await household()).checklist.rehearsalKids).toBe(0)
+    expect((await household()).checklist.anyKids).toBe(0)
 
     await tap(app, info.joinKey, 'test-kid')
 
-    expect((await household()).checklist.rehearsalKids).toBe(1)
-  })
-})
-
-describe('Reset the Rehearsal', () => {
-  test('clears its kids, and the TV and phones are told to start again from 0', async () => {
-    const { app, admin, household, info } = await newManager()
-    await tap(app, info.joinKey, 'k1')
-    await tap(app, info.joinKey, 'k2')
-    const tv = await open(app, `key=${info.tvToken}`)
-
-    const res = await admin({ type: 'resetRehearsal' })
-
-    expect(res.status).toBe(200)
-    expect((await tv.next()).data.type).toBe('event.updated') // live state takes a fresh snapshot on this
-    const snap = await (await fetch(`${app.url}/api/snapshot?key=${info.joinKey}`)).json()
-    expect(snap.kids).toEqual([])
-    expect((await household()).checklist.rehearsalKids).toBe(0)
-    await tap(app, info.joinKey, 'k3')
-    expect((await (await fetch(`${app.url}/api/snapshot?key=${info.joinKey}`)).json()).kids[0].number).toBe(1)
-  })
-
-  test('is refused on a night that is not a Rehearsal', () => {
-    const ledger = openLedger(new Database(':memory:'), { now: () => Date.parse('2026-10-20T20:00:00Z') })
-    const house = ledger.household(ledger.createHousehold({ displayName: 'B', timeZone: 'America/Toronto' }))
-    const night = house.events().find((e) => e.name === 'Halloween 2026')
-    house.apply({ type: 'goLive', eventId: night.id })
-    house.apply({ type: 'tap', id: 'real', tagId: null, tappedAt: 1, phoneName: 'Dad' })
-
-    expect(() => house.apply({ type: 'resetRehearsal' })).toThrow(BadCommand)
-    expect(house.snapshot().kids).toHaveLength(1)
+    expect((await household()).checklist.anyKids).toBe(1)
   })
 })
 

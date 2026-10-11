@@ -12,10 +12,10 @@ document.getElementById('rows').replaceChildren(
     return tr
   }),
 )
-// The live event's name, read with the Manager's session; the sheet works without it too.
+// The door's Event's name, read with the Manager's session; the sheet works without it too.
 fetch('/api/snapshot')
   .then((r) => r.json())
-  .then((s) => (document.getElementById('title').textContent = `${s.event.name}: tally`))
+  .then((s) => s.event && (document.getElementById('title').textContent = `${s.event.name}: tally`)) // none with no night on
   .catch(() => {})
 
 document.getElementById('print').addEventListener('click', () => print())

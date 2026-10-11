@@ -11,7 +11,7 @@ import { createHub } from './hub.js'
 import { createPairing } from './pairing.js'
 import { LIMITS, createGuard } from './guard.js'
 import { createBackups } from './backups.js'
-import { healthTiles, householdStatus } from './operator.js'
+import { STATUSES, healthTiles, householdStatus } from './operator.js'
 import { createNearby } from './nearby.js'
 import { isBlocked } from './blocklist.js'
 import { toCsv } from './export.js'
@@ -20,7 +20,7 @@ const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
 const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html', '/privacy': '/privacy.html', '/summary': '/summary.html' }
-const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink', 'setLocation', 'passFirstRun', 'resetRehearsal', 'setLastYear'])
+const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink', 'setLocation', 'passFirstRun', 'setLastYear', 'close'])
 
 // What a TV-link holder gets (spec §9): what the TV draws, without each kid's phone name.
 const withoutPhone = ({ phoneName, ...kid }) => kid
@@ -104,6 +104,11 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   }
   // A snapshot carries the figures as they stood at the last refresh.
   const withNearby = (snap, house) => ({ ...snap, nearby: nearby.forHousehold(house.id, cellOf(house.id)) })
+  // What a phone or TV with no ?event= reads (spec v2.1 §15): the door's Event, or "no night" with none open.
+  const doorSnapshot = (house) => {
+    const door = house.doorEvent()
+    return door ? house.snapshot(door.id) : house.idleSnapshot()
+  }
 
   // The first tick runs now, with nearby ready for any night it ends.
   tick()
@@ -114,18 +119,18 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   const stopBackups = backups?.start({ also: () => accounts.pruneDeletions() }) ?? (() => {})
 
   const routes = {
-    // The live event, for a phone or a Manager; ?event=<id> reads one of the Household's events (a past
+    // The door's Event, for a phone, a TV or a Manager; ?event=<id> reads one of the Household's events (a past
     // night's recap on /tv?event=<id>), for a Manager only.
     'GET /api/snapshot': async (req, server) => {
       const id = new URL(req.url).searchParams.get('event')
-      if (id == null) return read((req, house, credential) => Response.json(withNearby(credential.kind === 'tv' ? tvSnapshot(house.snapshot()) : house.snapshot(), house)))(req, server)
+      if (id == null) return read((req, house, credential) => Response.json(withNearby(credential.kind === 'tv' ? tvSnapshot(doorSnapshot(house)) : doorSnapshot(house), house)))(req, server)
       return manager((req, house) => {
         const snap = house.snapshot(Number(id))
         return snap ? Response.json(snap) : notFound()
       })(req, server)
     },
     // EventSource can't send headers, so a phone's key or the TV link's token comes as ?key= (masked in the
-    // Caddy log). A TV gets the live night TV-shaped.
+    // Caddy log). A TV gets the door's Event TV-shaped; each reconnect reads the door afresh.
     'GET /api/stream': read((req, house, credential, server) => {
       const kind = credential.kind !== 'tv' ? 'phone' : credential.paired ? 'paired' : 'tvLink'
       const ip = clientIp(req, server)
@@ -134,8 +139,8 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       // A full TV gets 503, which the TV page shows as "This TV is full, try again soon" and retries.
       if (refusal) return new Response(refusal === 'tvFull' ? 'This TV is full, try again soon' : 'Too many connections', { status: refusal === 'tvFull' ? 503 : 429 })
       return kind === 'phone'
-        ? hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(house.snapshot(), house) })
-        : hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(tvSnapshot(house.snapshot()), house), shape: tvDelta })
+        ? hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(doorSnapshot(house), house) })
+        : hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(tvSnapshot(doorSnapshot(house)), house), shape: tvDelta })
     }),
 
     // ---- Pairing a TV (spec §9): the bare /tv asks for a code and waits; a Manager redeems it in /setup.
@@ -157,12 +162,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     }),
     'POST /api/taps': write(async (req, house) => {
       if (!guard.take('taps', house.id)) return tooMany()
-      const { id, tagId, tappedAt, phoneName, teen } = await req.json()
-      hub.publish(house.id, house.apply({ type: 'tap', id, tagId, tappedAt, phoneName, teen }))
+      const { id, tagId, tappedAt, phoneName, teen, eventId, stamp } = await req.json()
+      hub.publish(house.id, house.apply({ type: 'tap', id, tagId, tappedAt, phoneName, teen, eventId, stamp }))
     }),
     'POST /api/remove': write(async (req, house) => {
-      const { kidId } = await req.json()
-      hub.publish(house.id, house.apply({ type: 'remove', kidId }))
+      const { kidId, eventId, stamp } = await req.json()
+      hub.publish(house.id, house.apply({ type: 'remove', kidId, eventId, stamp }))
     }),
     // The deploy's health check: the server is up and its database answers. Needs no credential.
     'GET /healthz': () => {
@@ -180,12 +185,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // The whole dashboard in one answer, polled every 30 s (spec §13). No emails and no Location cells here.
     'GET /api/operator': operator(() => {
       const at = now()
-      const nights = new Map(ledger.liveNights().map((n) => [n.householdId, n]))
+      const nights = new Map(ledger.liveNights().map((n) => [n.householdId, n])) // one per Household: its door's Event
       const streams = hub.counts()
       const reportCounts = new Map()
       for (const h of ledger.households()) reportCounts.set(h.id, ledger.reports(h.id).length)
       const households = ledger.households().map((h) => {
-        const night = nights.get(h.id) ?? { rehearsal: false, kids: 0, lastKidAt: null }
+        const night = nights.get(h.id) ?? { kids: 0, lastKidAt: null }
         const s = streams.households[h.id] ?? { phone: 0, paired: 0, tvLink: 0 }
         return {
           id: h.id,
@@ -202,7 +207,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
           suspendedSince: h.suspendedSince,
         }
       })
-      const statusCounts = Object.fromEntries(['Counting', 'Stale', 'Waiting', 'Rehearsal'].map((st) => [st, households.filter((h) => h.status === st).length]))
+      const statusCounts = Object.fromEntries(STATUSES.map((st) => [st, households.filter((h) => h.status === st).length]))
       const phones = households.reduce((n, h) => n + h.phones, 0)
       const health = healthTiles(
         {
@@ -227,7 +232,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const id = Number(new URL(req.url).searchParams.get('id'))
       const h = ledger.households().find((x) => x.id === id)
       if (!h) return notFound()
-      const night = ledger.liveNights().find((n) => n.householdId === id) ?? { rehearsal: false, kids: 0, lastKidAt: null }
+      const night = ledger.liveNights().find((n) => n.householdId === id) ?? { kids: 0, lastKidAt: null }
       return Response.json({
         id,
         displayName: h.displayName,
@@ -339,7 +344,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const { displayName, timeZone, location, firstRunPassed } = ledger.households().find((h) => h.id === house.id)
       const streams = hub.counts().households[house.id]
       // The ready checklist ticks itself from these (spec §6); /setup polls for them.
-      const checklist = { tvWatching: (streams?.tvLink ?? 0) + (streams?.paired ?? 0) > 0, rehearsalKids: house.rehearsalKids() }
+      const checklist = { tvWatching: (streams?.tvLink ?? 0) + (streams?.paired ?? 0) > 0, anyKids: house.anyKids() }
       return Response.json({ id: house.id, displayName, timeZone, location, firstRunPassed, checklist, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), joinKey: house.joinKey(), tvToken: house.tvToken(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
     }),
     // Delete my Household: typed name to confirm; everything goes at once, and its streams close.
@@ -397,7 +402,11 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
         headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${filename}.csv"` },
       })
     }),
-    'GET /api/batches': manager((req, house) => Response.json(house.batches())),
+    // ?event=<id>, or the door's Event's.
+    'GET /api/batches': manager((req, house) => {
+      const id = new URL(req.url).searchParams.get('event')
+      return Response.json(house.batches(id == null ? null : Number(id)))
+    }),
     'POST /api/admin': manager(async (req, house) => {
       const command = await req.json()
       if (!ADMIN_COMMANDS.has(command?.type)) throw new BadCommand(`Not a Setup command: ${command?.type}`)
@@ -409,21 +418,25 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       if (house.tvToken() !== oldTv) hub.close({ householdId: house.id, credential: oldTv })
       return Response.json({ deltas, joinKey: house.joinKey() })
     }),
-    // ☰ "🌙 End the night" / "Resume the night": any phone with the join key.
+    // ☰ "🌙 End the night" / "Resume the night": any phone with the join key. Every night write names its
+    // Event and the go-live stamp the phone saw (spec v2.1 §4).
     'POST /api/end': write(async (req, house) => {
-      hub.publish(house.id, house.apply({ type: 'end', nearby: nearbyArea(house.id) }))
+      const { eventId, stamp } = await req.json()
+      hub.publish(house.id, house.apply({ type: 'end', eventId, stamp, nearby: nearbyArea(house.id) }))
     }),
     'POST /api/resume': write(async (req, house) => {
-      hub.publish(house.id, house.apply({ type: 'resume' }))
+      const { eventId, stamp } = await req.json()
+      hub.publish(house.id, house.apply({ type: 'resume', eventId, stamp }))
     }),
     // ☰ "Release remaining tickets": any phone with the join key (the phone shows it from 7:45pm event time).
     'POST /api/release': write(async (req, house) => {
-      hub.publish(house.id, house.apply({ type: 'release' }))
+      const { eventId, stamp } = await req.json()
+      hub.publish(house.id, house.apply({ type: 'release', eventId, stamp }))
     }),
     // ☰ soundboard: any phone with the key; the answer says whether it played or hit the cooldown.
     'POST /api/soundboard': write(async (req, house) => {
-      const { slot } = await req.json()
-      const deltas = house.apply({ type: 'soundboard', slot })
+      const { slot, eventId, stamp } = await req.json()
+      const deltas = house.apply({ type: 'soundboard', slot, eventId, stamp })
       hub.publish(house.id, deltas)
       return Response.json({ played: deltas.length > 0 })
     }),
@@ -433,8 +446,8 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     }),
     'POST /api/catch-up': write(async (req, house) => {
       if (!guard.take('taps', house.id)) return tooMany()
-      const { tag, n, kid } = await req.json()
-      hub.publish(house.id, house.apply({ type: 'catchUp', tag, n, kid }))
+      const { tag, n, kid, eventId, stamp } = await req.json()
+      hub.publish(house.id, house.apply({ type: 'catchUp', tag, n, kid, eventId, stamp }))
     }),
   }
 
@@ -458,7 +471,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     return session ? { householdId: session.householdId, kind: 'session', token, session } : null
   }
 
-  // The live night's reads: a join key or a Manager's session.
+  // The door's Event's reads: a join key, a TV link or a Manager's session.
   function read(handler) {
     return async (req, server) => {
       const credential = credentialOf(req)

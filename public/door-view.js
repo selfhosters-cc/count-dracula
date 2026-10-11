@@ -78,7 +78,7 @@ function catchUpPreview(serverKids) {
   }
 }
 
-// "Quiet out there? 🌙 End the night" (v2 spec §7): a live, non-Rehearsal night, from 8:30 pm event time in the
+// "Quiet out there? 🌙 End the night" (v2 spec §7): a Live night, from 8:30 pm event time in the
 // Household's zone (and on through the small hours), with no kid for 30 minutes. Dismissing it hides it for 30.
 const QUIET_MS = 30 * 60_000
 const NUDGE_FROM = 20 * 60 + 30
@@ -86,7 +86,7 @@ const NIGHT_ENDS = 6 * 60 // after midnight still counts as late
 
 export function quietNudge(state, realNowMs, dismissedAt = -Infinity) {
   const event = state?.event
-  if (!event?.live || event.rehearsal || event.ended) return false
+  if (!event?.live || event.ended) return false
   if (realNowMs - dismissedAt < QUIET_MS) return false
   const minute = minuteOfDay(eventNow(realNowMs, event.clockShiftMs ?? 0), state.timeZone)
   if (minute < NUDGE_FROM && minute >= NIGHT_ENDS) return false

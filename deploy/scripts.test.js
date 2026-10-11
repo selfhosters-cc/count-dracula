@@ -14,7 +14,8 @@ function database() {
   const ids = ['The Smiths', 'Casa Ortiz'].map((name, i) => {
     const id = ledger.createHousehold({ displayName: name, timeZone: 'America/Toronto' })
     db.query('INSERT INTO managers (google_sub, email, name, household_id, last_sign_in_at) VALUES (?, ?, ?, ?, 0)').run(`sub-${i}`, `m${i}@example.com`, `M ${i}`, id)
-    ledger.household(id).apply({ type: 'tap', id: `kid-${i}`, tagId: null, tappedAt: 1, phoneName: 'Dad' })
+    const door = ledger.doorEvent(id)
+    ledger.household(id).apply({ type: 'tap', eventId: door.id, stamp: door.wentLiveAt, id: `kid-${i}`, tagId: null, tappedAt: 1, phoneName: 'Dad' })
     return id
   })
   db.close()
@@ -56,8 +57,8 @@ describe('deploy/access-request.js', () => {
     expect(held.household).toMatchObject({ id: ids[1], display_name: 'Casa Ortiz', time_zone: 'America/Toronto' })
     expect(held.household).not.toHaveProperty('tv_token')
     expect(held.household).not.toHaveProperty('join_key')
-    expect(held.events.map((e) => e.name).sort()).toEqual(['Halloween 2026', 'Rehearsal'])
-    expect(held.events.find((e) => e.name === 'Rehearsal').kids).toBe(1)
+    expect(held.events.map((e) => e.name).sort()).toEqual(['Halloween 2026', 'Test night'])
+    expect(held.events.find((e) => e.name === 'Test night')).toMatchObject({ state: 'live', kids: 1 })
   })
 
   test('says so when nobody has that email', async () => {

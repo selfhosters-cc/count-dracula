@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { Database } from 'bun:sqlite'
 import { startServer } from './app.js'
 import { openLedger } from './ledger.js'
-import { setUpV1Night } from '../test/v1-night.js'
+import { named, namingTheDoor, setUpV1Night } from '../test/v1-night.js'
 import { readFrames } from '../test/sse.js'
 import { fakeGoogle } from '../test/fake-google.js'
 import { cookieOf, signIn } from '../test/sign-in.js'
@@ -29,7 +29,7 @@ function start(configOverrides = {}, options = {}) {
   const google = fakeGoogle()
   const app = startServer({ configPath, port: 0, google, env: { HOUSEHOLD1_MANAGER_EMAIL: 'us@example.com' }, ...options })
   running.push(app)
-  app.house = app.ledger.household(1)
+  app.house = namingTheDoor(app.ledger.household(1))
   app.google = google
   return app
 }
@@ -54,10 +54,12 @@ describe('startup', () => {
   })
 })
 
-function postTap(app, tap, { key = app.house.joinKey(), withKey = true } = {}) {
+// A door phone's tap names the Event it shows (the door's) and that Event's go-live stamp.
+function postTap(app, tap, { key = app.house.joinKey(), withKey = true, house = app.house } = {}) {
   const headers = { 'Content-Type': 'application/json' }
   if (withKey) headers['X-Join-Key'] = key
-  return fetch(`${app.url}/api/taps`, { method: 'POST', headers, body: JSON.stringify(tap) })
+  const door = house.doorEvent()
+  return fetch(`${app.url}/api/taps`, { method: 'POST', headers, body: JSON.stringify(typeof tap === 'string' ? tap : { eventId: door?.id, stamp: door?.wentLiveAt, ...tap }) })
 }
 
 function aTap(id) {
@@ -88,7 +90,7 @@ describe('join key', () => {
     expect(await liveCount(app)).toBe(0)
   })
 
-  test('a tap with the live event key is counted', async () => {
+  test("a tap with the Household's key is counted", async () => {
     const app = start()
 
     const res = await postTap(app, aTap('a'))
@@ -178,10 +180,10 @@ describe('per-Household streams', () => {
     const controller = new AbortController()
     const res = await fetch(`${app.url}/api/stream?key=${other.joinKey()}`, { signal: controller.signal })
     const stream = readFrames(res)
-    expect((await stream.next()).data.event.rehearsal).toBe(true)
+    expect((await stream.next()).data.event.name).toBe('Test night')
 
     await postTap(app, aTap('ours'))
-    await postTap(app, aTap('theirs'), { key: other.joinKey() })
+    await postTap(app, aTap('theirs'), { key: other.joinKey(), house: other })
 
     const delta = await stream.next()
     expect(delta.data).toMatchObject({ seq: 1, kid: { id: 'theirs', number: 1 } })
@@ -346,11 +348,13 @@ describe('past events for /tv?event=<id>', () => {
     const rehearsal = app.house.snapshot().event.id
     const [{ event }] = app.house.apply({ type: 'createEvent', name: 'Halloween 2026' })
     app.house.apply({ type: 'goLive', eventId: event.id })
+    app.house.apply({ type: 'end', ...named(app.house, rehearsal) })
+    app.house.apply({ type: 'close', eventId: rehearsal })
 
     const headers = { Cookie: await managerCookie(app) }
     const past = await (await fetch(`${app.url}/api/snapshot?event=${rehearsal}`, { headers })).json()
 
-    expect(past.event).toMatchObject({ name: 'Rehearsal', frozen: true })
+    expect(past.event).toMatchObject({ name: 'Rehearsal', state: 'past' })
     expect(past.kids).toHaveLength(1)
     expect(past.recap).not.toBeNull()
     expect((await fetch(`${app.url}/api/snapshot?event=99999`, { headers })).status).toBe(404)

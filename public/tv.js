@@ -369,13 +369,14 @@ function renderLeaderboard(state) {
 
 // ---- 🌙 the ended night: "THAT'S A WRAP" in the top bar, and with Must #9 on, the recap
 let wasEnded = false
-const over = (state) => !!(state.event.ended || state.event.frozen)
+const NO_NIGHT = { id: null, name: '🌙 No night on right now', state: null, open: false, live: false, ended: false, past: false, clockShiftMs: 0, visitWindowMs: 15_000 }
+const over = (state) => !!(state.event.ended || state.event.past)
 const inRecap = (state) => over(state) && state.settings.switches.recap
 function renderEnded(state, cause) {
   const ended = over(state)
   $('board').classList.toggle('ended', ended)
   $('board').classList.toggle('recap', inRecap(state))
-  $('title').textContent = ended ? `🎃 That's a wrap — ${state.event.name}` : 'Count Dracula'
+  $('title').textContent = ended ? `🎃 That's a wrap — ${state.event.name}` : state.event.id == null ? state.event.name : 'Count Dracula'
   if (inRecap(state)) renderCards(state)
   if (ended !== wasEnded) sound.ended(ended, { quietly: cause === 'snapshot' })
   wasEnded = ended
@@ -496,6 +497,9 @@ live?.onRefused(() => {
 live?.onBusy(() => ($('tv-full').hidden = false))
 live?.on(({ cause }) => {
   if (cause === 'snapshot') $('tv-full').hidden = true
+  // With no Event open (spec v2.1 §4) the snapshot has no event: an empty board stands in for now, under a
+  // "No night on right now" title. Ticket 51 gives it its own screen. Registered first, so every handler sees it.
+  if (live.state && !live.state.event) live.state = { ...live.state, event: NO_NIGHT }
 })
 
 // ---- the pairing screen (spec §9): a code and a QR until a Manager redeems it, then the board
@@ -526,7 +530,6 @@ function renderNearby(state) {
 }
 
 function renderSnapshot(state, cause) {
-  $('rehearsal-chip').hidden = !state.event.rehearsal
   renderNearby(state)
   // First load shows the count as is; a reconnect rolls up quietly to the new total.
   showCount(state.kids.length, wasDisconnected && shown != null ? 'roll' : 'set')
@@ -555,7 +558,7 @@ live?.on(({ state, cause, delta }) => {
   }
   if (cause === 'nearby') return renderNearby(state)
   teaser.pause(quietOrAway(state))
-  kidsCounted = state.kids.length
+  kidsCounted = state.event.id == null ? null : state.kids.length // no night on: no "Start the night"
   showStart()
   if (cause === 'snapshot') {
     teaser.activity() // (re)connected: the 45 s count from now
