@@ -71,6 +71,10 @@
 
     <section>
       <h2>📺 Your TV</h2>
+      <form id="pair-form">
+        <label for="pair-code">Pair a TV: the code on its screen (open <b>/tv</b> on the TV's computer)</label>
+        <div class="row"><input id="pair-code" placeholder="K7Q-M4X" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="primary" type="submit">Pair a TV</button></div>
+      </form>
       <p class="muted">Anyone with this link can watch tonight's board: the porch TV, or family far away. Rotate it to cut every one of them off.</p>
       <p><code id="tv-link" class="link"></code></p>
       <div class="row">
@@ -237,6 +241,21 @@
       }
       await navigator.clipboard.writeText(url)
       say('Join link copied')
+    })
+
+    // ---- Pair a TV (spec §9): the code a bare /tv shows, typed or arriving from its QR as ?pair=<code>
+    async function pairTv(code) {
+      if (!confirm('Show our TV here?')) return
+      const res = await fetch('/api/pair/redeem', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
+      if (res.status === 401) location.href = '/signup'
+      if (!res.ok) return say(await res.text(), true)
+      $('pair-code').value = ''
+      say('✓ Paired: your TV is showing your board')
+    }
+
+    $('pair-form').addEventListener('submit', (e) => {
+      e.preventDefault()
+      if ($('pair-code').value.trim()) pairTv($('pair-code').value.trim())
     })
 
     // ---- the TV link (spec §9): shared from here only, never shown on the TV
@@ -501,6 +520,15 @@
 
     await load()
     $('admin').hidden = false
+
+    // Arrived from a TV's scan-to-pair QR: the code is filled in, and one confirm pairs it.
+    const pairParam = new URLSearchParams(location.search).get('pair')
+    if (pairParam) {
+      history.replaceState(null, '', location.pathname)
+      $('pair-code').value = pairParam
+      $('pair-form').scrollIntoView({ block: 'center' })
+      pairTv(pairParam)
+    }
   </script>
 </body>
 </html>

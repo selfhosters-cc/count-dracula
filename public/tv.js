@@ -1,6 +1,8 @@
 // The porch TV: renders the live state and plays what the celebration director decides.
 // It never celebrates a snapshot, only deltas (spec §3), and never shows an error screen.
 import { connectLive } from '/live.js'
+import { formatCode, startPairing } from '/tv-pairing.js'
+import qrcode from '/vendor/qrcode/qrcode.js'
 import { createDirector } from '/director.js'
 import { animate } from '/vendor/motion/motion.js'
 import confettiLib, { create as createConfetti } from '/vendor/canvas-confetti/confetti.module.js'
@@ -18,9 +20,28 @@ const confetti = createConfetti($('confetti'), { resize: true, useWorker: false 
 const clock = { now: () => Date.now(), setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (id) => clearTimeout(id) }
 
 // What this page shows: the TV link's live night (/tv/k/<token>), one past night's recap (/tv?event=<id>,
-// for a Manager), or a bare /tv.
+// for a Manager), or a bare /tv: the TV link it was paired to, or else the pairing screen.
+const STORED_LINK = 'cd.tvLink' // { tvToken, deviceToken } from pairing
 const tvToken = location.pathname.match(/^\/tv\/k\/([^/]+)/)?.[1] ?? null
 const pastEventId = new URLSearchParams(location.search).get('event')
+const stored = tvToken || pastEventId ? null : storedLink()
+const pairingMode = !tvToken && !pastEventId && !stored
+
+function storedLink() {
+  try {
+    const link = JSON.parse(localStorage.getItem(STORED_LINK) ?? 'null')
+    return link?.tvToken ? link : null
+  } catch {
+    return null
+  }
+}
+
+function storeLink(link) {
+  try {
+    if (link) localStorage.setItem(STORED_LINK, JSON.stringify(link))
+    else localStorage.removeItem(STORED_LINK)
+  } catch {}
+}
 
 // ---- sound (spec §9): the board always shows. While the AudioContext isn't running, a corner pill asks
 // for any click, touch or key (a TV remote can't aim at a button). The full-screen "Start the night" is
@@ -30,7 +51,7 @@ const sound = createSound({ audio, clock })
 let kidsCounted = null // unknown until the first snapshot: the pill, not a flash of Start
 let unlockedOnce = false
 function showStart() {
-  const needsSound = !sound.running && !pastEventId
+  const needsSound = !sound.running && !pastEventId && !pairingMode
   const startScreen = needsSound && kidsCounted === 0 && !unlockedOnce
   $('start').hidden = !startScreen
   $('sound-pill').hidden = !needsSound || startScreen
@@ -452,13 +473,42 @@ const teaser = createTeaser({
 const quietOrAway = (state) => !live?.connected || over(state)
 
 // ---- live state (or, with /tv?event=<id>, one past night's recap from stored data). A TV link reads with its
-// token; a bare /tv, for now, on a signed-in Manager's session.
-const live = pastEventId ? null : connectLive(tvToken ? `/api/stream?key=${encodeURIComponent(tvToken)}` : '/api/stream')
+// token; a paired bare /tv adds its device token, which marks it as the Household's own TV.
+const streamUrl = () => {
+  const query = new URLSearchParams({ key: tvToken ?? stored.tvToken })
+  if (stored?.deviceToken) query.set('device', stored.deviceToken)
+  return `/api/stream?${query}`
+}
+const live = pastEventId || pairingMode ? null : connectLive(streamUrl())
 live?.onRefused(() => {
+  // A paired bare /tv whose link was rotated, or whose Household is gone: forget it and pair again.
+  if (stored) {
+    storeLink(null)
+    return location.reload()
+  }
   $('unavailable').hidden = false // a rotated link, or a Household that's gone: nothing to say about which
   $('start').hidden = true
   $('sound-pill').hidden = true
 })
+
+// ---- the pairing screen (spec §9): a code and a QR until a Manager redeems it, then the board
+if (pairingMode) {
+  $('pairing').hidden = false
+  $('pair-where').textContent = `${location.host}/setup`
+  startPairing({
+    show({ code }) {
+      $('pair-code').textContent = formatCode(code)
+      const qr = qrcode(0, 'M')
+      qr.addData(`${location.origin}/setup?pair=${code}`)
+      qr.make()
+      $('pair-qr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true })
+    },
+    onPaired({ tvToken, deviceToken }) {
+      storeLink({ tvToken, deviceToken })
+      location.reload()
+    },
+  })
+}
 let wasDisconnected = false
 
 function renderSnapshot(state, cause) {

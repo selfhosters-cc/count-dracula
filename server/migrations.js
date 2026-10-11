@@ -57,6 +57,18 @@ const MIGRATIONS = [
     for (const { id } of db.query('SELECT id FROM households').all()) set.run(randomToken(), id)
     db.exec('CREATE UNIQUE INDEX households_by_tv_token ON households (tv_token)')
   },
+
+  // 3 → 4: TVs paired by code (v2 spec §9), told apart from TV-link viewers for the viewer cap.
+  (db) => {
+    db.exec(`
+      CREATE TABLE paired_devices (
+        token TEXT PRIMARY KEY,
+        household_id INTEGER NOT NULL REFERENCES households(id),
+        paired_at INTEGER NOT NULL
+      );
+      CREATE INDEX paired_devices_by_household ON paired_devices (household_id);
+    `)
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

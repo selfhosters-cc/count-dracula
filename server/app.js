@@ -8,6 +8,7 @@ import { BadCommand, openLedger } from './ledger.js'
 import { openAccounts } from './accounts.js'
 import { googleClient } from './google.js'
 import { createHub } from './hub.js'
+import { createPairing } from './pairing.js'
 import { toCsv } from './export.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
@@ -40,6 +41,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     canSignUp,
   })
   const hub = createHub({ heartbeatMs })
+  const pairing = createPairing({ now })
 
   const routes = {
     // The live event, for a phone or a Manager; ?event=<id> reads one of the Household's events (a past
@@ -56,8 +58,25 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // Caddy log). A TV gets the live night TV-shaped.
     'GET /api/stream': read((req, house, credential, server) =>
       credential.kind === 'tv'
-        ? hub.attach(req, server, { householdId: house.id, kind: 'tvLink', credential: credential.token, snapshot: () => tvSnapshot(house.snapshot()), shape: tvDelta })
+        ? hub.attach(req, server, { householdId: house.id, kind: credential.paired ? 'paired' : 'tvLink', credential: credential.token, snapshot: () => tvSnapshot(house.snapshot()), shape: tvDelta })
         : hub.attach(req, server, { householdId: house.id, kind: 'phone', credential: credential.token, snapshot: () => house.snapshot() })),
+
+    // ---- Pairing a TV (spec §9): the bare /tv asks for a code and waits; a Manager redeems it in /setup.
+    // The waiting secret travels in the body, never the address.
+    'POST /api/pair/code': () => Response.json(pairing.newCode()),
+    'POST /api/pair/wait': async (req) => {
+      const { waitToken } = await req.json().catch(() => ({}))
+      const answer = pairing.wait(waitToken)
+      const house = answer?.paired ? ledger.household(answer.householdId) : null
+      if (!answer || (answer.paired && !house)) return new Response('That code has expired: get a new one', { status: 410 })
+      if (!answer.paired) return Response.json({ paired: false })
+      return Response.json({ paired: true, tvToken: house.tvToken(), deviceToken: house.pairDevice() })
+    },
+    'POST /api/pair/redeem': manager(async (req, house) => {
+      const { code } = await req.json()
+      if (!pairing.redeem(code, house.id)) return new Response("That code isn't on any TV right now. Check it, or wait for the TV's next one.", { status: 404 })
+      return Response.json({ paired: true })
+    }),
     'POST /api/taps': write(async (req, house) => {
       const { id, tagId, tappedAt, phoneName, teen } = await req.json()
       hub.publish(house.id, house.apply({ type: 'tap', id, tagId, tappedAt, phoneName, teen }))
@@ -168,7 +187,10 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const householdId = ledger.householdByJoinKey(key)
       if (householdId != null) return { householdId, kind: 'key', token: key }
       const tvHousehold = header ? null : ledger.householdByTvToken(key)
-      return tvHousehold == null ? null : { householdId: tvHousehold, kind: 'tv', token: key }
+      if (tvHousehold == null) return null
+      // A TV paired by code also carries its device token (?device=): the Household's own TV, not a viewer.
+      const paired = ledger.isPairedDevice(tvHousehold, new URL(req.url).searchParams.get('device'))
+      return { householdId: tvHousehold, kind: 'tv', token: key, paired }
     }
     const token = tokenOf(req)
     const session = accounts.session(token)
@@ -255,6 +277,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   return {
     url: server.url.origin,
     ledger,
+    hub,
     stop() {
       hub.shutdown()
       server.stop(true)

@@ -1,7 +1,7 @@
 # TV pairing code and QR
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 23
 
 ## What to build
@@ -27,10 +27,20 @@ A bare `/tv` shows a short code and a QR. A signed-in Manager redeems it to put 
 
 ## Acceptance criteria
 
-- [ ] A bare `/tv` shows a code from the no-lookalike alphabet and a QR to `/setup?pair=<code>`; the code changes after 10 minutes
-- [ ] Redeeming it as a Manager switches the waiting screen to that Household's live board within a few seconds, without a click
-- [ ] Without a session, redeeming fails; an expired or unknown code pairs nothing
-- [ ] Reloading a paired `/tv` goes straight to the board; after Rotate, it clears the link and shows a new code
-- [ ] A paired device is distinguishable from a TV-link viewer on the server
+- [x] A bare `/tv` shows a code from the no-lookalike alphabet and a QR to `/setup?pair=<code>`; the code changes after 10 minutes
+- [x] Redeeming it as a Manager switches the waiting screen to that Household's live board within a few seconds, without a click
+- [x] Without a session, redeeming fails; an expired or unknown code pairs nothing
+- [x] Reloading a paired `/tv` goes straight to the board; after Rotate, it clears the link and shows a new code
+- [x] A paired device is distinguishable from a TV-link viewer on the server
 - [ ] Scanning the QR with a phone's camera app opens `/setup` with the code filled in (checked on a real phone)
-- [ ] `bun test` passes
+  - **Left for the user:** needs a real phone. In the browser, opening `/setup?pair=<code>` fills it in and asks "Show our TV here?".
+- [x] `bun test` passes
+
+## Notes from the build
+
+- Codes live in memory (`server/pairing.js`): 6 characters from `ACDEFHJKMNPQRTUVWXY34679`, 10 minutes, single use. The bare `/tv` asks with `POST /api/pair/code` and polls `POST /api/pair/wait` every 2 s with its wait secret in the body (no token in any URL). An expired code answers 410 and the TV asks for a new one.
+- `POST /api/pair/redeem` needs a Manager session. Its per-Manager rate limit (10 per 10 min) comes with ticket 28.
+- Pairing issues a **device token** (`paired_devices` table). The TV stores `{ tvToken, deviceToken }` in `localStorage` (`cd.tvLink`) and streams with `?key=<tvToken>&device=<deviceToken>`, which the hub counts as `paired`. A wrong device token is just a TV-link viewer. Rotate deletes the Household's device tokens; a refused stored link is forgotten and the screen goes back to pairing.
+- **For ticket 35's log masking:** besides `/tv/k/<token>` and `?key=`, mask `device=` too. `?pair=<code>` is short-lived and harmless.
+- `/setup?pair=…` without a session goes to `/signup` and loses the code; ticket 27's first-run may want to carry it through sign-in.
+- Checked in the browser: the pairing screen, `/setup?pair=` confirm, the TV switching to the board without a click, and Rotate sending it back to a new code.

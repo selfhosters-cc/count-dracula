@@ -173,9 +173,16 @@ export function openLedger(db, config) {
           db.query(`DELETE FROM ${table} WHERE event_id IN (${events})`).run(id)
         }
         db.query('DELETE FROM events WHERE household_id = ?').run(id)
+        db.query('DELETE FROM paired_devices WHERE household_id = ?').run(id)
         db.query('DELETE FROM households WHERE id = ?').run(id)
       })()
       opened.delete(id)
+    },
+
+    // Whether a device token is a TV this Household paired by code (and hasn't rotated away since).
+    isPairedDevice(householdId, token) {
+      if (typeof token !== 'string' || token === '') return false
+      return !!db.query('SELECT 1 FROM paired_devices WHERE token = ? AND household_id = ?').get(token, householdId)
     },
 
     // The Household whose TV link carries this token, or null.
@@ -618,6 +625,7 @@ export function openLedger(db, config) {
       // Rotate TV link (spec §9): a new secret; the HTTP layer closes every stream on the old one.
       rotateTvLink() {
         db.query('UPDATE households SET tv_token = ? WHERE id = ?').run(randomToken(), householdId)
+        db.query('DELETE FROM paired_devices WHERE household_id = ?').run(householdId) // they pair again
         return []
       },
 
@@ -684,6 +692,13 @@ export function openLedger(db, config) {
 
       tvToken() {
         return household().tv_token
+      },
+
+      // A TV paired by code: its device token, which marks its streams as the Household's own TV.
+      pairDevice() {
+        const token = randomToken()
+        db.query('INSERT INTO paired_devices (token, household_id, paired_at) VALUES (?, ?, ?)').run(token, householdId, now())
+        return token
       },
 
       // A counts-only past night from half-hour buckets ({ name, buckets: [{ start, end, count }] }),
