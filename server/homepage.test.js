@@ -69,8 +69,9 @@ describe('/ is the homepage', () => {
     expect(html.match(/name="timeZone"/g)).toHaveLength(2)
     expect(html).toContain('id="start"')
     expect(html).toContain('id="sign-in"')
-    expect(html).toContain('<a href="#join">Helping at someone\'s door? <b>Join a night ›</b></a>')
-    expect(html).toContain('<form id="join-form"')
+    expect(html).toContain('<a href="#code">Got a code from a TV or a host? <b>Enter it ›</b></a>')
+    expect(html).toContain('<form id="code-form"')
+    expect(html).toContain('<input type="hidden" name="pair" id="sign-in-pair">') // a TV's code rides through Sign in
     expect(html).toContain('Sign-ups are paused, try again later.')
     expect(html).toContain('<a href="/privacy">Privacy and House rules</a>')
     expect(html).toContain('<a href="/help/tv">TV setup help</a>')

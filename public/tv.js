@@ -534,7 +534,7 @@ function cutOff() {
 // ---- the pairing screen (spec §9): a code and a QR until a Manager redeems it, then the board
 if (pairingMode) {
   $('pairing').hidden = false
-  $('pair-where').textContent = `${location.host}/setup`
+  $('pair-where').textContent = location.host // the homepage's one code box (spec v2.1 §11)
   startPairing({
     show({ code }) {
       $('pair-code').textContent = formatCode(code)

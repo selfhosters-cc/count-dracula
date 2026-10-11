@@ -66,8 +66,9 @@
       .join-line { text-align: center; margin: 4px 0 14px; }
     .join-line a { color: var(--text); text-decoration: none; }
     .join-line b { color: var(--orange); }
-    #join-code { font-family: ui-monospace, Menlo, monospace; letter-spacing: 0.04em; }
+    #code-input { font-family: ui-monospace, Menlo, monospace; letter-spacing: 0.04em; }
     .error { color: #ff8a8a; margin: 8px 0 0; }
+      .pair-note { background: var(--panel2); border-radius: 10px; padding: 10px 12px; margin: 0; }
   </style>
 </head>
 <body>
@@ -92,7 +93,7 @@
     <a class="button primary" href="#start">Start counting</a>
     <a class="button" href="#sign-in">Sign in</a>
   </div>
-  <p class="join-line"><a href="#join">Helping at someone's door? <b>Join a night ›</b></a></p>
+  <p class="join-line"><a href="#code">Got a code from a TV or a host? <b>Enter it ›</b></a></p>
 
   <section class="how" id="how">
     <h2>How it works</h2>
@@ -134,20 +135,22 @@
     <h2>Already counting?</h2>
     <form method="post" action="/auth/google/start">
       <input type="hidden" name="timeZone">
+      <input type="hidden" name="pair" id="sign-in-pair">
+      <p class="pair-note" id="pair-note" hidden>Sign in to put your TV on: it's showing <b id="pair-note-code"></b>.</p>
       <button type="submit">Sign in with Google</button>
     </form>
   </section>
 
-  <!-- Join a night (spec v2.1 §11): a helper with a join code or link, but no QR to scan. -->
-  <section id="join">
-    <h2>Join a night</h2>
-    <p class="muted">Helping at someone's door? Scan the QR on their phone with your camera, or type the join code
-      under it here. A join link they sent works pasted in too.</p>
-    <form id="join-form" autocomplete="off">
-      <label for="join-code">Join code or link</label>
-      <input id="join-code" name="code" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. Ab3dEf7hJk">
-      <button type="submit">Join and start counting</button>
-      <p class="error" id="join-error" role="alert" hidden>That doesn't look like a join code. It's 10 letters and numbers, under their QR.</p>
+  <!-- The one code box (spec v2.1 §11): a TV's pairing code or a host's join code; the page tells them apart. -->
+  <section id="code">
+    <h2>Got a code?</h2>
+    <p class="muted">A code on a TV's screen, or one a host gave you to help at their door. Type it here: we'll work
+      out which it is. A link you were sent works pasted in too.</p>
+    <form id="code-form" autocomplete="off">
+      <label for="code-input">Code</label>
+      <input id="code-input" name="code" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="K7Q-M4X or Ab3dEf7hJk">
+      <button type="submit">Continue</button>
+      <p class="error" id="code-error" role="alert" hidden>That isn't a code we know. A TV shows 6 characters, like K7Q-M4X; a host's helper code is 10 letters and numbers.</p>
     </form>
   </section>
 

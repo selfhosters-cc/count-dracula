@@ -1,6 +1,7 @@
 // Accounts (v2 spec §3, §20): Managers signing in with Google, their sessions, sign-up, and deleting a
 // Household. Google is the one outside call and sits behind a seam (server/google.js; a fake in tests).
 import { BadCommand, displayNameOf, isTimeZone } from './ledger.js'
+import { tvCodeFrom } from '../shared/codes.js'
 import { randomToken } from './migrations.js'
 
 const SESSION_MS = 90 * 86_400_000
@@ -26,17 +27,18 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
   return {
     // The sign-up or sign-in button: remembers what to do when Google sends the person back, and
     // returns Google's address to send them to. A sign-up carries the display name and the browser's zone.
-    beginSignIn({ displayName, timeZone, invite = null, redirectUri }) {
+    // pair: a TV's code that sent a signed-out phone here (spec v2.1 §11), kept so the callback can carry it on.
+    beginSignIn({ displayName, timeZone, invite = null, pair = null, redirectUri }) {
       const name = invite || displayName == null || String(displayName).trim() === '' ? null : displayNameOf(displayName)
       const at = now()
       for (const [state, p] of pending) if (p.expiresAt < at) pending.delete(state)
       const state = randomToken()
       const nonce = randomToken()
-      pending.set(state, { nonce, displayName: name, invite: invite || null, timeZone: isTimeZone(timeZone) ? timeZone : 'UTC', expiresAt: at + STATE_MS })
+      pending.set(state, { nonce, displayName: name, invite: invite || null, pair: tvCodeFrom(pair), timeZone: isTimeZone(timeZone) ? timeZone : 'UTC', expiresAt: at + STATE_MS })
       return google.authUrl({ state, nonce, redirectUri })
     },
 
-    // Google's callback. Returns { token, householdId, created, already } or { refused } with one of
+    // Google's callback. Returns { token, householdId, created, already, pair } or { refused } with one of
     // 'state' | 'unverified' | 'noHousehold' | 'paused' | 'alreadyManager' | 'invite' (with `why`). A state works once.
     async finishSignIn({ code, state, redirectUri, ip }) {
       const started = pending.get(state)
@@ -54,20 +56,20 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
         db.query('UPDATE managers SET email = ?, name = ?, last_sign_in_at = ? WHERE id = ?').run(identity.email, identity.name ?? null, now(), known.id)
         // Start counting (a name was typed) with an account that already runs a Household: signed in to that one,
         // and told so, never a second Household.
-        return { token: startSession(known.id), householdId: known.household_id, created: false, already: started.displayName != null }
+        return { token: startSession(known.id), householdId: known.household_id, created: false, already: started.displayName != null, pair: started.pair }
       }
       if (invited) {
         if (invited.status !== 'ok') return { refused: 'invite', why: invited.status }
         return db.transaction(() => {
           db.query('UPDATE invites SET used_at = ? WHERE token = ?').run(now(), started.invite)
-          return { ...join(invited.householdId, identity), created: false }
+          return { ...join(invited.householdId, identity), created: false, pair: started.pair }
         })()
       }
       if (!started.displayName) return { refused: 'noHousehold' }
       if (!canSignUp({ ip })) return { refused: 'paused' }
       return db.transaction(() => {
         const householdId = ledger.createHousehold({ displayName: started.displayName, timeZone: started.timeZone })
-        return { ...join(householdId, identity), created: true }
+        return { ...join(householdId, identity), created: true, pair: started.pair }
       })()
     },
 

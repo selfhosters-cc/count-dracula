@@ -38,6 +38,7 @@ _Avoid_: User, volunteer, member
 
 **Join key**:
 The one secret a door phone holds to write to a Household: it writes to any of the Household's Live or Ended Events, and every write names its Event. It's kept across Events, so a phone set up for a test night works on the real one; Change join key cuts off every phone holding the old one.
+People see it as the **join code**, typed into the homepage's "Got a code?" box when they can't scan the QR.
 _Avoid_: Event key, password, TV link (that's read-only)
 
 **Operator**:

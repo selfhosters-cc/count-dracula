@@ -1,5 +1,6 @@
 // The homepage on / (spec v2.1 §11): the pitch, the site-wide line, How it works, Start and Sign in.
-import { doorRedirect, joinKeyFrom } from '/door-view.js'
+import { doorRedirect } from '/door-view.js'
+import { readCode, tvCodeFrom } from '/shared/codes.js'
 import { homeSiteLine } from '/nearby-text.js'
 
 const $ = (id) => document.getElementById(id)
@@ -29,7 +30,7 @@ const watch = new IntersectionObserver((entries) => {
   for (const e of entries) inView.set(e.target.id, e.isIntersecting)
   sticky.classList.toggle('show', ![...inView.values()].some(Boolean))
 })
-for (const id of ['cta-top', 'start', 'sign-in', 'join']) watch.observe($(id))
+for (const id of ['cta-top', 'start', 'sign-in', 'code']) watch.observe($(id))
 
 const getJson = (path) => fetch(path).then((r) => (r.ok ? r.json() : null)).catch(() => null)
 
@@ -67,11 +68,27 @@ $('count-here').addEventListener('click', async () => {
   location.href = '/door'
 })
 
-// Join a night: the code typed or the link pasted opens the door phone with that key, as a helper's QR would.
-$('join-form').addEventListener('submit', (e) => {
-  e.preventDefault()
-  const key = joinKeyFrom($('join-code').value)
-  $('join-error').hidden = key != null
-  if (key) location.href = `/door?key=${encodeURIComponent(key)}`
-})
+// A TV's scan-to-pair QR on a signed-out phone lands here with ?pair=: Sign in carries the code on to /setup.
+const waitingTv = tvCodeFrom(new URLSearchParams(location.search).get('pair'))
+if (waitingTv) {
+  $('sign-in-pair').value = waitingTv
+  $('pair-note-code').textContent = `${waitingTv.slice(0, 3)}-${waitingTv.slice(3)}`
+  $('pair-note').hidden = false
+}
 
+// Got a code?: a TV's code pairs that TV (through sign-in if need be), a join code opens the door phone.
+// A join code is checked first, so a mistyped one says so here instead of on the door phone.
+$('code-form').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const say = (text) => {
+    $('code-error').textContent = text
+    $('code-error').hidden = !text
+  }
+  const code = readCode($('code-input').value)
+  if (!code) return say("That isn't a code we know. A TV shows 6 characters, like K7Q-M4X; a host's helper code is 10 letters and numbers.")
+  if (code.tv) return (location.href = `/setup?pair=${code.tv}`)
+  const res = await fetch(`/api/snapshot?key=${encodeURIComponent(code.join)}`).catch(() => null)
+  if (res && (res.status === 401 || res.status === 403)) return say("No door has that code. Check it with your host: it's under the QR on their phone.")
+  say('')
+  location.href = `/door?key=${encodeURIComponent(code.join)}`
+})

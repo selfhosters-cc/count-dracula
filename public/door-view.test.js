@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { doorRedirect, doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, joinCodeLine, joinKeyFrom, quietNudge, refusedKey } from './door-view.js'
+import { doorRedirect, doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, joinCodeLine, quietNudge, refusedKey } from './door-view.js'
 
 function state(kidIds, tags = []) {
   return { tags, kids: kidIds.map((id, i) => ({ id, number: i + 1, tagId: null, tappedAt: i })) }
@@ -313,6 +313,11 @@ describe('where / goes', () => {
     expect(doorRedirect({ pathname: '/', search: '', storedKey: 'abc' })).toBe('/door')
   })
 
+  test("a phone that holds a door's key can still reach Got a code? (a TV's code, another host's)", () => {
+    expect(doorRedirect({ pathname: '/', search: '', hash: '#code', storedKey: 'abc' })).toBeNull()
+    expect(doorRedirect({ pathname: '/', search: '?pair=K7QM4X', hash: '#sign-in', storedKey: 'abc' })).toBeNull()
+  })
+
   test('/ with no key stays on the homepage, and /door never redirects', () => {
     expect(doorRedirect({ pathname: '/', search: '', storedKey: null })).toBeNull()
     expect(doorRedirect({ pathname: '/door', search: '?key=abc', storedKey: 'abc' })).toBeNull()
@@ -349,22 +354,8 @@ describe('Go live now (a signed-in Manager)', () => {
   })
 })
 
-describe('Join a night on the homepage', () => {
-  test('takes the join code typed, or the key out of a pasted join link', () => {
-    expect(joinKeyFrom('Ab3dEf7hJk')).toBe('Ab3dEf7hJk')
-    expect(joinKeyFrom('  Ab3d Ef7h Jk \n')).toBe('Ab3dEf7hJk') // spaces from reading it aloud or copying
-    expect(joinKeyFrom('https://count-dracula.example.com/door?key=Ab3dEf7hJk')).toBe('Ab3dEf7hJk')
-    expect(joinKeyFrom('count-dracula.example.com/?key=Ab3dEf7hJk&x=1')).toBe('Ab3dEf7hJk') // an old link, no https
-  })
-
-  test("refuses what can't be a join code", () => {
-    for (const text of ['', '   ', 'abc', 'https://count-dracula.example.com/door', 'not a code at all!', 'x'.repeat(80)]) {
-      expect(joinKeyFrom(text)).toBeNull()
-    }
-  })
-
-  test("the helper box spells out the code for someone who can't scan", () => {
-    expect(joinCodeLine('Ab3dEf7hJk', 'https://count-dracula.example.com')).toBe('Or go to count-dracula.example.com, tap Join a night and type Ab3dEf7hJk')
+describe("a helper's code under the QR", () => {
+  test("spells the code out for a phone that can't scan, worded like the TV's", () => {
+    expect(joinCodeLine('Ab3dEf7hJk', 'https://count-dracula.example.com')).toBe('No camera? On their phone, go to count-dracula.example.com and enter Ab3dEf7hJk')
   })
 })
-

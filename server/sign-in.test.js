@@ -247,6 +247,31 @@ describe('sessions', () => {
   })
 })
 
+describe("a TV's code through sign-in (spec v2.1 §11)", () => {
+  test('a signed-out /setup?pair= keeps the code on its way to sign-in', async () => {
+    const { app } = start()
+
+    const scanned = await fetch(`${app.url}/setup?pair=k7q-m4x`, { redirect: 'manual' })
+    const junk = await fetch(`${app.url}/setup?pair=https://evil.example.com`, { redirect: 'manual' })
+
+    expect(scanned.headers.get('Location')).toBe('/?pair=K7QM4X#sign-in')
+    expect(junk.headers.get('Location')).toBe('/#sign-in')
+  })
+
+  test('signing in with the code lands on /setup?pair=, ready to pair that TV', async () => {
+    const server = start({ fresh: true })
+    await signIn(server, ALICE, { displayName: 'The Smiths' })
+
+    const back = await signIn(server, ALICE, { pair: 'K7QM4X' })
+    const newcomer = await signIn(server, BOB, { displayName: 'The Joneses', pair: 'K7QM4X' })
+    const junk = await signIn(server, ALICE, { pair: '/evil' })
+
+    expect(back.headers.get('Location')).toBe('/setup?pair=K7QM4X')
+    expect(newcomer.headers.get('Location')).toBe('/setup?pair=K7QM4X')
+    expect(junk.headers.get('Location')).toBe('/setup')
+  })
+})
+
 describe('/setup on a session', () => {
   test('/setup and every Setup read and command refuse without a session', async () => {
     const { app } = start()

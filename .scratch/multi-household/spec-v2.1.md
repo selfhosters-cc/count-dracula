@@ -355,6 +355,7 @@ Prototype: branch `prototype/homepage` (`d414470`), `public/home-prototype.html?
   - **Start your household** (name, Continue with Google, the privacy line)
   - **Already counting?** Sign in with Google, then *"Helping at someone's door? Scan the QR on their phone, or open the link they sent you."*
   - **Footer:** Privacy and House rules · TV setup help · Help: email us
+- **Got a code?** (added after opening, 2026-10-11): one box for both codes a person may type, worked out from the code's shape (`shared/codes.js`): a TV's pairing code (6 characters, e.g. `K7Q-M4X`) goes to `/setup?pair=`, through sign-in if need be (Sign in carries it, and the callback lands on `/setup?pair=`); a join code (10 characters) is checked with the server, then opens `/door?key=`. The TV's pairing screen says "On your phone, go to <host> and enter this code, or scan this", and every helper QR adds "No camera? On their phone, go to <host> and enter <code>". A line under Start / Sign in links to it, and a phone holding a door's key can still reach it (`/#code`).
 - **A sticky Start counting / Sign in bar on phones** slides up while neither the top row nor the forms are on screen.
 - **Paused sign-ups:** "Sign-ups are paused, try again later." replaces the Continue button, before anyone goes to Google. Sign in still works.
 - **A signed-in Manager:** a **Welcome back** card at the top ("Signed in to *<Household>*", **Go to Setup ›**, 📱 Count on this device, Not you? Sign out). It replaces the row, the bar and both forms. There's no redirect.

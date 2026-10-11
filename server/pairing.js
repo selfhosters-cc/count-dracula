@@ -1,10 +1,8 @@
 // TV pairing codes (v2 spec §9): a bare /tv asks for a short code, a signed-in Manager redeems it, and the
 // waiting screen learns which Household it now shows. Codes live in memory: a restart only means a new code.
 import { randomToken } from './migrations.js'
+import { TV_CODE_ALPHABET as ALPHABET, TV_CODE_LENGTH as CODE_LENGTH } from '../shared/codes.js'
 
-// No lookalikes: no 0/O, 1/I/L, 2/Z, 5/S, 8/B or G/6.
-const ALPHABET = 'ACDEFHJKMNPQRTUVWXY34679'
-const CODE_LENGTH = 6
 const CODE_MS = 10 * 60_000
 
 export function createPairing({ now = Date.now } = {}) {

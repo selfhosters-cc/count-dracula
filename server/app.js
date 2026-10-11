@@ -9,6 +9,7 @@ import { openAccounts } from './accounts.js'
 import { googleClient } from './google.js'
 import { createHub } from './hub.js'
 import { createPairing } from './pairing.js'
+import { tvCodeFrom } from '../shared/codes.js'
 import { LIMITS, createGuard } from './guard.js'
 import { createBackups } from './backups.js'
 import { STATUSES, healthTiles, householdStatus } from './operator.js'
@@ -307,7 +308,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       if (!guard.take('signIn', clientIp(req, server))) return page('Slow down', '<p>Too many sign-ins from here. Try again in a while.</p>', 429)
       const form = await req.formData()
       try {
-        return redirect(accounts.beginSignIn({ displayName: form.get('displayName'), timeZone: form.get('timeZone'), invite: form.get('invite'), redirectUri: callbackUrl(req) }))
+        return redirect(accounts.beginSignIn({ displayName: form.get('displayName'), timeZone: form.get('timeZone'), invite: form.get('invite'), pair: form.get('pair'), redirectUri: callbackUrl(req) }))
       } catch (err) {
         if (err instanceof BadCommand) return page('Pick another name', `<p>${esc(err.message)}.</p><p><a href="/#start">Back</a></p>`, 400)
         throw err
@@ -324,7 +325,9 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
         return page('Sign-in didn\'t work', '<p>Google sign-in didn\'t work. <a href="/#start">Try again</a>.</p>', 502)
       }
       if (result.refused) return REFUSALS[result.refused](result)
-      return redirect(result.already ? '/setup?already=1' : '/setup', { 'Set-Cookie': sessionCookie(result.token) })
+      // A TV's code that sent a signed-out phone to sign in comes back to /setup?pair= (spec v2.1 §11).
+      const next = new URLSearchParams({ ...(result.already && { already: '1' }), ...(result.pair && { pair: result.pair }) }).toString()
+      return redirect(next ? `/setup?${next}` : '/setup', { 'Set-Cookie': sessionCookie(result.token) })
     },
     'POST /auth/signout': (req) => {
       accounts.signOut(tokenOf(req))
@@ -526,7 +529,11 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   function managerPage(pathname) {
     return async (req) => {
       const session = accounts.session(tokenOf(req))
-      if (!session) return redirect(SIGN_IN)
+      if (!session) {
+        // A TV's scan-to-pair QR on a signed-out phone: the code waits on the homepage's Sign in (spec v2.1 §11).
+        const pair = tvCodeFrom(new URL(req.url).searchParams.get('pair'))
+        return redirect(pair ? `/?pair=${pair}#sign-in` : SIGN_IN)
+      }
       if (ledger.isSuspended(session.householdId)) return page('Suspended', `<p>This Household is suspended by the Operator.</p><p>Questions: <a href="mailto:${esc(contact)}">${esc(contact)}</a></p>`, 403)
       return renew(await serveStatic(pathname, req, contact), session, req)
     }
