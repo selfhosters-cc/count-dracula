@@ -153,3 +153,37 @@ describe('on the screens', () => {
     expect(snap.settings.switches.nearby).toBe(false)
   })
 })
+
+describe('the Site-wide total on the sign-up page', () => {
+  const running46 = []
+  afterEach(() => running46.splice(0).forEach((app) => app.stop()))
+
+  function site(households, switches = {}) {
+    const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
+    const configPath = join(dir, 'config.json')
+    writeFileSync(configPath, JSON.stringify({ dbPath: join(dir, 'db.sqlite'), switches }))
+    const app = startServer({ configPath, port: 0, env: {}, now: () => Date.parse('2026-10-31T23:00:00Z') })
+    running46.push(app)
+    for (let i = 0; i < households; i++) {
+      const house = app.ledger.household(app.ledger.createHousehold({ displayName: `House ${i}`, timeZone: 'America/Toronto' }))
+      for (let k = 0; k < 3; k++) house.apply({ type: 'tap', id: `h${i}k${k}`, tagId: null, tappedAt: Date.parse('2026-10-31T22:59:00Z'), phoneName: 'Secret' })
+    }
+    app.refreshNearby()
+    return app
+  }
+
+  test('shows with 5 live Households, hidden below, and holds only the rounded totals', async () => {
+    const four = await (await fetch(`${site(4).url}/api/site`)).json()
+    const res = await fetch(`${site(5).url}/api/site`)
+    const body = await res.text()
+
+    expect(four).toEqual({ site: null })
+    expect(JSON.parse(body)).toEqual({ site: { houses: 5, kids: 15 } })
+    expect(body).not.toContain('House')
+    expect(body).not.toContain('Secret')
+  })
+
+  test('the nearby switch hides it', async () => {
+    expect(await (await fetch(`${site(5, { nearby: false }).url}/api/site`)).json()).toEqual({ site: null })
+  })
+})

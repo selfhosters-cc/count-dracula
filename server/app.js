@@ -357,6 +357,9 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     }),
     'GET /summary': managerPage('/summary'),
 
+    // The Site-wide total for the public sign-up page (spec §14): only the rounded line, from the last refresh.
+    'GET /api/site': () => Response.json({ site: nearby.forHousehold(null, null)?.site ?? null }),
+
     // ---- Share links (spec §12): /share?key=<token>, a shape the Caddy log masks. Public: no sign-in.
     'POST /api/share': manager(async (req, house) => {
       const { eventId, hideName } = await req.json()
