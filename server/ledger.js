@@ -120,7 +120,20 @@ export const DEFAULT_SWITCHES = {
   rushMeter: true, // a nice-to-have (ticket 39), switchable like the Musts
   nearby: true, // v2: nearby figures and the Site-wide total, everywhere (spec §17)
   shareLinks: true, // v2: Night summary share links (spec §17)
+  estimatedGhost: true, // v2: "About how many kids came last year?" (spec §14)
 }
+
+// The estimated ghost's shape (spec §14): our own 2025 night's five half-hours, as fractions of its total, so
+// no count is in the code. Read at the same local times in each Household's zone.
+const LAST_YEAR_SHAPE = [
+  { start: '17:42', end: '18:00', share: 0.040462 },
+  { start: '18:00', end: '18:30', share: 0.208092 },
+  { start: '18:30', end: '19:00', share: 0.309249 },
+  { start: '19:00', end: '19:30', share: 0.343931 },
+  { start: '19:30', end: '20:00', share: 0.098266 },
+]
+const ESTIMATED_NAME = 'Halloween 2025 (estimated)'
+const MAX_LAST_YEAR = 100_000
 
 export function openLedger(db, config) {
   const switches = { ...DEFAULT_SWITCHES, ...config.switches }
@@ -396,7 +409,9 @@ export function openLedger(db, config) {
           )
       return {
         eventId: against.id,
-        label: against.name.match(/\b(?:19|20)\d\d\b/)?.[0] ?? against.name, // "2025: 346" on the chart
+        // "2025: 346" on the chart; an Estimated past event says so wherever it shows (spec §14).
+        label: against.estimated ? 'last year (estimated)' : (against.name.match(/\b(?:19|20)\d\d\b/)?.[0] ?? against.name),
+        estimated: against.estimated === 1,
         total: buckets.reduce((sum, b) => sum + b.count, 0),
         buckets,
       }
@@ -776,6 +791,27 @@ export function openLedger(db, config) {
         return [{ type: 'event.updated', eventId: eventById().id }]
       },
 
+      // "About how many kids came last year?" (spec §14): the total spread over 2025's shape as an Estimated past
+      // event, set as the coming night's Race against. null clears it, and Race against goes back to None.
+      setLastYear({ total }) {
+        if (!canEstimateLastYear()) throw new BadCommand('Your household already has a past night to race')
+        const existing = estimatedEvent()
+        if (total == null) {
+          if (existing) removeEvent(existing.id)
+          return liveUpdated()
+        }
+        if (!Number.isInteger(total) || total < 1 || total > MAX_LAST_YEAR) throw new BadCommand('Last year needs a whole number of kids')
+        const id = existing?.id ?? db
+          .query('INSERT INTO events (household_id, name, counts_only, frozen, estimated) VALUES (?, ?, 1, 1, 1) RETURNING id')
+          .get(householdId, ESTIMATED_NAME).id
+        db.query('DELETE FROM ghost_buckets WHERE event_id = ?').run(id)
+        const insert = db.query('INSERT INTO ghost_buckets (event_id, slot_start, slot_end, count) VALUES (?, ?, ?, ?)')
+        for (const b of lastYearBuckets(total)) insert.run(id, b.start, b.end, b.count)
+        const night = comingNight()
+        if (night) db.query('UPDATE events SET race_against_id = ? WHERE id = ?').run(id, night.id)
+        return liveUpdated()
+      },
+
       // First-run's screen 3 was passed (paired, sent, used here or skipped): it stops showing.
       passFirstRun() {
         db.query('UPDATE households SET first_run_passed = 1 WHERE id = ?').run(householdId)
@@ -821,6 +857,38 @@ export function openLedger(db, config) {
       },
     }
 
+    // ---- the estimated ghost (spec §14)
+    function estimatedEvent() {
+      return db.query('SELECT * FROM events WHERE household_id = ? AND estimated = 1').get(householdId)
+    }
+
+    // Offered only while the Household has no past night of its own (a Rehearsal or an estimate isn't one).
+    function canEstimateLastYear() {
+      if (!switches.estimatedGhost) return false
+      return !db.query('SELECT 1 FROM events WHERE household_id = ? AND (frozen = 1 OR counts_only = 1) AND rehearsal = 0 AND estimated = 0').get(householdId)
+    }
+
+    // The night the estimate races: the live non-Rehearsal one, or else the next one to go live.
+    function comingNight() {
+      return db
+        .query(`
+          SELECT * FROM events WHERE household_id = ? AND frozen = 0 AND counts_only = 0 AND rehearsal = 0
+          ORDER BY live DESC, goes_live_at IS NULL, goes_live_at, id LIMIT 1
+        `)
+        .get(householdId)
+    }
+
+    function liveUpdated() {
+      return [{ type: 'event.updated', eventId: eventById().id }] // screens resync, so the ghost appears or goes
+    }
+
+    // An event and everything it holds; anything racing it goes to None.
+    function removeEvent(id) {
+      db.query('UPDATE events SET race_against_id = NULL WHERE race_against_id = ?').run(id)
+      for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches', 'share_links', 'reports']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(id)
+      db.query('DELETE FROM events WHERE id = ?').run(id)
+    }
+
     function writableTag(tagId) {
       const tag = db
         .query('SELECT t.* FROM tags t JOIN events e ON e.id = t.event_id WHERE t.id = ? AND e.household_id = ?')
@@ -862,6 +930,14 @@ export function openLedger(db, config) {
 
       tvToken() {
         return household().tv_token
+      },
+
+      canEstimateLastYear,
+
+      // The estimated total last year, or null.
+      lastYear() {
+        const event = estimatedEvent()
+        return event ? db.query('SELECT SUM(count) AS n FROM ghost_buckets WHERE event_id = ?').get(event.id).n : null
       },
 
       // Kids counted on the Household's Rehearsals: the checklist's "A phone counted a test kid".
@@ -1034,6 +1110,7 @@ function toEventSummary(row) {
     ended: row.ended === 1,
     endedAutomatically: row.ended_automatically === 1,
     rehearsal: row.rehearsal === 1,
+    estimated: row.estimated === 1,
   }
 }
 
@@ -1074,6 +1151,14 @@ function decentName(name) {
 
 function costumeName(name) {
   return decentName(requireName(name, 'A costume'))
+}
+
+// The total spread over 2025's shape; the rounding remainder goes to the biggest bucket, so it adds up exactly.
+function lastYearBuckets(total) {
+  const buckets = LAST_YEAR_SHAPE.map(({ start, end, share }) => ({ start, end, count: Math.floor(total * share) }))
+  const biggest = buckets.reduce((a, b) => (b.count > a.count ? b : a))
+  biggest.count += total - buckets.reduce((sum, b) => sum + b.count, 0)
+  return buckets
 }
 
 export function isTimeZone(zone) {

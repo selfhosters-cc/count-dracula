@@ -133,6 +133,11 @@ const MIGRATIONS = [
       CREATE INDEX reports_by_household ON reports (household_id);
     `)
   },
+
+  // 10 → 11: an Estimated past event (v2 spec §14): a counts-only night made from a typed-in total.
+  (db) => {
+    db.exec('ALTER TABLE events ADD COLUMN estimated INTEGER NOT NULL DEFAULT 0')
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

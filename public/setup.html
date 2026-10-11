@@ -73,7 +73,10 @@
         <li id="check-tv"><b>A TV is watching</b><span class="muted" data-todo>Open /tv on the TV's computer, then Pair a TV below.</span></li>
         <li id="check-kid"><b>A phone counted a test kid</b><span class="muted" data-todo>Tap 📱 Count on this phone, then +1 Kid.</span><span class="muted" data-done>Now try <button type="button" class="link-button" id="check-reset">Reset the Rehearsal</button> so your TV starts at 0.</span></li>
         <li id="check-night"><b>Your Halloween night</b><span class="muted" id="check-night-when"></span>
-          <form id="check-night-form" class="row" data-todo><input id="check-expected" type="number" min="0" placeholder="Expected kids" aria-label="Expected kids"><button type="submit">Save</button><button type="button" id="check-night-skip">Skip</button></form></li>
+          <form id="check-night-form" data-todo>
+            <div class="row"><input id="check-expected" type="number" min="0" placeholder="Expected kids" aria-label="Expected kids"><button type="submit">Save</button><button type="button" id="check-night-skip">Skip</button></div>
+            <div class="row" id="check-last-year-row" style="margin-top: 6px"><input id="check-last-year" type="number" min="1" placeholder="About how many kids came last year?" aria-label="About how many kids came last year?"><button type="button" id="check-last-year-save">Race it</button></div>
+          </form></li>
       </ol>
     </section>
 
@@ -129,6 +132,10 @@
         <input id="s-name">
         <label for="s-race">Race against</label>
         <select id="s-race"></select>
+        <div id="last-year" hidden>
+          <label for="s-last-year">No past night of your own? About how many kids came last year? It becomes a ghost to race, "last year (estimated)".</label>
+          <div class="row"><input id="s-last-year" type="number" min="1"><button type="button" id="s-last-year-save">Save</button><button type="button" id="s-last-year-clear" class="danger">Clear</button></div>
+        </div>
         <div class="row">
           <div><label for="s-expected">Expected kids</label><input id="s-expected" type="number" min="0"></div>
           <div><label for="s-visit">Visit window (s)</label><input id="s-visit" type="number" min="1"></div>

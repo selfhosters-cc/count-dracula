@@ -144,7 +144,8 @@ export function createRaceChart(canvas) {
       tonightLine.pointRadius = line.map((_, i) => (i === line.length - 1 ? 11 : 0)) // the dot at "now"
       tonightLine.hidden = !count
       chart.options.plugins.raceLabels = {
-        ghostEnd: g && { text: `${g.label}: ${g.total}`, y: g.total },
+        // An estimate's end label is just "last year": the legend beside it says "(estimated)", and it fits.
+        ghostEnd: g && { text: `${g.estimated ? 'last year' : g.label}: ${g.total}`, y: g.total },
         ghostNow: g && { x: Math.min(Math.max(now, xMin), xMax), y: ghostCurve(g.buckets)(now) },
         tonight: count ? { x: Math.max(now, kidMinutes[count - 1]), y: count } : null,
       }

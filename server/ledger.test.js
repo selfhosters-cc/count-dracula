@@ -102,6 +102,7 @@ describe('feature switches', () => {
       rushMeter: true,
       nearby: true,
       shareLinks: true,
+      estimatedGhost: true,
     })
   })
 })
@@ -131,6 +132,7 @@ describe('snapshot', () => {
       ghost: {
         eventId: expect.any(Number),
         label: '2025',
+        estimated: false,
         total: 346,
         buckets: [
           { start: '17:42', end: '18:00', count: 14 },
@@ -303,6 +305,7 @@ describe('ghost from a past event with taps', () => {
     expect(ledger.snapshot().ghost).toEqual({
       eventId: past,
       label: '2026',
+      estimated: false,
       total: 2,
       buckets: [
         { start: '17:50', end: '18:00', count: 1 },

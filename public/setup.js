@@ -170,7 +170,8 @@ function renderChecklist() {
   const night = halloweenNight()
   const tv = house.checklist.tvWatching
   const kid = remembered('kid')
-  const nightDone = !!night && (night.expectedKids != null || night.raceAgainstId != null || remembered('night'))
+  const nightDone = !!night && (night.expectedKids != null || night.raceAgainstId != null || house.lastYear != null || remembered('night'))
+  $('check-last-year-row').hidden = !house.canEstimateLastYear
   $('check-tv').classList.toggle('done', tv)
   $('check-kid').classList.toggle('done', kid)
   $('check-night').classList.toggle('done', nightDone)
@@ -189,6 +190,20 @@ $('check-night-form').addEventListener('submit', async (e) => {
   const night = halloweenNight()
   if (night && $('check-expected').value !== '') await admin({ type: 'settings', eventId: night.id, expectedKids: Number($('check-expected').value) }, 'Expected kids saved')
 })
+// "About how many kids came last year?" (spec §14): a ghost to race, made from one number.
+async function setLastYear(total, done) {
+  await admin({ type: 'setLastYear', total }, done)
+}
+$('check-last-year-save').addEventListener('click', () => {
+  if ($('check-last-year').value) setLastYear(Number($('check-last-year').value), 'Last year saved: race it on the night')
+})
+$('s-last-year-save').addEventListener('click', () => {
+  if ($('s-last-year').value) setLastYear(Number($('s-last-year').value), 'Last year saved')
+})
+$('s-last-year-clear').addEventListener('click', () => {
+  if (confirm('Clear last year? Your night races nobody until you set it again.')) setLastYear(null, 'Last year cleared')
+})
+
 $('check-night-skip').addEventListener('click', () => {
   remember('night')
   renderChecklist()
@@ -315,6 +330,9 @@ function render() {
   $('s-visit').value = editing.visitWindowMs / 1000
   $('s-golden').value = editing.goldenCount
   $('goes-row').hidden = editing.live
+  $('last-year').hidden = !house.canEstimateLastYear
+  if (document.activeElement !== $('s-last-year')) $('s-last-year').value = house.lastYear ?? ''
+  $('s-last-year-clear').hidden = house.lastYear == null
   $('goes-zone').textContent = timeZone
   $('s-goes').value = editing.goesLiveAt == null ? '' : stamp(editing.goesLiveAt, timeZone).slice(0, 16).replace(' ', 'T')
   $('auto-ended').hidden = !(live.ended && live.endedAutomatically)

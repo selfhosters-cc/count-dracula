@@ -1,7 +1,7 @@
 # Estimated ghost from last year's total
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 18, 27
 
 ## What to build
@@ -19,10 +19,19 @@ A Household with no past night types in about how many kids came last year and g
 
 ## Acceptance criteria
 
-- [ ] A total of 200 gives five buckets that sum to exactly 200, in the 2025 shape, at the Household's local times
-- [ ] It becomes Halloween 2026's Race against, and the TV shows the ghost with "last year (estimated)"
-- [ ] The golden range uses it
-- [ ] Clearing it sets Race against back to None and removes the event
-- [ ] A Household with its own past Event isn't offered the field
-- [ ] The switch hides the field
-- [ ] `bun test` passes
+- [x] A total of 200 gives five buckets that sum to exactly 200, in the 2025 shape, at the Household's local times
+- [x] It becomes Halloween 2026's Race against, and the TV shows the ghost with "last year (estimated)"
+- [x] The golden range uses it
+- [x] Clearing it sets Race against back to None and removes the event
+- [x] A Household with its own past Event isn't offered the field
+- [x] The switch hides the field
+- [x] `bun test` passes
+
+## Notes from the build
+
+- **Ledger:** the Setup command `setLastYear({ total })` (1 to 100,000; `null` clears) makes or reshapes the counts-only "Halloween 2025 (estimated)" (`events.estimated`, migration step 11) and sets it as the coming night's Race against: the live non-Rehearsal night, or else the next to go live. Clearing deletes it, and anything racing it goes to None. `house.lastYear()` and `house.canEstimateLastYear()` (no frozen or counts-only night of its own other than Rehearsals and estimates, and the switch on) feed `/api/household`.
+- **Shape:** `LAST_YEAR_SHAPE` holds the five 2025 half-hours as decimal fractions only (0.040462, 0.208092, 0.309249, 0.343931, 0.098266); 200 → 8, 41, 61, 71, 19 with the remainder on the biggest bucket. The buckets are local times, so they read in each Household's zone like any ghost.
+- **Labels:** the ghost carries `estimated: true` and `label: 'last year (estimated)'`, so the chart legend, the recap verdict and the Night summary say so; the pace and teaser lines already say "last year". The chart's end label says just "last year: N" for an estimate, since the full label didn't fit.
+- **Switch:** `switches.estimatedGhost` (default on) hides the field and refuses the command; a night already racing an estimate keeps it.
+- **`/setup`:** the field is in checklist item 3 (it ticks the item) and in the event editor (Save / Clear), only when offered.
+- Checked in the browser: a new Household typed 200 in the checklist, the item ticked, "Halloween 2026" raced it, and its TV showed "last year (estimated)" in the legend with 5 golden tickets drawn from the 200.
