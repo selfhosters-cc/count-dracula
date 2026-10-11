@@ -131,3 +131,19 @@ describe('celebration queue', () => {
     ])
   })
 })
+
+describe('the door moving (spec v2.1 §4)', () => {
+  test('cut() clears the show playing and drops everything queued, never finishing it over the new board', async () => {
+    const { director, played, clock } = setup()
+    director.push(['golden'], kid(12))
+    director.push(['milestone:50'], kid(50))
+    await clock.advance(1_000)
+
+    director.cut()
+    await clock.advance(20_000)
+
+    expect(played.map((p) => p.show?.kind ?? null)).toEqual(['takeover', null])
+    director.push([], kid(1))
+    expect(played.at(-1).show).toEqual({ kind: 'pop', from: 1, to: 1 })
+  })
+})

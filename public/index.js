@@ -343,6 +343,7 @@ function start(phoneName) {
     const b = e.target.closest('[data-slot]')
     if (!b) return
     const res = await post('/api/soundboard', { slot: Number(b.dataset.slot), ...night() }).catch(() => null)
+    if (res?.status === 400) return toast("That night isn't on the TV any more") // the door's Event moved
     if (!res?.ok) return toast("Couldn't reach the TV")
     if (!(await res.json()).played) return toast('Cooling down: one sound every 3 s')
     navigator.vibrate?.(15)

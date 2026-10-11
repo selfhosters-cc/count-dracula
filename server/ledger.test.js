@@ -345,7 +345,7 @@ describe('events and Go live', () => {
 
     const deltas = ledger.apply({ type: 'goLive', eventId: event.id })
 
-    expect(deltas).toMatchObject([{ type: 'event.switched', eventId: event.id }])
+    expect(deltas).toMatchObject([{ type: 'door.changed', door: event.id }])
     expect(ledger.snapshot().event).toMatchObject({ name: 'Halloween 2026', live: true })
     expect(liveEvents(ledger).map((e) => e.name)).toEqual(['Halloween 2026', 'Rehearsal'])
     expect(ledger.joinKey()).toBe(key)

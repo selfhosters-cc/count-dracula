@@ -21,7 +21,7 @@ const signUp = (ledger, timeZone, name = 'House') => ledger.household(ledger.cre
 const live = (house) => house.doorEvent()
 const byName = (house, name) => house.events().find((e) => e.name === name)
 // The Households a tick took live (it may also end and close other nights).
-const wentLive = (done) => done.filter((t) => t.deltas.some((d) => d.type === 'event.switched' && d.eventId != null)).map((t) => t.householdId)
+const wentLive = (done) => done.filter((t) => t.deltas.some((d) => d.type === 'door.changed' && d.door != null)).map((t) => t.householdId)
 
 describe('sign-up makes "Halloween 2026"', () => {
   test('not live, with the starter costumes, 5 golden tickets, no ghost, going live Oct 31 at 4:00 pm in its zone', () => {
@@ -58,7 +58,7 @@ describe('the minute tick: going live', () => {
     clock.now = at('2026-10-31T03:00:00Z')
     const first = ledger.tick()
     expect(first.map((t) => t.householdId)).toEqual([auckland.id])
-    expect(first[0].deltas.map((d) => d.type)).toContain('event.switched')
+    expect(first[0].deltas.map((d) => d.type)).toContain('door.changed')
     expect(live(auckland).name).toBe('Halloween 2026')
     expect(byName(auckland, 'Test night').state).toBe('live') // Go live never changes another Event
     expect(live(toronto).name).toBe('Test night')
@@ -191,7 +191,7 @@ describe('the server runs the tick', () => {
 
     clock.now = at('2026-10-31T20:00:30Z')
 
-    expect((await tv.next()).data.type).toBe('event.switched')
+    expect((await tv.next()).data.type).toBe('door.changed')
     controller.abort()
   })
 })

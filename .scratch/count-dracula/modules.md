@@ -98,16 +98,16 @@ tagColour(order)                       // the six slots, untagged orange, grey f
 
 ```js
 const live = connectLive(url)
-live.state                              // live event, tags, kids, settings, seq
+live.state                              // the door's Event (or null + next), tags, kids, settings, seq
 live.on(({ state, cause, delta }) => …) // cause: 'snapshot' | 'delta'
 live.connected / live.disconnectedFor   // ms; drives the 🦇 chip and pauses the idle teaser
 ```
 
-**Hidden:** EventSource reconnects, applying the snapshot and then deltas, a full resync when there's a seq gap or an `event.switched`/`event.updated`, and noticing a stale connection (35 s without a ping).
+**Hidden:** EventSource reconnects, applying the snapshot and then deltas, skipping another Event's deltas (each names its `eventId`; the seq still counts), a full resync when there's a seq gap, a `door.changed` or its own Event's `event.updated`, and noticing a stale connection (35 s without a ping). `receive(state, delta)` is the pure step, tested on its own.
 
 The TV's "never celebrate a snapshot" rule is one check: `cause === 'delta'`.
 
-**Tickets:** 15, 17, 20, 34.
+**Tickets:** 15, 17, 20, 34, v2.1 51.
 
 ---
 

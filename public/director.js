@@ -74,6 +74,16 @@ export function createDirector({ clock, play }) {
   }
 
   return {
+    // The door's Event moved (spec v2.1 §4): the show playing is cleared and the queue dropped, never
+    // finished over the new board.
+    cut() {
+      clock.clearTimeout(endTimer)
+      queue.length = 0
+      if (!active) return
+      active = null
+      play(null)
+    },
+
     // From a kid.added delta (moments + kid) or a deferred `moment` delta (no kid).
     push(moments = [], kid) {
       if (kid?.late) return // late taps tick the count up quietly; the TV page rolls it

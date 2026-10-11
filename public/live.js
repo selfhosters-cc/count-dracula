@@ -1,9 +1,13 @@
 // Live state (modules.md §4): one SSE stream, the snapshot, then deltas.
 // The TV's "never celebrate a snapshot" rule is one check: cause === 'delta'.
+//
+// One stream per Household carries every Event's deltas, each naming its Event (`eventId`, or null for the
+// whole Household). A screen shows one Event, the door's: it applies that Event's deltas, skips the others'
+// while still counting their seq (so a skip is never a gap), and reopens for a fresh snapshot when the door's
+// Event moves (door.changed) or its own Event's settings change (spec v2.1 §15).
 
 const MAX_RETRY_MS = 5_000 // a random 0–5 s, so a server restart isn't met by every device at once
 const STALE_MS = 35_000 // the server pings every 15 s: two missed means the link is dead, even if still "open"
-const RESYNC = new Set(['event.switched', 'event.updated'])
 
 // When EventSource gives up, asking for the snapshot tells three things apart: the credential refused outright
 // (a rotated TV link, a changed join key, a deleted or suspended Household: onRefused, and no more tries), the
@@ -66,13 +70,12 @@ export function connectLive(url = '/api/stream') {
 
     source.addEventListener('delta', (e) => {
       lastHeard = Date.now()
+      if (!live.state) return
       const delta = JSON.parse(e.data)
-      if (!live.state || delta.seq <= live.state.seq) return
-      if (delta.seq !== live.state.seq + 1) return reopen() // missed one: the new snapshot resyncs us
-      if (RESYNC.has(delta.type)) return reopen() // the door's Event moved, or new settings: take a fresh snapshot
-      live.state = applyDelta(live.state, delta)
-      if ('golden' in delta) live.state = { ...live.state, golden: delta.golden } // just the count and the banner flag
-      emit('delta', delta)
+      const { action, state } = receive(live.state, delta)
+      if (action === 'reopen') return reopen()
+      live.state = state
+      if (action === 'apply') emit('delta', delta)
     })
 
     source.addEventListener('error', async () => {
@@ -124,6 +127,20 @@ export function connectLive(url = '/api/stream') {
   return live
 }
 
+// One delta against the state on screen: { action, state }. 'apply' (state updated), 'skip' (another Event's:
+// only seq moves on), 'stale' (already had it) or 'reopen' (missed one, the door moved, or its settings changed).
+export function receive(state, delta) {
+  if (delta.seq <= state.seq) return { action: 'stale', state }
+  if (delta.seq !== state.seq + 1) return { action: 'reopen', state }
+  if (delta.type === 'door.changed') return { action: 'reopen', state }
+  const onScreen = state.event?.id ?? null
+  if (delta.eventId != null && delta.eventId !== onScreen) return { action: 'skip', state: { ...state, seq: delta.seq } }
+  if (delta.type === 'event.updated') return { action: 'reopen', state }
+  let next = applyDelta(state, delta)
+  if ('golden' in delta) next = { ...next, golden: delta.golden } // just the count and the banner flag
+  return { action: 'apply', state: next }
+}
+
 function applyDelta(state, delta) {
   switch (delta.type) {
     case 'kid.added':
@@ -143,6 +160,8 @@ function applyDelta(state, delta) {
       return { ...state, seq: delta.seq, event: { ...state.event, ended: delta.ended, live: !delta.ended, state: delta.ended ? 'ended' : 'live' }, recap: delta.recap }
     case 'mix.changed':
       return { ...state, seq: delta.seq, settings: { ...state.settings, mix: delta.mix } }
+    case 'next.changed':
+      return { ...state, seq: delta.seq, next: delta.next }
     case 'tag.added':
       return { ...state, seq: delta.seq, tags: [...state.tags, delta.tag] }
     case 'tag.updated':

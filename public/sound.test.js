@@ -299,3 +299,19 @@ describe('ending the night', () => {
     expect(ambienceRamps(audio).at(-1)[0]).toBe(0)
   })
 })
+
+describe('the door moving (spec v2.1 §4)', () => {
+  test('cut() stops every sound playing, a soundboard press and the golden fanfare included', async () => {
+    const { clock, sound, sounding } = await setup()
+    sound.cue('board:2')
+    sound.cue('golden')
+    await clock.advance(500)
+    expect(sounding().map((v) => v.slot).sort()).toEqual(['board2', 'golden'])
+
+    sound.cut()
+
+    expect(sounding()).toEqual([])
+    sound.cue('bloop') // the golden fanfare's hold is gone too
+    expect(sounding().map((v) => v.slot)).toEqual(['bloop'])
+  })
+})

@@ -43,6 +43,7 @@ export function createSound({ audio, clock, random = Math.random }) {
   let lastTick = -Infinity
   let goldenUntil = 0 // nothing else plays during the golden fanfare (spec §10)
   let boardTimer = null
+  let boardVoice = null // the soundboard's last press, on its own bus outside the voice cap
   let mutes = {}
   let nightEnded = false
 
@@ -101,6 +102,20 @@ export function createSound({ audio, clock, random = Math.random }) {
       }
     },
 
+    // The door's Event moved (spec v2.1 §4): whatever is sounding stops, the golden fanfare's hold and the
+    // ducks with it, and the ambience comes back to its level. Nothing is finished over the new board.
+    cut() {
+      for (const v of voices.splice(0)) v.stop()
+      boardVoice?.stop()
+      boardVoice = null
+      goldenUntil = 0
+      clock.clearTimeout(boardTimer)
+      clock.clearTimeout(unduckTimer)
+      audio.ramp('fx', 1, DUCK_ATTACK_S)
+      if (ducked) audio.ramp('ambience', ambienceLevel(), DUCK_ATTACK_S)
+      ducked = false
+    },
+
     // The ☰ menu's controls (ticket 26): master volume plus the Ambience / Kid bloops / Everything mutes.
     mix({ volume = 1, mutes: next = {} }) {
       mutes = next
@@ -120,6 +135,7 @@ export function createSound({ audio, clock, random = Math.random }) {
       if (name.startsWith('board:')) {
         // On its own bus, outside the voice cap; the automatic sounds and the ambience duck under it.
         const voice = audio.voice(`board${name.slice(6)}`, { gain: 1, detune: 0, bus: 'board' })
+        boardVoice = voice
         const until = clock.now() + voice.duration * 1000
         audio.ramp('fx', BOARD_DUCK, DUCK_ATTACK_S)
         clock.clearTimeout(boardTimer)

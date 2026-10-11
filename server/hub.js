@@ -1,5 +1,6 @@
 // The SSE hub (modules.md §2, v2 spec §15): one stream per device, snapshot first, then `id: <seq>`
-// deltas, on one channel per Household. Each stream knows its Household, its credential kind and the
+// deltas, on one channel per Household. Every Event of the Household shares it: each delta names its Event,
+// and the screen skips the ones that aren't on it (v2.1 §15), so the hub never filters and seq never gaps. Each stream knows its Household, its credential kind and the
 // credential itself, so caps can count it and Rotate TV link, Change join key and Suspend can close it.
 const encoder = new TextEncoder()
 

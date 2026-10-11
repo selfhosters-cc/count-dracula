@@ -84,7 +84,7 @@ describe('the TV link', () => {
     await admin(app, cookie, { type: 'goLive', eventId: created.deltas[0].event.id })
 
     expect((await tv.next()).data.type).toBe('event.created')
-    expect((await tv.next()).data.type).toBe('event.switched')
+    expect((await tv.next()).data.type).toBe('door.changed')
     expect((await (await snapshot(app, info.tvToken)).json()).event.name).toBe('Halloween 2026')
     expect((await snapshot(app, info.tvToken, `&event=${testNight}`)).status).toBe(401)
     expect((await tap(app, info.tvToken, 'sneaky')).status).toBe(403)

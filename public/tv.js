@@ -12,6 +12,7 @@ import { biggestCrew, clockTime, costumeOfTheNight, eventNow, ghost, leaderboard
 import { createSound } from '/sound.js'
 import { createWebAudio } from '/web-audio.js'
 import { createTeaser, teaserLines } from '/teaser.js'
+import { noNightLines } from '/no-night.js'
 
 const $ = (id) => document.getElementById(id)
 const CATCHING_UP_AFTER_MS = 20_000
@@ -369,7 +370,7 @@ function renderLeaderboard(state) {
 
 // ---- 🌙 the ended night: "THAT'S A WRAP" in the top bar, and with Must #9 on, the recap
 let wasEnded = false
-const NO_NIGHT = { id: null, name: '🌙 No night on right now', state: null, open: false, live: false, ended: false, past: false, clockShiftMs: 0, visitWindowMs: 15_000 }
+const NO_NIGHT = { id: null, name: 'Count Dracula', state: null, open: false, live: false, ended: false, past: false, clockShiftMs: 0, visitWindowMs: 15_000 }
 const over = (state) => !!(state.event.ended || state.event.past)
 const inRecap = (state) => over(state) && state.settings.switches.recap
 function renderEnded(state, cause) {
@@ -472,7 +473,7 @@ const teaser = createTeaser({
   hide: () => animate($('teaser'), { transform: 'translateY(-110%)' }, { duration: 0.4 }),
   lines: () => (live?.state ? teaserLines(live.state, Date.now()) : []),
 })
-const quietOrAway = (state) => !live?.connected || over(state)
+const quietOrAway = (state) => !live?.connected || over(state) || state.event.id == null
 
 // ---- live state (or, with /tv?event=<id>, one past night's recap from stored data). A TV link reads with its
 // token; a paired bare /tv adds its device token, which marks it as the Household's own TV.
@@ -497,10 +498,38 @@ live?.onRefused(() => {
 live?.onBusy(() => ($('tv-full').hidden = false))
 live?.on(({ cause }) => {
   if (cause === 'snapshot') $('tv-full').hidden = true
-  // With no Event open (spec v2.1 §4) the snapshot has no event: an empty board stands in for now, under a
-  // "No night on right now" title. Ticket 51 gives it its own screen. Registered first, so every handler sees it.
+  // With no Event open (spec v2.1 §4) the snapshot has no event: an empty board stands behind the "No night on
+  // right now" screen. Registered first, so every handler sees it.
   if (live.state && !live.state.event) live.state = { ...live.state, event: NO_NIGHT }
+  if (live.state) renderNoNight(live.state)
 })
+
+// "No night on right now", with the next Upcoming Event and its countdown (redrawn every second, below).
+function renderNoNight(state) {
+  const none = state.event.id == null
+  $('no-night').hidden = !none
+  if (!none) return
+  const lines = noNightLines(state.next, Date.now())
+  $('no-night-next').textContent = lines.next ?? ''
+  $('no-night-countdown').textContent = lines.countdown ?? ''
+}
+
+// The door's Event moved (spec v2.1 §4): quietly, with no banner. Whatever is playing for the old board stops
+// and is never finished over the new one; the new board's count is set, not rolled.
+let onScreen // the Event id on screen (null: none open); undefined until the first snapshot
+function cutOff() {
+  director.cut()
+  sound.cut()
+  clearTimeout(bannerTimer)
+  $('banner').style.transform = 'translateY(-110%)'
+  $('takeover').style.opacity = 0
+  $('tomb').style.transform = 'translateY(120%)'
+  $('fx').replaceChildren()
+  confetti.reset()
+  born.clear()
+  shown = null
+  wasDisconnected = false
+}
 
 // ---- the pairing screen (spec §9): a code and a QR until a Manager redeems it, then the board
 if (pairingMode) {
@@ -561,9 +590,12 @@ live?.on(({ state, cause, delta }) => {
   kidsCounted = state.event.id == null ? null : state.kids.length // no night on: no "Start the night"
   showStart()
   if (cause === 'snapshot') {
+    if (onScreen !== undefined && state.event.id !== onScreen) cutOff()
+    onScreen = state.event.id
     teaser.activity() // (re)connected: the 45 s count from now
     return renderSnapshot(state, cause)
   }
+  if (delta.type === 'next.changed') return renderNoNight(state)
   const total = state.kids.length
   if (delta.type === 'event.ended') {
     renderGoldenPill(state) // End expires the tickets left; Resume brings them back
@@ -610,6 +642,7 @@ setInterval(() => {
   $('catching-up').classList.toggle('on', !live.connected && live.disconnectedFor >= CATCHING_UP_AFTER_MS)
   const shift = live.state?.event.clockShiftMs ?? 0 // the clock shows event time, in the Household's zone
   $('clock').textContent = clockTime(eventNow(Date.now(), shift), live.state?.timeZone)
+  if (live.state && live.state.event.id == null) renderNoNight(live.state)
 }, 1_000)
 
 // The ghost marker and tonight's line creep along with the clock.

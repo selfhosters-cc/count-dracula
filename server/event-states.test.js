@@ -100,7 +100,7 @@ describe('Go live', () => {
     expect(house.events().filter((e) => e.id !== b)).toEqual(others)
     expect(stateOf(house, 'B')).toBe('live')
     expect(byName(house, 'B').wentLiveAt).toBe(clock.now)
-    expect(deltas.map((d) => d.type)).toContain('event.switched')
+    expect(deltas.map((d) => d.type)).toContain('door.changed')
   })
 
   test('stamps strictly later than any earlier go-live, even within one millisecond', () => {
@@ -399,7 +399,7 @@ describe('Delete', () => {
     const deltas = house.apply({ type: 'deleteEvent', eventId: a, confirm: 'A' })
 
     expect(ledger.doorEvent(house.id).name).toBe('Test night')
-    expect(deltas.map((d) => d.type)).toContain('event.switched')
+    expect(deltas.map((d) => d.type)).toContain('door.changed')
   })
 })
 

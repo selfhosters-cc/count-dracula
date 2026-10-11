@@ -296,7 +296,7 @@ describe('admin (Setup)', () => {
     await admin(app, { type: 'goLive', eventId: created.deltas[0].event.id })
 
     expect((await stream.next()).data).toMatchObject({ type: 'event.created' }) // every seq is published, so no gaps
-    expect((await stream.next()).data).toMatchObject({ type: 'event.switched' })
+    expect((await stream.next()).data).toMatchObject({ type: 'door.changed' })
     stream.close()
   })
 })
