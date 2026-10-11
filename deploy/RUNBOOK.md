@@ -46,9 +46,11 @@ rm /tmp/practice.sqlite*
 2. Give LXC 118 its v2 size (once): `ssh proxmox pct set 118 --cores 2 --memory 1024`
 3. `deploy/deploy.sh`. It copies the database, removes the v1 config's dead keys (and says so), writes
    `/etc/count-dracula/env`, and checks `/healthz`. The migration runs as the server starts.
-4. Switch the public host on (ticket 35's prepared site block, on the shared Caddy, with the user's OK):
-   `host-public.sh add "$PUBLIC_HOST" 192.168.5.31:3131`, then make its block match `deploy/caddy-site.caddy`
-   (its own log, the masking, `stream_close_delay 10m` and `request_body`), with `$PUBLIC_HOST` for the example host.
+4. Switch the public host on (ticket 35's site block, on the shared Caddy, with the user's OK). Not with
+   `host-public.sh add`: that puts it inside the wildcard site, whose shared log would keep the tokens. In
+   `/opt/docker-compose/caddy-int/` on the dev machine, paste `deploy/caddy-site.caddy` into `Caddyfile` as its own
+   site, just before the wildcard site `$PUBLIC_HOST` falls under, with `$PUBLIC_HOST` for the example host. Then
+   `./deploy.sh` there (diff, validate, apply; a bad config is refused and the live one stays).
 5. Check it's v2 and ours:
    - `https://$PUBLIC_HOST/healthz` says `ok`; `https://$PUBLIC_HOST/api/snapshot` says 403 (reads aren't open).
    - Sign in at `https://$PUBLIC_HOST/signup` → **Sign in with Google** with `HOUSEHOLD1_MANAGER_EMAIL`. `/setup` shows
@@ -64,24 +66,16 @@ See [section 2](#2-load-check). About 15 minutes. If it fails, lower the caps, r
 
 - `https://$PUBLIC_HOST/privacy` shows the real `OPERATOR_CONTACT`. Send a test email to it from another account;
   it arrives.
-- A TV-link token is masked in the Caddy log. Open the TV link once, then on LXC 117 grep the Count Dracula access
-  log (`/var/log/caddy/count-dracula.log`, from `deploy/caddy-site.caddy`) for `/tv/k/`: the token shows as `REDACTED`, and so does `key=`.
+- A TV-link token is masked in the Caddy log. Open the TV link once, then
+  `ssh root@192.168.5.20 "grep -o '\"uri\":\"[^\"]*' /var/log/caddy/count-dracula.log | tail"`: `/tv/k/` and `key=`
+  show `REDACTED`. And `ssh root@192.168.5.20 "grep -c count-dracula /var/log/caddy/public-access.log"` (with the
+  real host name) finds nothing: none of our requests land in the shared log.
 - OSM tiles load only after the tap: open `/setup` with the browser's network panel, filter `openstreetmap`: nothing
   until **Pick on a map**.
 
-### Step 5. Publish the Google consent screen
+### Step 5. A test Household, end to end
 
-Google Cloud console → **Google Auth Platform**:
-
-1. **Clients** → the web client → Authorized redirect URIs has `https://$PUBLIC_HOST/auth/google/callback`.
-2. **Branding** → app name "Count Dracula", privacy policy link `https://$PUBLIC_HOST/privacy`.
-3. **Audience** → **Publish app** (from Testing to In production). Until now only the listed test users could sign in.
-
-**This is the gate between deploying and opening.**
-
-### Step 6. A test Household, end to end
-
-With the second Google account, on a phone that has never opened the site, through the public URL:
+While the consent screen is still in Testing, with the second Google account (a test user), on a phone that has never opened the site, through the public URL:
 
 1. Sign up, go through the 3 first-run screens.
 2. Pair a second browser as its TV, by code, then again (after **Rotate TV link**) by scanning the QR.
@@ -91,7 +85,18 @@ With the second Google account, on a phone that has never opened the site, throu
    automatically at 3:00 am". (Before ticket 43 there's no summary link yet.)
 5. **Delete my household**, typing its name. That tests the hard delete; `lxc "journalctl -u count-dracula | grep 'household deleted'"` shows one line.
 
-This is the one place auto go-live and auto-end are tested before Oct 31.
+This is the one place auto go-live and auto-end are tested before Oct 31. It comes before publishing so no
+stranger can sign up while it runs overnight.
+
+### Step 6. Publish the Google consent screen
+
+Google Cloud console → **Google Auth Platform**:
+
+1. **Clients** → the web client → Authorized redirect URIs has `https://$PUBLIC_HOST/auth/google/callback`.
+2. **Branding** → app name "Count Dracula", privacy policy link `https://$PUBLIC_HOST/privacy`.
+3. **Audience** → **Publish app** (from Testing to In production). Until now only the listed test users could sign in.
+
+**This is the gate between deploying and opening**: until it, only the listed test users can sign in.
 
 ### Step 7. Open sign-up
 

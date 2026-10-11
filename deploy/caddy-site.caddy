@@ -1,13 +1,22 @@
 # The Count Dracula site block for the shared Caddy (LXC 117), v2 ticket 35. Replace the host with $PUBLIC_HOST
 # from deploy/local.env when adding it; the repo only ever says count-dracula.example.com.
-# Checked on Caddy 2.11: every token below logs as REDACTED, X-Join-Key isn't logged, and a 100 KB POST gets 413.
+# Its own site, placed before the wildcard it would fall under: the wildcard's shared log would keep the tokens.
+# Expects the shared Caddyfile's dnstls and hsts snippets and its Cloudflare trusted_proxies with
+# client_ip_headers CF-Connecting-IP.
+# Checked on Caddy 2.11: every token below logs as REDACTED, X-Join-Key isn't logged, a 100 KB POST gets 413,
+# and a CF-Connecting-IP from anyone but Cloudflare is replaced by the real peer address.
 count-dracula.example.com {
+	import dnstls
+	import hsts
+
 	request_body {
 		max_size 64KB
 	}
 	reverse_proxy 192.168.5.31:3131 {
 		# Other sites' reloads don't cut the TVs' and phones' streams for 10 minutes.
 		stream_close_delay 10m
+		# The visitor's IP as Caddy worked it out: Cloudflare's header only when Cloudflare sent it.
+		header_up CF-Connecting-IP {client_ip}
 	}
 	# Its own log, 30 days and at most ~500 MB, so Halloween doesn't push the other sites' logs out.
 	log {
