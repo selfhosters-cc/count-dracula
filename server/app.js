@@ -290,16 +290,20 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     return `${env.PUBLIC_HOST ? `https://${env.PUBLIC_HOST}` : originOf(req)}/auth/google/callback`
   }
 
+  function route(req, server) {
+    const { pathname } = new URL(req.url)
+    const handler = routes[`${req.method} ${pathname}`]
+    if (handler) return handler(req, server)
+    // The TV link's page: the same TV page; it reads its token from the address.
+    if (req.method === 'GET' && pathname.startsWith('/tv/k/')) return serveStatic('/tv', req)
+    if (req.method === 'GET') return serveStatic(pathname, req)
+    return notFound()
+  }
+
   const server = Bun.serve({
     port: port ?? config.port,
-    fetch(req, server) {
-      const { pathname } = new URL(req.url)
-      const route = routes[`${req.method} ${pathname}`]
-      if (route) return route(req, server)
-      // The TV link's page: the same TV page; it reads its token from the address.
-      if (req.method === 'GET' && pathname.startsWith('/tv/k/')) return serveStatic('/tv', req)
-      if (req.method === 'GET') return serveStatic(pathname, req)
-      return notFound()
+    async fetch(req, server) {
+      return withSecurityHeaders(await route(req, server))
     },
   })
 
@@ -350,6 +354,21 @@ function tokenOf(req) {
 // Behind Cloudflare, the visitor's address is in CF-Connecting-IP (spec §15).
 function clientIp(req, server) {
   return req.headers.get('CF-Connecting-IP') ?? server?.requestIP(req)?.address ?? null
+}
+
+// The same browser security headers on every response (spec §15): no inline script, nothing from elsewhere
+// but OSM's tiles, Google as the only place a form goes, and no framing. HSTS comes from Caddy.
+const SECURITY_HEADERS = {
+  'Content-Security-Policy':
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; " +
+    "connect-src 'self'; form-action 'self' https://accounts.google.com; frame-ancestors 'none'",
+  'Referrer-Policy': 'strict-origin-when-cross-origin', // OSM gets the origin it asks for; a TV link's path goes nowhere
+  'X-Content-Type-Options': 'nosniff',
+}
+
+function withSecurityHeaders(res) {
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.headers.set(name, value)
+  return res
 }
 
 function tooMany() {
