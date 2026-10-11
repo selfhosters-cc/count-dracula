@@ -356,9 +356,11 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     'GET /api/household': manager((req, house, session) => {
       const { displayName, timeZone, location, firstRunPassed } = ledger.households().find((h) => h.id === house.id)
       const streams = hub.counts().households[house.id]
-      // The ready checklist ticks itself from these (spec §6); /setup polls for them.
+      // The ready checklist ticks itself from these (spec v2.1 §8); /setup polls for them.
       const checklist = { tvWatching: (streams?.tvLink ?? 0) + (streams?.paired ?? 0) > 0, anyKids: house.anyKids() }
-      return Response.json({ id: house.id, displayName, timeZone, location, firstRunPassed, checklist, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), joinKey: house.joinKey(), tvToken: house.tvToken(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
+      // The door's Event is what the TV shows: first-run's tick names it (spec v2.1 §8).
+      const door = house.doorEvent()
+      return Response.json({ id: house.id, displayName, timeZone, location, firstRunPassed, checklist, testNightEventId: house.testNightId(), door: door && { id: door.id, name: door.name }, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), joinKey: house.joinKey(), tvToken: house.tvToken(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
     }),
     // Delete my Household: typed name to confirm; everything goes at once, and its streams close.
     'POST /api/household/delete': manager(async (req, house) => {

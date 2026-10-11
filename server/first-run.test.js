@@ -91,7 +91,7 @@ describe('/help/tv', () => {
 
     expect(res.status).toBe(200)
     const html = await res.text()
-    for (const point of ['Chrome or Edge', 'Windows:', 'macOS:', 'Linux:', 'F11', 'sound output', '/tv?border', 'A reload needs a click or a key press for sound', 'Smart TVs and other devices', 'test it on your Rehearsal', 'count-dracula-tv.bat', 'count-dracula-tv.sh', 'email us']) {
+    for (const point of ['Chrome or Edge', 'Windows:', 'macOS:', 'Linux:', 'F11', 'sound output', '/tv?border', 'A reload needs a click or a key press for sound', 'Smart TVs and other devices', 'test it on your Test night (or Go live on any night)', 'on your Test night: it\'s the ceiling', 'count-dracula-tv.bat', 'count-dracula-tv.sh', 'email us']) {
       expect({ point, there: html.includes(point) }).toEqual({ point, there: true })
     }
     expect(html).not.toContain('install-cachyos')

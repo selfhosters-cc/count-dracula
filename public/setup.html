@@ -114,14 +114,15 @@
       <button role="tab" id="tab-household" data-tab="household" aria-controls="screen-household">Household</button>
     </nav>
 
-    <!-- Tonight: the ready checklist (ticket 58 rewords it), the door's Event large, the others open, a night
+    <!-- Tonight: the ready checklist (spec v2.1 §8), the door's Event large, the others open, a night
          waiting at the cap, or "No night on right now"; helpers at the foot. -->
     <div id="screen-tonight" role="tabpanel" aria-labelledby="tab-tonight">
       <section id="checklist" data-help="checklist" hidden>
         <div class="row"><h2 style="margin: 0">🎃 Ready for Halloween</h2><button id="checklist-hide" class="fit" aria-label="Hide the checklist">✕</button></div>
         <ol class="checks">
           <li id="check-tv"><b>A TV is watching</b><span class="muted" data-todo>Open /tv on the TV's computer, then Pair a TV under Household.</span></li>
-          <li id="check-kid"><b>A phone counted a test kid</b><span class="muted" data-todo>Tap 📱 Count on this device, then +1 Kid.</span></li>
+          <li id="check-kid"><b>A phone counted a test kid</b><span class="muted" data-todo>Tap 📱 Count on this device, then +1 Kid, or ➕ Add a helper and count on their phone.</span>
+            <div id="check-kid-tools" data-todo></div><span class="muted" id="check-kid-line" hidden></span></li>
           <li id="check-night"><b>Your Halloween night</b><span class="muted" id="check-night-when"></span>
             <form id="check-night-form" data-todo>
               <div class="row"><input id="check-expected" type="number" min="0" placeholder="Expected kids" aria-label="Expected kids"><button type="submit">Save</button><button type="button" id="check-night-skip">Skip</button></div>

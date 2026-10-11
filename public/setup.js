@@ -6,7 +6,7 @@ import { showFirstRun } from '/first-run.js'
 import { helperLink, helperWording } from './door-view.js'
 import { $, h, option } from './setup-dom.js'
 import {
-  closeConfirm, deleteConfirm, doorEvent, endConfirm, goLiveConfirm, goLiveOffer, nightGroups, nightsTabLabel,
+  checklist, closeConfirm, deleteConfirm, doorEvent, endConfirm, goLiveConfirm, goLiveOffer, nightGroups, nightsTabLabel,
   resetConfirm, screenFrom, searchFor, waitingNights,
 } from './setup-view.js'
 import { alsoOpen, doorCard, nightRow, nightScreen, nothingOpen, typedMissed, waiting } from './setup-night.js'
@@ -18,7 +18,7 @@ let shares = [] // the nights shared by a public link: [{ eventId, url, hideName
 let batches = [] // the shown night's Add missed kids batches
 let screen = screenFrom(location.search) // { tab: 'tonight' | 'nights' | 'household', event: id or null }
 // What's open on screen: End's choices (an Event id), Add missed kids (an Event id), a helper's QR (by place).
-const ui = { ending: null, missed: null, helper: { tonight: false, house: false } }
+const ui = { ending: null, missed: null, helper: { tonight: false, house: false, checklist: false } }
 const timeZone = () => house.timeZone // the Household's: every time of night in Setup reads in it
 
 let sayTimer
@@ -332,8 +332,8 @@ $('create-form').addEventListener('submit', async (e) => {
   }
 })
 
-// ---- the ready-for-Halloween checklist (spec §6), at the top of Tonight: ticks itself from real state, hides
-// when done or dismissed. A tick, a skip and the dismissal are remembered on this phone. Ticket 58 rewords it.
+// ---- the ready-for-Halloween checklist (spec v2.1 §8), at the top of Tonight: ticks itself from real state,
+// hides when done or dismissed. A tick, a skip and the dismissal are remembered on this phone.
 const remembered = (what) => {
   try {
     return localStorage.getItem(`cd.checklist.${house.id}.${what}`) === '1'
@@ -346,25 +346,32 @@ const remember = (what) => {
     localStorage.setItem(`cd.checklist.${house.id}.${what}`, '1')
   } catch {}
 }
-// The night the checklist is about: the next one that goes live by itself, or else the door's Event.
-const halloweenNight = () =>
-  events.filter((e) => e.goesLiveAt != null && e.state === 'upcoming').sort((a, b) => a.goesLiveAt - b.goesLiveAt)[0] ?? doorEvent(events)
+const checks = () =>
+  checklist({
+    events,
+    testNightId: house.testNightEventId,
+    tvWatching: house.checklist.tvWatching,
+    kid: remembered('kid'),
+    lastYear: house.lastYear,
+    skipped: remembered('night'),
+    dismissed: remembered('hidden'),
+    day: zoneDay,
+  })
 
 function renderChecklist() {
   if (house.checklist.anyKids > 0) remember('kid')
-  const night = halloweenNight()
-  const tv = house.checklist.tvWatching
-  const kid = remembered('kid')
-  const nightDone = !!night && (night.expectedKids != null || night.raceAgainstId != null || house.lastYear != null || remembered('night'))
+  const view = checks()
   $('check-last-year-row').hidden = !house.canEstimateLastYear
-  $('check-tv').classList.toggle('done', tv)
-  $('check-kid').classList.toggle('done', kid)
-  $('check-night').classList.toggle('done', nightDone)
-  $('check-night-when').textContent = !night
-    ? 'Make it under Nights.'
-    : night.open ? `${night.name} is live.` : `${night.name} goes live ${zoneDay(night.goesLiveAt)}. How many kids do you expect?`
-  $('check-night-form').hidden = !night || nightDone
-  $('checklist').hidden = remembered('hidden') || (tv && kid && nightDone)
+  $('check-tv').classList.toggle('done', view.tv)
+  $('check-kid').classList.toggle('done', view.kid)
+  $('check-kid-tools').replaceChildren(...(view.kid ? [] : helperBox('checklist').flat().filter(Boolean)))
+  $('check-kid-line').hidden = !view.kidLine
+  $('check-kid-line').textContent = view.kidLine ?? ''
+  $('check-night').hidden = !view.night
+  $('check-night').classList.toggle('done', view.nightDone)
+  $('check-night-when').textContent = view.nightLine ?? ''
+  $('check-night-form').hidden = !view.night || view.nightDone
+  $('checklist').hidden = view.hidden
 }
 $('checklist-hide').addEventListener('click', () => {
   remember('hidden')
@@ -372,7 +379,7 @@ $('checklist-hide').addEventListener('click', () => {
 })
 $('check-night-form').addEventListener('submit', async (e) => {
   e.preventDefault()
-  const night = halloweenNight()
+  const night = checks().night
   if (night && $('check-expected').value !== '') await admin({ type: 'settings', eventId: night.id, expectedKids: Number($('check-expected').value) }, 'Expected kids saved')
 })
 $('check-last-year-save').addEventListener('click', () => {

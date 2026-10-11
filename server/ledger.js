@@ -92,7 +92,8 @@ const STARTER_COSTUMES = [
 ]
 
 // The night sign-up schedules (spec §6): Oct 31, 4:00 pm in the Household's zone.
-const HALLOWEEN = { name: 'Halloween 2026', date: '2026-10-31', goesLiveAt: '16:00' }
+// A sign-up from its 3:00 am on Nov 1 on gets no "Halloween 2026" (spec v2.1 §8).
+const HALLOWEEN = { name: 'Halloween 2026', date: '2026-10-31', goesLiveAt: '16:00', over: '2026-11-01' }
 // The safety net (spec §7): a Live night still on at 3:00 am local is ended.
 const AUTO_END_AT = '03:00'
 // An Ended night goes Past by itself at noon local after that 3:00 am (spec v2.1 §3).
@@ -171,16 +172,21 @@ export function openLedger(db, config) {
   const opened = new Map() // household id → its Ledger, so seq and the soundboard cooldown live on
 
   return {
-    // Sign-up (spec §6): the Household with its join key and TV link, a "Test night" (an ordinary Event:
-    // starter costumes, no golden tickets) and "Halloween 2026" (starter costumes, 5 golden tickets, going live
-    // Oct 31 at 4:00 pm local). The Test night is live, unless Halloween's moment has passed: then Halloween is.
-    // Returns the new Household's id. (Ticket 58 reshapes this by date.)
+    // Sign-up (spec v2.1 §8), by when it happens in the Household's zone, with its join key and TV link:
+    // - before Oct 31, 4:00 pm: a live Test night (starter costumes, no golden tickets) and "Halloween 2026",
+    //   Upcoming, going live Oct 31 at 4:00 pm (starter costumes, 5 golden tickets);
+    // - from then until Nov 1, 3:00 am: only "Halloween 2026", live now (with no Race against and no Expected
+    //   kids yet, it has no golden tickets to draw);
+    // - after: only a live Test night.
+    // The Test night is an ordinary Event, remembered by id in households.test_night_event_id. Returns the id.
     createHousehold({ displayName, timeZone }) {
       const name = displayNameOf(displayName)
       if (!isTimeZone(timeZone)) throw new BadCommand('A household needs its time zone')
       const at = now()
       const halloweenAt = zonedTime(HALLOWEEN.date, HALLOWEEN.goesLiveAt, timeZone)
-      const late = at >= halloweenAt
+      const halloweenOver = zonedTime(HALLOWEEN.over, AUTO_END_AT, timeZone)
+      const testNight = at < halloweenAt || at >= halloweenOver
+      const halloween = at < halloweenOver
       return db.transaction(() => {
         const { id } = db
           .query('INSERT INTO households (display_name, time_zone, join_key, tv_token, signed_up_at, last_stamp) VALUES (?, ?, ?, ?, ?, ?) RETURNING id')
@@ -189,11 +195,19 @@ export function openLedger(db, config) {
           INSERT INTO events (household_id, name, state, golden_count, goes_live_at, went_live_at)
           VALUES (?, ?, ?, ?, ?, ?) RETURNING id
         `)
-        const testNight = insertEvent.get(id, TEST_NIGHT, late ? 'upcoming' : 'live', 0, null, late ? null : at)
-        // Live at once when late: with no ghost and no Expected kids yet, there are no golden tickets to draw.
-        const halloween = insertEvent.get(id, HALLOWEEN.name, late ? 'live' : 'upcoming', 5, late ? null : halloweenAt, late ? at : null)
         const insertTag = db.query('INSERT INTO tags (event_id, name, emoji, sort_order) VALUES (?, ?, ?, ?)')
-        for (const event of [testNight, halloween]) STARTER_COSTUMES.forEach(([costume, emoji], i) => insertTag.run(event.id, costume, emoji, i + 1))
+        const withCostumes = (event) => {
+          STARTER_COSTUMES.forEach(([costume, emoji], i) => insertTag.run(event.id, costume, emoji, i + 1))
+          return event
+        }
+        if (testNight) {
+          const test = withCostumes(insertEvent.get(id, TEST_NIGHT, 'live', 0, null, at))
+          db.query('UPDATE households SET test_night_event_id = ? WHERE id = ?').run(test.id, id)
+        }
+        if (halloween) {
+          const live = at >= halloweenAt
+          withCostumes(insertEvent.get(id, HALLOWEEN.name, live ? 'live' : 'upcoming', 5, live ? null : halloweenAt, live ? at : null))
+        }
         return id
       })()
     },
@@ -1021,6 +1035,7 @@ export function openLedger(db, config) {
     function removeEvent(id) {
       db.query('UPDATE events SET race_against_id = NULL WHERE race_against_id = ?').run(id)
       for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches', 'share_links', 'reports']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(id)
+      db.query('UPDATE households SET test_night_event_id = NULL WHERE test_night_event_id = ?').run(id)
       db.query('DELETE FROM events WHERE id = ?').run(id)
     }
 
@@ -1096,6 +1111,11 @@ export function openLedger(db, config) {
       lastYear() {
         const event = estimatedEvent()
         return event ? db.query('SELECT SUM(count) AS n FROM ghost_buckets WHERE event_id = ?').get(event.id).n : null
+      },
+
+      // The Test night sign-up made (spec v2.1 §8), by id, or null: none made, or deleted since.
+      testNightId() {
+        return household().test_night_event_id ?? null
       },
 
       // Kids counted on any of the Household's Events: the checklist's "A phone counted a test kid".

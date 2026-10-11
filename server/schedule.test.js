@@ -35,13 +35,13 @@ describe('sign-up makes "Halloween 2026"', () => {
     expect(live(house)).toMatchObject({ name: 'Test night', state: 'live' })
   })
 
-  test('after that moment, "Halloween 2026" is live at once and the Test night is made but Upcoming', () => {
+  test('after that moment, "Halloween 2026" is live at once, and there is no Test night', () => {
     const { ledger } = ledgerAt('2026-10-31T21:30:00Z') // 5:30 pm in Toronto
 
     const house = signUp(ledger, 'America/Toronto')
 
     expect(live(house).name).toBe('Halloween 2026')
-    expect(byName(house, 'Test night')).toMatchObject({ state: 'upcoming' })
+    expect(byName(house, 'Test night')).toBeUndefined()
     expect(byName(house, 'Halloween 2026').goesLiveAt).toBeNull()
     expect(house.tickets(live(house).id)).toEqual([]) // no ghost and no Expected kids: nothing to draw from
   })

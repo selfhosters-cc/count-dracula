@@ -1,6 +1,7 @@
-// First-run (v2 spec §6): three screens over /setup, shown on each visit until screen 3 has been passed once.
+// First-run (v2 spec §6, v2.1 §8): three screens over /setup, shown on each visit until screen 3 has been passed once.
 // Every screen can be skipped. 1: the household's name. 2: the Location. 3: put it on the TV.
 import { createLocationPicker } from '/location-picker.js'
+import { tvTick } from '/setup-view.js'
 
 // root: an empty, hidden element. house: /api/household. admin(command): a Setup command, falsy if refused.
 // redeem(code): pairs a TV, true if it did. tvUrl(): the TV link. share(url, title): share sheet or copy.
@@ -11,6 +12,7 @@ export function showFirstRun(root, { house, admin, redeem, tvUrl, share }) {
     return node
   }
   let tvWatching = house.checklist.tvWatching
+  let door = house.door // the door's Event: what the TV shows
 
   async function pass() {
     await admin({ type: 'passFirstRun' })
@@ -76,7 +78,10 @@ export function showFirstRun(root, { house, admin, redeem, tvUrl, share }) {
 
   function render() {
     if (!status) return
-    status.textContent = tvWatching ? '✓ Your TV is showing your Rehearsal' : status.textContent || 'Waiting for a TV…'
+    if (tvWatching) {
+      const tick = tvTick(door) // "✓ Your TV is showing Test night" (spec v2.1 §8)
+      status.replaceChildren(tick.text, ...(tick.name ? [h('i', { textContent: tick.name })] : []))
+    } else if (!status.textContent) status.textContent = 'Waiting for a TV…'
     document.getElementById('fr-done').hidden = !tvWatching
   }
 
@@ -85,6 +90,7 @@ export function showFirstRun(root, { house, admin, redeem, tvUrl, share }) {
     // From /setup's poll: the TV ticks screen 3 over as soon as it connects.
     update(next) {
       tvWatching = next.checklist.tvWatching
+      door = next.door
       render()
     },
   }

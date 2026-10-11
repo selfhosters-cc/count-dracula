@@ -32,6 +32,8 @@ for (const [i, cell] of CELLS.slice(0, houses).entries()) {
   const house = ledger.household(id)
   house.apply({ type: 'setLocation', cell })
   const halloween = () => house.events().find((e) => e.name === 'Halloween 2026')
+  // A sign-up from Nov 1, 3 am on makes no Halloween 2026 (spec v2.1 §8): make it, with the Test night's costumes.
+  if (!halloween()) house.apply({ type: 'createEvent', name: 'Halloween 2026', copyTagsFrom: house.doorEvent().id })
   if (!halloween().open) house.apply({ type: 'goLive', eventId: halloween().id })
   const night = halloween() // with its go-live stamp, which every tap names
   const tags = Object.fromEntries(house.snapshot(night.id).tags.map((t) => [t.name, t.id]))

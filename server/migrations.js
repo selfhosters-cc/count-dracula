@@ -181,6 +181,11 @@ const MIGRATIONS = [
       UPDATE households SET last_stamp = (SELECT MAX(went_live_at) FROM events WHERE household_id = households.id);
     `)
   },
+
+  // 14 → 15: the Test night sign-up made, by id, never by name (spec v2.1 §8). Households from before have none.
+  (db) => {
+    db.exec('ALTER TABLE households ADD COLUMN test_night_event_id INTEGER')
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.
