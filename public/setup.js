@@ -1,5 +1,5 @@
 // /setup (v2 spec §6): a signed-in Manager runs their Household.
-import { atEventTime, clockTime as zoneClock, eventNow, minuteOfDay, slots, stamp, zonedTime } from '/shared/night-maths.js'
+import { atEventTime, clockTime as zoneClock, eventNow, minuteOfDay, slots, stamp, tickNoteText, zonedTime } from '/shared/night-maths.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
 import { createLocationPicker } from '/location-picker.js'
 import { showFirstRun } from '/first-run.js'
@@ -329,6 +329,11 @@ function render() {
   $('summary-link').href = `/summary?event=${live?.id}`
   $('live-sharing').replaceChildren(...(live?.ended ? sharingOff(live) : []))
   $('auto-ended-summary').href = `/summary?event=${live?.id}`
+  // What the tick did to each Event (ticket 53), until ticket 57 shows it on the Event itself. The door's
+  // auto-end has its own section above.
+  const noted = events.filter((e) => e.note && !(e === live && e.note.kind === 'autoEnded'))
+  $('tick-notes').hidden = !noted.length
+  $('tick-notes-list').replaceChildren(...noted.map((e) => h('li', {}, h('b', { textContent: `${e.name}: ` }), tickNoteText(e.note, timeZone))))
   renderChecklist()
 
   $('tags').replaceChildren(...(editing?.tags ?? []).map(tagRow))

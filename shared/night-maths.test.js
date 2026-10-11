@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { atEventTime, biggestCrew, clockTime, raceWindow, rush, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, releaseOpen, slots, tagColour, toBuckets, visits } from './night-maths.js'
+import { atEventTime, tickNoteText, biggestCrew, clockTime, raceWindow, rush, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, releaseOpen, slots, tagColour, toBuckets, visits } from './night-maths.js'
 import seed2025 from '../config/2025-counts.json'
 
 describe('tagColour', () => {
@@ -279,5 +279,26 @@ describe('time zones', () => {
   test('clock text is in the zone', () => {
     expect(clockTime(utc('2026-10-31T23:15:00'), toronto)).toMatch(/^7:15\sPM$/)
     expect(clockTime(utc('2026-10-31T23:15:00'), 'America/Vancouver')).toMatch(/^4:15\sPM$/)
+  })
+})
+
+describe('tickNoteText: what the tick did, in the Household’s zone (spec v2.1 §5)', () => {
+  const utc = (iso) => Date.parse(`${iso}Z`)
+  const toronto = 'America/Toronto'
+
+  test('the auto-end', () => {
+    expect(tickNoteText({ kind: 'autoEnded', at: utc('2026-11-01T08:00:00') }, toronto)).toBe('Ended automatically at 3:00 am. Late kids still count until noon.')
+  })
+
+  test('closed to make room', () => {
+    expect(tickNoteText({ kind: 'closedForRoom', at: utc('2026-10-31T20:00:00'), for: 'Halloween 2026' }, toronto)).toBe('Closed at 4:00 pm so Halloween 2026 could go live')
+  })
+
+  test('waiting at the cap', () => {
+    expect(tickNoteText({ kind: 'waiting', at: utc('2026-10-31T16:05:00') }, toronto)).toBe("Couldn't go live at 12:05 pm: 3 nights are open. It'll go live as soon as you end or close one.")
+  })
+
+  test('none', () => {
+    expect(tickNoteText(null, toronto)).toBe('')
   })
 })

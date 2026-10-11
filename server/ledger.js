@@ -97,6 +97,8 @@ const AUTO_END_AT = '03:00'
 // An Ended night goes Past by itself at noon local after that 3:00 am (spec v2.1 §3).
 const PAST_AT = '12:00'
 const TEST_NIGHT = 'Test night'
+// How long "Closed at 4:00 pm so Halloween 2026 could go live" stays on the closed Event (spec v2.1 §5).
+const CLOSED_NOTE_MS = 24 * 60 * 60_000
 
 // Event states (spec v2.1 §3): upcoming → live → ended → past. Live or Ended is open, at most 3 at once.
 const OPEN = "state IN ('live', 'ended')"
@@ -193,41 +195,37 @@ export function openLedger(db, config) {
       })()
     },
 
-    // The minute tick (spec §7, v2.1 §3): any Upcoming Event whose Goes live at has passed goes live (at the
-    // 3-open cap it waits: ticket 53 makes room), any Live night still on at 3:00 am local the morning after it
-    // went live is ended, by name, and any Ended night is Past from noon that day. After a restart, the first
-    // tick catches up on all three. Returns [{ householdId, deltas }] to publish.
+    // The minute tick (spec §7, v2.1 §3, §5), in this order, so a tick after a restart catches up on all of it:
+    // every Live Event still on at the first 3:00 am local after it went live is ended, by name; every Ended
+    // Event is Past from noon after that 3:00 am; then every Upcoming Event whose Goes live at has passed goes
+    // live, closing its Household's oldest Ended Event at the 3-open cap, or waiting while all 3 are Live.
+    // Returns [{ householdId, deltas }] to publish, leaving out what told screens nothing.
     // nearbyFor(householdId): the Area figures to keep on a night the tick ends, for its summary.
     tick({ nearbyFor = () => null } = {}) {
       const at = now()
       const done = []
-      const due = db
-        .query("SELECT id, household_id FROM events WHERE goes_live_at <= ? AND state = 'upcoming' AND counts_only = 0 ORDER BY goes_live_at")
-        .all(at)
-      for (const event of due) {
-        try {
-          done.push({ householdId: event.household_id, deltas: householdOf(event.household_id).apply({ type: 'goLive', eventId: event.id }) })
-        } catch (err) {
-          if (!(err instanceof BadCommand)) throw err // at the cap: it stays Upcoming and tries again next tick
-        }
-      }
+      const publish = (householdId, deltas) => deltas.length && done.push({ householdId, deltas })
       const nightsIn = (state) =>
         db
           .query(`
             SELECT e.id, e.household_id, e.went_live_at, h.time_zone FROM events e JOIN households h ON h.id = e.household_id
-            WHERE e.state = ? AND e.went_live_at IS NOT NULL
+            WHERE e.state = ? AND e.went_live_at IS NOT NULL ORDER BY e.id
           `)
           .all(state)
       const autoEndAt = (night) => nextWallTime(night.went_live_at, AUTO_END_AT, night.time_zone)
       for (const night of nightsIn('live')) {
         if (at < autoEndAt(night)) continue
         const house = householdOf(night.household_id)
-        done.push({ householdId: night.household_id, deltas: house.apply({ type: 'end', eventId: night.id, stamp: night.went_live_at, automatically: true, nearby: nearbyFor(night.household_id) }) })
+        publish(night.household_id, house.apply({ type: 'end', eventId: night.id, stamp: night.went_live_at, automatically: true, nearby: nearbyFor(night.household_id) }))
       }
       for (const night of nightsIn('ended')) {
         if (at < nextWallTime(autoEndAt(night), PAST_AT, night.time_zone)) continue
-        done.push({ householdId: night.household_id, deltas: householdOf(night.household_id).apply({ type: 'close', eventId: night.id }) })
+        publish(night.household_id, householdOf(night.household_id).apply({ type: 'close', eventId: night.id }))
       }
+      const due = db
+        .query("SELECT id, household_id FROM events WHERE goes_live_at <= ? AND state = 'upcoming' AND counts_only = 0 ORDER BY goes_live_at, id")
+        .all(at)
+      for (const event of due) publish(event.household_id, householdOf(event.household_id).apply({ type: 'goesLive', eventId: event.id }))
       return done
     },
 
@@ -779,9 +777,28 @@ export function openLedger(db, config) {
         if (next.counts_only || next.state === 'past') throw new BadCommand("A past event can't go live again")
         const open = db.query(`SELECT COUNT(*) AS n FROM events WHERE household_id = ? AND ${OPEN}`).get(householdId).n
         if (open >= MAX_OPEN) throw new BadCommand('End or close one of your live nights first')
-        db.query("UPDATE events SET state = 'live', goes_live_at = NULL, went_live_at = ? WHERE id = ?").run(nextStamp(), next.id)
+        db.query("UPDATE events SET state = 'live', goes_live_at = NULL, went_live_at = ?, tick_note = NULL, tick_note_at = NULL, tick_note_for = NULL WHERE id = ?").run(nextStamp(), next.id)
         drawGoldenTickets(eventById(next.id))
         return []
+      },
+
+      // The tick's Go live at Goes live at (spec v2.1 §5); never a Manager's (it's not in the HTTP layer's
+      // Setup commands). At the 3-open cap it closes the oldest Ended Event, by go-live stamp, noting why on
+      // it, and goes live in the same breath (one door.changed). With all 3 Live it waits, noted on itself
+      // from the first tick that couldn't, and tries again every tick.
+      goesLive({ eventId }) {
+        const next = eventById(eventId)
+        if (!next || next.state !== 'upcoming' || next.counts_only) return []
+        if (db.query(`SELECT COUNT(*) AS n FROM events WHERE household_id = ? AND ${OPEN}`).get(householdId).n >= MAX_OPEN) {
+          const oldest = db.query("SELECT * FROM events WHERE household_id = ? AND state = 'ended' ORDER BY went_live_at, id LIMIT 1").get(householdId)
+          if (!oldest) {
+            if (next.tick_note !== 'waiting') db.query("UPDATE events SET tick_note = 'waiting', tick_note_at = ?, tick_note_for = NULL WHERE id = ?").run(now(), next.id)
+            return []
+          }
+          commands.close({ eventId: oldest.id })
+          db.query("UPDATE events SET tick_note = 'closed', tick_note_at = ?, tick_note_for = ? WHERE id = ?").run(now(), next.name, oldest.id)
+        }
+        return commands.goLive({ eventId: next.id })
       },
 
       // Per-event settings (spec §6). Only the fields given change.
@@ -798,10 +815,14 @@ export function openLedger(db, config) {
           expectedKids: ['expected_kids', (v) => (v == null ? null : wholeNumber(v, 'Expected kids', 0))],
           visitWindowMs: ['visit_window_ms', (v) => wholeNumber(v, 'Visit window', 1)],
           goldenCount: ['golden_count', (v) => wholeNumber(v, 'Golden tickets', 0)],
-          // Only an Upcoming night can be scheduled; null clears it.
+          // Only an Upcoming night can be scheduled, and only for a time still ahead; null clears it. The
+          // time it already has passes unchanged (Setup's form sends it back), so a waiting night keeps waiting.
           goesLiveAt: ['goes_live_at', (v) => {
             if (event.state !== 'upcoming') throw new BadCommand('This night is already live')
+            if (v === event.goes_live_at) return v
             if (v != null && !Number.isFinite(v)) throw new BadCommand('Goes live at needs a time')
+            if (v != null && v <= now()) throw new BadCommand('Pick a time that’s still ahead')
+            db.query("UPDATE events SET tick_note = NULL, tick_note_at = NULL WHERE id = ? AND tick_note = 'waiting'").run(event.id)
             return v
           }],
         }
@@ -1099,13 +1120,16 @@ export function openLedger(db, config) {
       },
 
       // Every event for the Setup page, newest first. Never includes the join key.
+      // `note` is what the tick did to it, or null (tickNote).
       events() {
         const tagsOf = db.query('SELECT * FROM tags WHERE event_id = ? ORDER BY sort_order')
         const kidCount = db.query('SELECT COUNT(*) AS n FROM kids WHERE event_id = ? AND deleted_at IS NULL')
+        const { time_zone: timeZone } = household()
+        const at = now()
         return db
           .query('SELECT * FROM events WHERE household_id = ? ORDER BY id DESC')
           .all(householdId)
-          .map((row) => ({ ...toEventSummary(row), kids: kidCount.get(row.id).n, tags: tagsOf.all(row.id).map(toTag) }))
+          .map((row) => ({ ...toEventSummary(row), note: tickNote(row, timeZone, at), kids: kidCount.get(row.id).n, tags: tagsOf.all(row.id).map(toTag) }))
       },
 
       // The Night summary (spec §12): one Ended or Past night, from stored data, with no phone names. null while
@@ -1221,6 +1245,22 @@ function toEventSummary(row) {
     endedAutomatically: row.ended_automatically === 1,
     estimated: row.estimated === 1,
   }
+}
+
+// What the tick did, noted on the Event it touched (spec v2.1 §5), for Setup; shared/night-maths.js's
+// tickNoteText words it. One at a time, since each belongs to one state:
+//   { kind: 'autoEnded', at }: ended at 3:00 am by itself; while Ended (Resume or Past drops it)
+//   { kind: 'closedForRoom', at, for }: closed so `for` could go live; for 24 hours
+//   { kind: 'waiting', at }: couldn't go live at the cap; while it's Upcoming and waiting
+function tickNote(row, timeZone, at) {
+  if (row.state === 'ended' && row.ended_automatically && row.went_live_at != null) {
+    return { kind: 'autoEnded', at: nextWallTime(row.went_live_at, AUTO_END_AT, timeZone) }
+  }
+  if (row.state === 'past' && row.tick_note === 'closed' && at - row.tick_note_at < CLOSED_NOTE_MS) {
+    return { kind: 'closedForRoom', at: row.tick_note_at, for: row.tick_note_for }
+  }
+  if (row.state === 'upcoming' && row.tick_note === 'waiting') return { kind: 'waiting', at: row.tick_note_at }
+  return null
 }
 
 function wholeNumber(value, what, min = -Infinity) {

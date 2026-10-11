@@ -161,6 +161,17 @@ const MIGRATIONS = [
     `)
     db.query("UPDATE events SET went_live_at = ? WHERE state IN ('live', 'ended') AND went_live_at IS NULL").run(now())
   },
+
+  // 12 → 13: what the tick did, noted on the Event it touched (spec v2.1 §5): 'closed' (closed to make room
+  // for tick_note_for, at tick_note_at) or 'waiting' (couldn't go live at the cap, since tick_note_at). The
+  // auto-end's note is ended_automatically on an Ended Event.
+  (db) => {
+    db.exec(`
+      ALTER TABLE events ADD COLUMN tick_note TEXT;
+      ALTER TABLE events ADD COLUMN tick_note_at INTEGER;
+      ALTER TABLE events ADD COLUMN tick_note_for TEXT;
+    `)
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

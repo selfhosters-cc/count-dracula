@@ -77,6 +77,18 @@ export function clockTime(ms, timeZone) {
   return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone })
 }
 
+// What the tick did to an Event (the Ledger's `note`, spec v2.1 §5), worded for Setup, its times in the
+// Household's zone ("4:00 pm"). '' for none.
+export function tickNoteText(note, timeZone) {
+  if (!note) return ''
+  const d = wallClock(note.at, timeZone)
+  const time = `${d.getUTCHours() % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, '0')} ${d.getUTCHours() < 12 ? 'am' : 'pm'}`
+  if (note.kind === 'autoEnded') return `Ended automatically at ${time}. Late kids still count until noon.`
+  if (note.kind === 'closedForRoom') return `Closed at ${time} so ${note.for} could go live`
+  if (note.kind === 'waiting') return `Couldn't go live at ${time}: 3 nights are open. It'll go live as soon as you end or close one.`
+  return ''
+}
+
 // "2026-10-31 18:42:10" in the zone: readable in a spreadsheet.
 export function stamp(ms, timeZone) {
   return wallClock(ms, timeZone).toISOString().slice(0, 19).replace('T', ' ')
