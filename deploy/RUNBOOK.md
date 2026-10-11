@@ -203,9 +203,21 @@ The counts match what `/operator` showed at the copy's time.
 
 ### Nearby's ≥ 5 view (ticket 42)
 
-On the dev box, the seed script from ticket 42 makes 6 fake Households in one Area with taps and costumes. Look at
-the TV box and the phone strip there, including a costume counted in only 2 Households (hidden) and a blocklisted
-one (hidden). **There are no fake Households on production**, which only ever shows the below-minimum view.
+On the dev box, `deploy/seed-nearby.js` makes 6 fake Households in one Area (dpz8), live on "Halloween 2026" with
+recent taps: Witch everywhere, Bluey (the most kids, but only 2 Households) and a blocklisted name (3 Households).
+It refuses the production database, and refuses to run with `PUBLIC_HOST` set.
+
+```bash
+mkdir -p /tmp/nearby-check
+bun deploy/seed-nearby.js /tmp/nearby-check/db.sqlite                      # prints each house's TV and phone links
+echo '{ "port": 3193, "dbPath": "/tmp/nearby-check/db.sqlite" }' > /tmp/nearby-check/config.json
+bun server/main.js /tmp/nearby-check/config.json                           # nearby refreshes as it starts
+```
+
+Open one house's TV link (`http://localhost:3193/tv/k/…`) and its phone (`/?key=…`). The TV shows **🏘️ Near you
+tonight** under the rush meter with 6 houses and **Witch on top**; the phone shows **🏘️ Near you: … · 6 houses**.
+Neither Bluey nor the blocklisted name is ever the top costume. Then `rm -rf /tmp/nearby-check`.
+**There are no fake Households on production**, which only ever shows the below-minimum view.
 
 ---
 
