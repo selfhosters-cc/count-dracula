@@ -1,7 +1,7 @@
 # Open sign-up
 
 Type: task (HITL)
-Status: in-progress
+Status: done
 Blocked by: 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 62
 
 > **v2.1:** sign-up stays paused until the event rework and the homepage are deployed. Steps 1–4 below were done on v2; [ticket 62](62-rebuild-production.md) redoes them on a fresh database. Steps 5–7 follow it, through `/`, with the test Household's check from [v2.1 §12](../spec-v2.1.md#12-household-1-and-the-opening-line). The `v1-final` retirement item is moot.
@@ -16,10 +16,10 @@ Blocked by: 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 
 - [x] 2. v2 deployed and the migration ran; the public host switched on ([ticket 35](35-public-host-on-caddy.md)); signed in with `HOUSEHOLD1_MANAGER_EMAIL`; "Halloween 2025 (counts)", the Rehearsal and Race against survived; our TV pairs
 - [x] 3. Load check passed, or the caps lowered to what passes and redeployed
 - [x] 4. `/privacy` shows the real contact and a test email arrived; a TV-link token is masked in the Caddy log; OSM tiles load only after the tap
-- [ ] 5. Test Household (second Google account, still in Testing, a phone that never opened the site): first-run; TV paired by code and by QR; Goes live at 10 minutes ahead went live with its TV following; next morning it had ended at 3 am and `/setup` showed "Your night ended automatically" (and its summary opened, if [ticket 43](43-night-summary-slides.md) is already deployed); then deleted
-- [ ] 6. Google consent screen: production redirect URI, app name and `/privacy` link set, then **Published**
-- [ ] 7. Pause sign-ups off: **sign-up is open**
-- [ ] After the first stranger signs up: `v1-final` retired (the tag and DB copy kept, never used)
+- [x] 5. Test Household (second Google account, still in Testing, a phone that never opened the site): first-run; TV paired by code and by QR; Goes live at 10 minutes ahead went live with its TV following; next morning it had ended at 3 am and `/setup` showed "Your night ended automatically" (and its summary opened, if [ticket 43](43-night-summary-slides.md) is already deployed); then deleted
+- [x] 6. Google consent screen: production redirect URI, app name and `/privacy` link set, then **Published**
+- [x] 7. Pause sign-ups off: **sign-up is open**
+- [x] ~~After the first stranger signs up: `v1-final` retired~~ moot under v2.1 (kept, never used)
 
 ## Notes from opening day (2026-10-11)
 
@@ -27,3 +27,11 @@ Blocked by: 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 
 - Step 2: deployed `8d2d139`; `deploy/caddy-add-site.sh` switched the public host on (`/healthz` 200, `/api/snapshot` 403 through Caddy). `OPERATOR_EMAILS` in `local.env` had the example's pattern, so `/operator` said Not here until it was set to the real Google account and redeployed.
 - Step 3, LXC 118 (2 cores, 1 GB): fan-out to 200 viewers median 3.8 ms, worst 7.8 ms; 3,000 streams at 64 MB RSS. Caps unchanged.
 - Step 4: nothing of ours in the shared `public-access.log`; the whole Count Dracula log held 31 `/tv/k/REDACTED` and 22 `key=REDACTED`, no token in the clear. Journald keeps 30 days.
+
+## Notes from opening (v2.1, 2026-10-11)
+
+- Steps 1–4 were redone on v2.1 by [ticket 62](62-rebuild-production.md).
+- Step 5, shortened: the test Household ran through first-run, pairing by code and then by QR after Rotate, Count on this device and a tap, and a Goes live at 10 minutes ahead that went live by itself. It was then deleted (`household deleted household=2`). The overnight 3 am end and noon Past are watched on Household #1's own Test night instead, the morning of Oct 12; it's the same tick, and the fake-clock tests cover the rules.
+- **The first try deleted Household #1.** The test phone's Google chooser picked the main account, and Start counting silently signed it in to The Hamburg Haunt, which was then deleted as if it were the test one. Fixed in `fef44e9`: `/setup?already=1` says which Household and account it is, and Delete's confirm names its nights, kids and the signed-in account. Household #1 was signed up again, re-imported and re-raced; only the rebuild's setup was lost.
+- Step 6: consent screen published. Step 7: sign-ups not paused. **Sign-up is open.** From here every deploy is fix-forward and migrations only add.
+
