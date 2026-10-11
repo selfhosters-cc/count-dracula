@@ -93,7 +93,7 @@ describe('the minute tick: going live', () => {
     expect(() => house.apply({ type: 'settings', eventId: byName(house, 'Halloween 2026').id, goesLiveAt: 'soon' })).toThrow()
   })
 
-  test('going live early clears the time, so the tick does nothing later', () => {
+  test('going live early keeps the time (for a Reset, spec v2.1 §6), but the tick only goes live on Upcoming', () => {
     const { clock, ledger } = ledgerAt('2026-10-20T12:00:00Z')
     const house = signUp(ledger, 'America/Toronto')
     const night = byName(house, 'Halloween 2026')
@@ -103,7 +103,7 @@ describe('the minute tick: going live', () => {
     clock.now = at('2026-10-31T20:00:00Z')
 
     expect(wentLive(ledger.tick())).toEqual([])
-    expect(byName(house, 'Halloween 2026')).toMatchObject({ goesLiveAt: null, state: 'past' }) // its own 3 am and noon, long ago
+    expect(byName(house, 'Halloween 2026')).toMatchObject({ goesLiveAt: at('2026-10-31T20:00:00Z'), state: 'past' }) // its own 3 am and noon, long ago
     expect(other).toBeTruthy()
   })
 })

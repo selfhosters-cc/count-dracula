@@ -103,6 +103,8 @@ const CLOSED_NOTE_MS = 24 * 60 * 60_000
 // Event states (spec v2.1 §3): upcoming → live → ended → past. Live or Ended is open, at most 3 at once.
 const OPEN = "state IN ('live', 'ended')"
 const MAX_OPEN = 3
+// Reset (spec v2.1 §6): above this many kids, the Event's name is typed to confirm.
+const RESET_CONFIRM_ABOVE = 20
 const isOpen = (event) => event.state === 'live' || event.state === 'ended'
 // An events row `e` that is its Household's door's Event: open, with the latest go-live stamp.
 const DOOR_ROW = `e.state IN ('live', 'ended') AND e.id = (
@@ -180,8 +182,8 @@ export function openLedger(db, config) {
       const late = at >= halloweenAt
       return db.transaction(() => {
         const { id } = db
-          .query('INSERT INTO households (display_name, time_zone, join_key, tv_token, signed_up_at) VALUES (?, ?, ?, ?, ?) RETURNING id')
-          .get(name, timeZone, randomKey(), randomToken(), at)
+          .query('INSERT INTO households (display_name, time_zone, join_key, tv_token, signed_up_at, last_stamp) VALUES (?, ?, ?, ?, ?, ?) RETURNING id')
+          .get(name, timeZone, randomKey(), randomToken(), at, at) // the Event it makes live is stamped `at`
         const insertEvent = db.query(`
           INSERT INTO events (household_id, name, state, golden_count, goes_live_at, went_live_at)
           VALUES (?, ?, ?, ?, ?, ?) RETURNING id
@@ -450,10 +452,15 @@ export function openLedger(db, config) {
       return event
     }
 
-    // Go live stamps strictly later than any earlier go-live of the Household, so the door's Event is never a tie.
+    // Go live stamps strictly later than any earlier go-live of the Household, so the door's Event is never a
+    // tie, and a tap under a stamp from before a Reset (or a deleted Event) never matches again. The Household
+    // remembers its latest stamp, since Reset clears an Event's.
     function nextStamp() {
-      const last = db.query('SELECT MAX(went_live_at) AS at FROM events WHERE household_id = ?').get(householdId).at
-      return Math.max(now(), last == null ? -Infinity : last + 1)
+      const { at } = db.query('SELECT MAX(went_live_at) AS at FROM events WHERE household_id = ?').get(householdId)
+      const last = Math.max(household().last_stamp ?? -Infinity, at ?? -Infinity)
+      const stamp = Math.max(now(), last + 1)
+      db.query('UPDATE households SET last_stamp = ? WHERE id = ?').run(stamp, householdId)
+      return stamp
     }
 
     // The Race-against event as half-hour buckets: stored for a counts-only event, else from its own taps.
@@ -777,7 +784,8 @@ export function openLedger(db, config) {
         if (next.counts_only || next.state === 'past') throw new BadCommand("A past event can't go live again")
         const open = db.query(`SELECT COUNT(*) AS n FROM events WHERE household_id = ? AND ${OPEN}`).get(householdId).n
         if (open >= MAX_OPEN) throw new BadCommand('End or close one of your live nights first')
-        db.query("UPDATE events SET state = 'live', goes_live_at = NULL, went_live_at = ?, tick_note = NULL, tick_note_at = NULL, tick_note_for = NULL WHERE id = ?").run(nextStamp(), next.id)
+        // Goes live at stays, so a Reset before it goes live by itself then (spec v2.1 §6); only Upcoming is ticked.
+        db.query("UPDATE events SET state = 'live', went_live_at = ?, tick_note = NULL, tick_note_at = NULL, tick_note_for = NULL WHERE id = ?").run(nextStamp(), next.id)
         drawGoldenTickets(eventById(next.id))
         return []
       },
@@ -799,6 +807,28 @@ export function openLedger(db, config) {
           db.query("UPDATE events SET tick_note = 'closed', tick_note_at = ?, tick_note_for = ? WHERE id = ?").run(now(), next.name, oldest.id)
         }
         return commands.goLive({ eventId: next.id })
+      },
+
+      // Reset (Setup, spec v2.1 §6): a Live or Ended Event back to Upcoming, as if it never went live. Its
+      // night goes (kids, batches, moments, golden tickets, the summary's nearby slide, share links, the go-live
+      // stamp, ended and the tick's notes); its setup, costumes and Reports stay, and Goes live at while it's
+      // still ahead. Above 20 kids the Event's name is typed to confirm. Resetting the door's Event moves the
+      // door (apply() tells screens); otherwise its own screens resync, and the door's if it races it.
+      reset({ eventId, confirm }) {
+        const event = eventById(eventId)
+        if (!event) throw new BadCommand('No such event')
+        if (!isOpen(event)) throw new BadCommand('Only a live or ended night can be reset')
+        if (liveCount.get(event.id).n > RESET_CONFIRM_ABOVE && confirm !== event.name) throw new BadCommand(`Type "${event.name}" to reset it`)
+        for (const table of ['kids', 'backfill_batches', 'fired_moments', 'golden_tickets', 'share_links']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
+        db.query(`
+          UPDATE events SET state = 'upcoming', went_live_at = NULL, ended_automatically = 0, summary_nearby = NULL,
+            tick_note = NULL, tick_note_at = NULL, tick_note_for = NULL,
+            goes_live_at = CASE WHEN goes_live_at > ? THEN goes_live_at END
+          WHERE id = ?
+        `).run(now(), event.id)
+        const door = doorRow()
+        const racedByDoor = door != null && door.race_against_id === event.id
+        return [{ type: 'event.updated', eventId: event.id }, ...(racedByDoor ? [{ type: 'event.updated', eventId: door.id }] : [])]
       },
 
       // Per-event settings (spec §6). Only the fields given change.

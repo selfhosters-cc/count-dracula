@@ -339,6 +339,9 @@ function render() {
   $('tags').replaceChildren(...(editing?.tags ?? []).map(tagRow))
   $('c-copy').replaceChildren(option('', 'Nothing (start empty)', true), ...events.filter((e) => !e.countsOnly).map((e) => option(e.id, e.name)))
 
+  // Reset (spec v2.1 §6) for every open Event, the door's first, until ticket 57 gives each its own card.
+  $('resets').replaceChildren(...[live, ...others].filter(Boolean).map((e) => h('button', { className: 'danger', textContent: `↺ Reset ${e.name}`, onclick: () => resetEvent(e) })))
+
   renderBackfill(live)
   renderLists(upcoming, past)
 }
@@ -511,6 +514,21 @@ $('export-live').addEventListener('click', () => (doorEvent() ? exportEvent(door
 function goLive(event) {
   if (!confirm(`Go live with "${event.name}"?\n\nPhones and the TV switch to it by themselves. Any other live night stays open.`)) return
   admin({ type: 'goLive', eventId: event.id }, `${event.name} is live`)
+}
+
+// Reset (spec v2.1 §6): back to Upcoming with no kids. A plain confirm naming the count; above 20 kids, the
+// Event's name typed. A Goes live at that has passed is cleared, and the confirm says so.
+function resetEvent(event) {
+  const kids = !event.kids ? 'It' : event.kids === 1 ? 'Its 1 kid is deleted and it' : `Its ${event.kids} kids are deleted and it`
+  const cleared = event.goesLiveAt != null && event.goesLiveAt <= Date.now()
+  const text = `Reset "${event.name}"? ${kids} goes back to Upcoming.${cleared ? `\n\n${event.name} won't go live by itself again. Go live when you're ready.` : ''}`
+  let confirmed
+  if (event.kids > 20) {
+    confirmed = prompt(`${text}\n\nType its name to confirm.`)
+    if (confirmed === null) return
+    if (confirmed !== event.name) return say('The name didn’t match, so nothing was reset', true)
+  } else if (!confirm(text)) return
+  admin({ type: 'reset', eventId: event.id, confirm: confirmed }, `${event.name} is back to Upcoming`)
 }
 
 function deleteEvent(event) {

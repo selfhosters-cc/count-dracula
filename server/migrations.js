@@ -172,6 +172,15 @@ const MIGRATIONS = [
       ALTER TABLE events ADD COLUMN tick_note_for TEXT;
     `)
   },
+
+  // 13 → 14: the Household's latest go-live stamp (spec v2.1 §6). Reset clears an Event's went_live_at, so the
+  // next Go live can't read "strictly later than any stamp so far" off the events any more.
+  (db) => {
+    db.exec(`
+      ALTER TABLE households ADD COLUMN last_stamp INTEGER;
+      UPDATE households SET last_stamp = (SELECT MAX(went_live_at) FROM events WHERE household_id = households.id);
+    `)
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.
