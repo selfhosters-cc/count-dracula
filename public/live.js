@@ -5,14 +5,18 @@ const MAX_RETRY_MS = 5_000 // a random 0–5 s, so a server restart isn't met by
 const STALE_MS = 35_000 // the server pings every 15 s: two missed means the link is dead, even if still "open"
 const RESYNC = new Set(['event.switched', 'event.updated'])
 
-// The server refusing the credential outright (a rotated TV link, a changed join key, a deleted or suspended
-// Household) is told apart from a dropped link by asking for the snapshot: onRefused hears it, and the
-// stream stops trying.
+// When EventSource gives up, asking for the snapshot tells three things apart: the credential refused outright
+// (a rotated TV link, a changed join key, a deleted or suspended Household: onRefused, and no more tries), the
+// server up but the stream turned away by a cap (onBusy, and tries again backing off up to a minute), and the
+// server unreachable (a dropped link: try again in 0–5 s).
 const REFUSED = new Set([401, 403, 404])
+const MAX_BACKOFF_MS = 60_000
 
 export function connectLive(url = '/api/stream') {
   const listeners = new Set()
   const refusedListeners = new Set()
+  const busyListeners = new Set()
+  let busyTries = 0
   let source
   let disconnectedAt = Date.now()
   let lastHeard = Date.now()
@@ -30,6 +34,9 @@ export function connectLive(url = '/api/stream') {
     onRefused(listener) {
       refusedListeners.add(listener)
     },
+    onBusy(listener) {
+      busyListeners.add(listener)
+    },
   }
 
   function emit(cause, delta) {
@@ -45,6 +52,7 @@ export function connectLive(url = '/api/stream') {
       lastHeard = Date.now()
       live.state = JSON.parse(e.data)
       live.connected = true
+      busyTries = 0
       emit('snapshot')
     })
 
@@ -65,20 +73,27 @@ export function connectLive(url = '/api/stream') {
       emit('disconnected')
       // EventSource retries by itself (after the server's random `retry:`) unless the server answered with an error status.
       if (source.readyState !== EventSource.CLOSED) return
-      if (await refused()) {
+      const why = await whyClosed()
+      if (why === 'refused') {
         live.refused = true
         for (const listener of refusedListeners) listener()
         return
+      }
+      if (why === 'busy') {
+        for (const listener of busyListeners) listener()
+        const backoff = Math.min(MAX_BACKOFF_MS, MAX_RETRY_MS * 2 ** busyTries++)
+        return setTimeout(reopen, backoff / 2 + Math.random() * (backoff / 2))
       }
       setTimeout(reopen, Math.random() * MAX_RETRY_MS)
     })
   }
 
-  async function refused() {
+  async function whyClosed() {
     try {
-      return REFUSED.has((await fetch(url.replace('/api/stream', '/api/snapshot'))).status)
+      const { status } = await fetch(url.replace('/api/stream', '/api/snapshot'))
+      return REFUSED.has(status) ? 'refused' : status === 200 ? 'busy' : 'down'
     } catch {
-      return false // the server's unreachable: that's a dropped link, keep trying
+      return 'down' // the server's unreachable: that's a dropped link, keep trying
     }
   }
 

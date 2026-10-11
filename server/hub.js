@@ -48,10 +48,10 @@ export function createHub({ heartbeatMs = 15_000, random = Math.random } = {}) {
   return {
     // { householdId, kind, credential, snapshot, shape } → the stream's Response. shape(delta), if given,
     // is what this device gets of each delta (a TV's leaves out phone names); snapshot() is already shaped.
-    attach(req, server, { householdId, kind, credential, snapshot, shape = null }) {
+    attach(req, server, { householdId, kind, credential, snapshot, shape = null, ip = null }) {
       if (!KINDS.includes(kind)) throw new Error(`Unknown stream kind: ${kind}`)
       server.timeout(req, 0)
-      const client = { householdId, kind, credential, shape, controller: null }
+      const client = { householdId, kind, credential, shape, ip, controller: null }
       const body = new ReadableStream(
         {
           start(controller) {
@@ -94,6 +94,13 @@ export function createHub({ heartbeatMs = 15_000, random = Math.random } = {}) {
       for (const client of [...(channels.get(householdId) ?? [])]) {
         if (credential === undefined || client.credential === credential) end(client)
       }
+    },
+
+    // Open streams from one client address, for the per-IP cap.
+    streamsFrom(ip) {
+      let n = 0
+      for (const channel of channels.values()) for (const client of channel) if (client.ip === ip) n++
+      return n
     },
 
     // Open streams per Household and kind, for the caps and /operator.

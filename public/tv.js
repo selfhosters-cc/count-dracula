@@ -491,6 +491,12 @@ live?.onRefused(() => {
   $('sound-pill').hidden = true
 })
 
+// A cap turned this screen away (spec §15): say so, calmly; live.js tries again, backing off.
+live?.onBusy(() => ($('tv-full').hidden = false))
+live?.on(({ cause }) => {
+  if (cause === 'snapshot') $('tv-full').hidden = true
+})
+
 // ---- the pairing screen (spec §9): a code and a QR until a Manager redeems it, then the board
 if (pairingMode) {
   $('pairing').hidden = false

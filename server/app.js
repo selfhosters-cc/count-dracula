@@ -9,6 +9,7 @@ import { openAccounts } from './accounts.js'
 import { googleClient } from './google.js'
 import { createHub } from './hub.js'
 import { createPairing } from './pairing.js'
+import { LIMITS, createGuard } from './guard.js'
 import { toCsv } from './export.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
@@ -27,9 +28,10 @@ const SESSION_COOKIE = 'cd_session'
 const sessionCookie = (token, maxAge = 90 * 86_400) => `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`
 
 // env: PUBLIC_HOST, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPERATOR_EMAILS, HOUSEHOLD1_MANAGER_EMAIL (deploy/local.env).
-// google, now, canSignUp and tickMs are seams for the tests.
-export function startServer({ configPath, port, heartbeatMs, env = process.env, google, now = Date.now, canSignUp, tickMs = 60_000 }) {
+// google, now, canSignUp, tickMs, limits and log are seams for the tests.
+export function startServer({ configPath, port, heartbeatMs, env = process.env, google, now = Date.now, canSignUp, tickMs = 60_000, limits = LIMITS, log = console.log }) {
   const config = loadConfig(configPath)
+  const guard = createGuard({ now, limits, log })
   const db = new Database(config.dbPath, { create: true })
   const ledger = openLedger(db, { ...config, now })
   const accounts = openAccounts(db, {
@@ -38,7 +40,8 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     now,
     household1Email: env.HOUSEHOLD1_MANAGER_EMAIL ?? '',
     operatorEmails: (env.OPERATOR_EMAILS ?? '').split(/[\s,]+/).filter(Boolean),
-    canSignUp,
+    // A new Household: 3 per IP per day and 60 site-wide per hour (spec §15).
+    canSignUp: canSignUp ?? (({ ip }) => guard.take('householdsPerIp', ip) && guard.take('householdsSite', 'site')),
   })
   const hub = createHub({ heartbeatMs })
   const pairing = createPairing({ now })
@@ -68,14 +71,21 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     },
     // EventSource can't send headers, so a phone's key or the TV link's token comes as ?key= (masked in the
     // Caddy log). A TV gets the live night TV-shaped.
-    'GET /api/stream': read((req, house, credential, server) =>
-      credential.kind === 'tv'
-        ? hub.attach(req, server, { householdId: house.id, kind: credential.paired ? 'paired' : 'tvLink', credential: credential.token, snapshot: () => tvSnapshot(house.snapshot()), shape: tvDelta })
-        : hub.attach(req, server, { householdId: house.id, kind: 'phone', credential: credential.token, snapshot: () => house.snapshot() })),
+    'GET /api/stream': read((req, house, credential, server) => {
+      const kind = credential.kind !== 'tv' ? 'phone' : credential.paired ? 'paired' : 'tvLink'
+      const ip = clientIp(req, server)
+      const counts = hub.counts()
+      const refusal = guard.admitStream({ kind, total: counts.total, fromIp: hub.streamsFrom(ip), household: counts.households[house.id] ?? { phone: 0, paired: 0, tvLink: 0 } })
+      // A full TV gets 503, which the TV page shows as "This TV is full, try again soon" and retries.
+      if (refusal) return new Response(refusal === 'tvFull' ? 'This TV is full, try again soon' : 'Too many connections', { status: refusal === 'tvFull' ? 503 : 429 })
+      return kind === 'phone'
+        ? hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => house.snapshot() })
+        : hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => tvSnapshot(house.snapshot()), shape: tvDelta })
+    }),
 
     // ---- Pairing a TV (spec §9): the bare /tv asks for a code and waits; a Manager redeems it in /setup.
     // The waiting secret travels in the body, never the address.
-    'POST /api/pair/code': () => Response.json(pairing.newCode()),
+    'POST /api/pair/code': (req, server) => (guard.take('pairCode', clientIp(req, server)) ? Response.json(pairing.newCode()) : tooMany()),
     'POST /api/pair/wait': async (req) => {
       const { waitToken } = await req.json().catch(() => ({}))
       const answer = pairing.wait(waitToken)
@@ -84,12 +94,14 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       if (!answer.paired) return Response.json({ paired: false })
       return Response.json({ paired: true, tvToken: house.tvToken(), deviceToken: house.pairDevice() })
     },
-    'POST /api/pair/redeem': manager(async (req, house) => {
+    'POST /api/pair/redeem': manager(async (req, house, session) => {
+      if (!guard.take('redeem', session.manager.id)) return tooMany()
       const { code } = await req.json()
       if (!pairing.redeem(code, house.id)) return new Response("That code isn't on any TV right now. Check it, or wait for the TV's next one.", { status: 404 })
       return Response.json({ paired: true })
     }),
     'POST /api/taps': write(async (req, house) => {
+      if (!guard.take('taps', house.id)) return tooMany()
       const { id, tagId, tappedAt, phoneName, teen } = await req.json()
       hub.publish(house.id, house.apply({ type: 'tap', id, tagId, tappedAt, phoneName, teen }))
     }),
@@ -98,7 +110,8 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       hub.publish(house.id, house.apply({ type: 'remove', kidId }))
     }),
     // ---- Signing in (spec §3). The sign-up page posts here; Google sends the person back to the callback.
-    'POST /auth/google/start': async (req) => {
+    'POST /auth/google/start': async (req, server) => {
+      if (!guard.take('signIn', clientIp(req, server))) return page('Slow down', '<p>Too many sign-ins from here. Try again in a while.</p>', 429)
       const form = await req.formData()
       try {
         return redirect(accounts.beginSignIn({ displayName: form.get('displayName'), timeZone: form.get('timeZone'), redirectUri: callbackUrl(req) }))
@@ -188,6 +201,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       hub.publish(house.id, house.apply({ type: 'mix', volume, mutes }))
     }),
     'POST /api/catch-up': write(async (req, house) => {
+      if (!guard.take('taps', house.id)) return tooMany()
       const { tag, n, kid } = await req.json()
       hub.publish(house.id, house.apply({ type: 'catchUp', tag, n, kid }))
     }),
@@ -293,6 +307,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     url: server.url.origin,
     ledger,
     hub,
+    guard,
     stop() {
       clearInterval(ticker)
       hub.shutdown()
@@ -335,6 +350,10 @@ function tokenOf(req) {
 // Behind Cloudflare, the visitor's address is in CF-Connecting-IP (spec §15).
 function clientIp(req, server) {
   return req.headers.get('CF-Connecting-IP') ?? server?.requestIP(req)?.address ?? null
+}
+
+function tooMany() {
+  return new Response('Too many: slow down and try again', { status: 429 })
 }
 
 function redirect(location, headers = {}) {
