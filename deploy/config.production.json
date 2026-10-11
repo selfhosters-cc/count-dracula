@@ -6,7 +6,6 @@
   "autoJoinHosts": [
     "__HOST__"
   ],
-  "ghostSeed": "/opt/count-dracula/config/2025-counts.json",
   "switches": {
     "milestones": true,
     "goldenTickets": true,

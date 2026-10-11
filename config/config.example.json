@@ -3,7 +3,6 @@
   "port": 3131,
   "lanUrl": null,
   "dbPath": "../count-dracula.sqlite",
-  "ghostSeed": "2025-counts.json",
   "switches": {
     "milestones": true,
     "goldenTickets": true,

@@ -11,4 +11,5 @@ if (!existsSync(configPath)) {
 const app = startServer({ configPath })
 console.log(`Count Dracula on ${app.url}`)
 console.log(`  TV:    ${app.url}/tv`)
-console.log(`  Phone: ${app.url}/?key=${app.ledger.joinKey()}`)
+const [first] = app.ledger.households()
+if (first) console.log(`  Phone: ${app.url}/?key=${app.ledger.household(first.id).joinKey()}`)

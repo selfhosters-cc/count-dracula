@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { ghostSeedFromCsv, toCsv } from './export.js'
+import { toCsv } from './export.js'
 
 const local = (hh, mm, ss = 0) => new Date(2026, 9, 31, hh, mm, ss).getTime()
 
@@ -26,21 +26,10 @@ describe('export CSV', () => {
     expect(lines[5]).toBe('3,2026-10-31 18:40:00,2026-10-31 18:40:02,"Bluey, the dog",tap,,Dad,')
   })
 
-  test('ends with a half-hour summary of the non-deleted kids, in the ghost seed\'s shape', () => {
+  test('ends with a half-hour summary of the non-deleted kids', () => {
     const csv = toCsv(night)
     const summary = csv.trimEnd().split('\n\n')[1].split('\n')
 
     expect(summary).toEqual(['half_hour_start,half_hour_end,kids', '17:42,18:00,1', '18:00,18:30,1', '18:30,19:00,1'])
-  })
-
-  test('reads back as a ghost seed', () => {
-    expect(ghostSeedFromCsv(toCsv(night))).toEqual({
-      name: 'Halloween 2026',
-      buckets: [
-        { start: '17:42', end: '18:00', count: 1 },
-        { start: '18:00', end: '18:30', count: 1 },
-        { start: '18:30', end: '19:00', count: 1 },
-      ],
-    })
   })
 })

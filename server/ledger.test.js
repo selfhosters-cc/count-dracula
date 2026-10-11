@@ -2,52 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { BadCommand, openLedger } from './ledger.js'
 import ghostSeed from '../config/2025-counts.json'
-
-describe('first install', () => {
-  test('creates "Rehearsal" and makes it the live event', () => {
-    const ledger = openLedger(new Database(':memory:'), {})
-
-    const { event, kids } = ledger.snapshot()
-
-    expect(event.name).toBe('Rehearsal')
-    expect(event.live).toBe(true)
-    expect(kids).toEqual([])
-  })
-
-  test('seeds the counts-only 2025 event and races Rehearsal against it', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
-
-    const { ghost } = ledger.snapshot()
-
-    expect(ghost.buckets).toHaveLength(5)
-    expect(ghost.buckets.reduce((sum, b) => sum + b.count, 0)).toBe(346)
-    expect(ghost.buckets[0]).toEqual({ start: '17:42', end: '18:00', count: 14 })
-
-    const past = ledger.snapshot(ghost.eventId).event
-    expect(past.name).toBe('Halloween 2025 (counts)')
-    expect(past.live).toBe(false)
-    expect(past.countsOnly).toBe(true)
-  })
-
-  test('gives the live event a random join key', () => {
-    const a = openLedger(new Database(':memory:'), { ghostSeed })
-    const b = openLedger(new Database(':memory:'), { ghostSeed })
-
-    expect(a.joinKey()).toMatch(/^[A-Za-z0-9]{8,}$/)
-    expect(a.joinKey()).not.toBe(b.joinKey())
-  })
-
-  test('happens once: reopening the database keeps the same live event and key', () => {
-    const db = new Database(':memory:')
-    const first = openLedger(db, { ghostSeed })
-
-    const again = openLedger(db, { ghostSeed })
-
-    expect(again.snapshot().event.id).toBe(first.snapshot().event.id)
-    expect(again.snapshot().ghost.buckets).toHaveLength(5)
-    expect(again.joinKey()).toBe(first.joinKey())
-  })
-})
+import { openV1Night } from '../test/v1-night.js'
 
 function tap(id, extra = {}) {
   return { type: 'tap', id, tagId: null, tappedAt: 1_000, phoneName: 'Dad', ...extra }
@@ -55,7 +10,7 @@ function tap(id, extra = {}) {
 
 describe('taps', () => {
   test('a tap adds kid #1 and returns a kid.added delta', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
 
     const deltas = ledger.apply(tap('kid-a', { tappedAt: 1_700_000_000_000 }))
 
@@ -71,7 +26,7 @@ describe('taps', () => {
   })
 
   test('repeating a tap id stores one kid and returns no delta', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     ledger.apply(tap('kid-a'))
 
     const deltas = ledger.apply(tap('kid-a'))
@@ -88,7 +43,7 @@ describe('kid numbers', () => {
   }
 
   test('count up with each arrival', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
 
     expect(numberOf(ledger.apply(tap('a')))).toBe(1)
     expect(numberOf(ledger.apply(tap('b')))).toBe(2)
@@ -96,7 +51,7 @@ describe('kid numbers', () => {
   })
 
   test('an undone kid frees its number for the next arrival', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     ledger.apply(tap('a'))
     ledger.apply(tap('b'))
 
@@ -107,7 +62,7 @@ describe('kid numbers', () => {
   })
 
   test('are never rewritten: removing an earlier kid leaves two kids sharing a number', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     ledger.apply(tap('a'))
     ledger.apply(tap('b'))
     ledger.apply(tap('c'))
@@ -123,7 +78,7 @@ describe('kid numbers', () => {
   })
 
   test('removing is idempotent', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     ledger.apply(tap('a'))
     ledger.apply({ type: 'remove', kidId: 'a' })
 
@@ -134,7 +89,7 @@ describe('kid numbers', () => {
 
 describe('feature switches', () => {
   test('are all on unless the config turns one off, and clients see them in the snapshot', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed, switches: { goldenTickets: false } })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed, switches: { goldenTickets: false } })
 
     expect(ledger.snapshot().settings.switches).toEqual({
       milestones: true,
@@ -151,7 +106,7 @@ describe('feature switches', () => {
 
 describe('snapshot', () => {
   test('carries the live event, tags, kids, ghost, settings and seq, and never the join key', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed, now: () => 6_000 })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed, now: () => 6_000 })
     ledger.apply(tap('kid-a', { tappedAt: 5_000, phoneName: 'Mom' }))
 
     const snap = ledger.snapshot()
@@ -164,6 +119,7 @@ describe('snapshot', () => {
         countsOnly: false,
         ended: false,
         frozen: false,
+        rehearsal: false,
         clockShiftMs: 0,
         visitWindowMs: 15_000,
       },
@@ -184,6 +140,7 @@ describe('snapshot', () => {
       golden: { left: 5, nextIsGolden: false },
       recap: null,
       settings: { switches: expect.any(Object), mix: expect.any(Object), lanUrl: null, soundboard: [] },
+      timeZone: 'America/Toronto',
       seq: 1,
     })
     expect(JSON.stringify(snap)).not.toContain(ledger.joinKey())
@@ -192,7 +149,7 @@ describe('snapshot', () => {
 
 describe('late taps', () => {
   function ledgerAt(nowMs) {
-    return openLedger(new Database(':memory:'), { ghostSeed, now: () => nowMs })
+    return openV1Night(new Database(':memory:'), { ghostSeed, now: () => nowMs })
   }
 
   test.each([
@@ -231,7 +188,7 @@ function catchUp(kidId, n, extra = {}) {
 
 describe('catch-up (+ New costume)', () => {
   test('with nobody to catch up, creates the costume and counts the kid at the door with it', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     ledger.apply(tap('a'))
 
     const deltas = ledger.apply(catchUp('door', 0))
@@ -244,7 +201,7 @@ describe('catch-up (+ New costume)', () => {
   })
 
   test('re-tags the N most recent untagged kids by tap time and adds exactly one kid', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed, now: () => 10_000 })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed, now: () => 10_000 })
     ledger.apply(tap('a', { tappedAt: 1_000 }))
     ledger.apply(tap('b', { tappedAt: 4_000 }))
     ledger.apply(tap('c', { tappedAt: 2_000 })) // arrived after b, but tapped before it
@@ -265,7 +222,7 @@ describe('catch-up (+ New costume)', () => {
   })
 
   test('caps N at the untagged kids there are, skipping tagged and removed kids', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     ledger.apply(tap('a', { tappedAt: 1_000 }))
     ledger.apply(catchUp('witch', 0, { tag: { name: 'Witch', emoji: '🧙' }, kid: { id: 'witch', tappedAt: 2_000 } }))
     ledger.apply(tap('b', { tappedAt: 3_000 }))
@@ -279,7 +236,7 @@ describe('catch-up (+ New costume)', () => {
   })
 
   test('a retry with the same door kid id does nothing: no second costume, no re-tagging', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     ledger.apply(tap('a'))
     ledger.apply(catchUp('door', 0))
     ledger.apply(tap('b'))
@@ -297,7 +254,7 @@ describe('catch-up (+ New costume)', () => {
     ['a fractional N', { n: 1.5 }],
     ['no door kid', { kid: undefined }],
   ])('refuses %s, changing nothing', (_, override) => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     ledger.apply(tap('a'))
 
     expect(() => ledger.apply({ ...catchUp('door', 1), ...override })).toThrow(BadCommand)
@@ -308,7 +265,7 @@ describe('catch-up (+ New costume)', () => {
 
 describe('tag taps', () => {
   test("add a kid with that costume", () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const [tagAdded] = ledger.apply(catchUp('door', 0))
 
     const [delta] = ledger.apply(tap('a', { tagId: tagAdded.tag.id }))
@@ -317,7 +274,7 @@ describe('tag taps', () => {
   })
 
   test("naming a costume that isn't in the live event (deleted while queued) still counts the kid, untagged", () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
 
     const [delta] = ledger.apply(tap('a', { tagId: 999 }))
 
@@ -328,11 +285,11 @@ describe('tag taps', () => {
 describe('ghost from a past event with taps', () => {
   test("races against a 2026-style event's own non-deleted taps, in its event time", () => {
     const db = new Database(':memory:')
-    const ledger = openLedger(db, { ghostSeed })
+    const ledger = openV1Night(db, { ghostSeed })
     // Arranged with SQL until Setup (ticket 22) can create events: a past +3h rehearsal with 3 kids, one deleted.
     const local = (hh, mm) => new Date(2026, 9, 24, hh, mm).getTime()
     const past = db
-      .query("INSERT INTO events (name, frozen, clock_shift_ms) VALUES ('Dress rehearsal 2026', 1, ?) RETURNING id")
+      .query("INSERT INTO events (household_id, name, frozen, clock_shift_ms) VALUES (1, 'Dress rehearsal 2026', 1, ?) RETURNING id")
       .get(3 * 3_600_000).id
     const addKid = db.query('INSERT INTO kids (id, event_id, number, tapped_at, received_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?)')
     addKid.run('r1', past, 1, local(14, 50), local(14, 50), null)
@@ -356,7 +313,7 @@ describe('events and Go live', () => {
   const liveEvents = (ledger) => ledger.events().filter((e) => e.live)
 
   test("creating an event doesn't make it live", () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
 
     const [created] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
 
@@ -366,7 +323,7 @@ describe('events and Go live', () => {
   })
 
   test('Go live switches the live event, freezes the old one and keeps the join key', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const key = ledger.joinKey()
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
 
@@ -380,7 +337,7 @@ describe('events and Go live', () => {
   })
 
   test('taps after Go live count in the new event, numbered from 1', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     ledger.apply(tap('rehearsal-kid'))
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
     ledger.apply({ type: 'goLive', eventId: event.id })
@@ -400,7 +357,7 @@ describe('events and Go live', () => {
       return rehearsal
     }],
   ])("can't go live with %s", (_, pick) => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const eventId = pick(ledger)
     const before = ledger.snapshot().event.id
 
@@ -410,7 +367,7 @@ describe('events and Go live', () => {
   })
 
   test('"Copy costumes from" copies names, emoji, order, sounds and the Visit window, with zero counts', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const rehearsal = ledger.snapshot().event.id
     ledger.apply(catchUp('door', 0, { tag: { name: 'Witch', emoji: '🧙' } }))
     ledger.apply(catchUp('door-2', 0, { tag: { name: 'Bluey', emoji: '🐶' } }))
@@ -428,7 +385,7 @@ describe('events and Go live', () => {
 
 describe('event settings', () => {
   test('Race against and Clock shift change what the live snapshot carries, and tell clients to resync', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const live = ledger.snapshot().event.id
 
     const deltas = ledger.apply({ type: 'settings', eventId: live, raceAgainstId: null, clockShiftMs: 3 * 3_600_000 })
@@ -439,14 +396,14 @@ describe('event settings', () => {
   })
 
   test("an event can't race against itself", () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const live = ledger.snapshot().event.id
 
     expect(() => ledger.apply({ type: 'settings', eventId: live, raceAgainstId: live })).toThrow(BadCommand)
   })
 
   test("an upcoming event's settings change quietly: no delta for the live clients", () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
 
     expect(ledger.apply({ type: 'settings', eventId: event.id, expectedKids: 350 })).toEqual([])
@@ -454,7 +411,7 @@ describe('event settings', () => {
   })
 
   test('past events are read-only: settings and costume changes are rejected', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const rehearsal = ledger.snapshot().event.id
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
     ledger.apply({ type: 'goLive', eventId: event.id })
@@ -467,7 +424,7 @@ describe('event settings', () => {
 
 describe('join key and deleting events', () => {
   test('Change key replaces the live event\'s key', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const old = ledger.joinKey()
 
     ledger.apply({ type: 'changeKey' })
@@ -477,14 +434,14 @@ describe('join key and deleting events', () => {
   })
 
   test("the live event can't be deleted", () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const live = ledger.snapshot().event
 
     expect(() => ledger.apply({ type: 'deleteEvent', eventId: live.id, confirm: live.name })).toThrow(BadCommand)
   })
 
   test('a past event is deleted with its kids and costumes, only with its name typed to confirm', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const rehearsal = ledger.snapshot().event.id
     ledger.apply(tap('a'))
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
@@ -502,7 +459,7 @@ describe('join key and deleting events', () => {
 
 describe('costume presets', () => {
   test('creating, renaming and re-emojiing a costume on the live event updates clients', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const live = ledger.snapshot().event.id
 
     const [added] = ledger.apply({ type: 'createTag', eventId: live, name: 'Wednesday', emoji: '🖤' })
@@ -514,7 +471,7 @@ describe('costume presets', () => {
   })
 
   test('deleting a costume makes its kids untagged', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const [{ tag }] = ledger.apply(catchUp('door', 0))
     ledger.apply(tap('a', { tagId: tag.id }))
     ledger.apply(tap('b'))
@@ -530,7 +487,7 @@ describe('costume presets', () => {
   })
 
   test("an upcoming event's costumes change without telling the live clients", () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
 
     expect(ledger.apply({ type: 'createTag', eventId: event.id, name: 'Witch', emoji: '🧙' })).toEqual([])
@@ -543,7 +500,7 @@ describe('milestones and Beat last year (fired moments)', () => {
   // Golden tickets off: a randomly drawn ticket landing on #50 would add 'golden' to that kid's moments.
   function race({ switches = {}, ...config } = {}) {
     let clockMs = 1_000_000_000
-    const ledger = openLedger(new Database(':memory:'), {
+    const ledger = openV1Night(new Database(':memory:'), {
       ghostSeed,
       now: () => clockMs,
       switches: { goldenTickets: false, ...switches },
@@ -644,7 +601,7 @@ describe('golden tickets: the draw', () => {
     return () => values[i++ % values.length]
   }
   const goLiveWith = (config, settings = {}) => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed, ...config })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed, ...config })
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
     ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: ledger.snapshot().ghost.eventId, ...settings })
     ledger.apply({ type: 'goLive', eventId: event.id })
@@ -675,7 +632,7 @@ describe('golden tickets: the draw', () => {
   })
 
   test('the first install draws for the live Rehearsal too (the rehearsal draws for real)', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
 
     expect(ledger.tickets(ledger.snapshot().event.id)).toHaveLength(5)
     expect(ledger.snapshot().golden).toEqual({ left: 5, nextIsGolden: false })
@@ -687,7 +644,7 @@ describe('golden tickets: winning', () => {
   function golden(config = {}) {
     let clockMs = 1_000_000_000
     const db = new Database(':memory:')
-    const ledger = openLedger(db, { ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] }, random: () => 0, now: () => clockMs, ...config })
+    const ledger = openV1Night(db, { ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] }, random: () => 0, now: () => clockMs, ...config })
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Night' })
     ledger.apply({ type: 'settings', eventId: event.id, raceAgainstId: ledger.snapshot().ghost.eventId, goldenCount: 1 })
     ledger.apply({ type: 'goLive', eventId: event.id })
@@ -750,26 +707,26 @@ describe('TV mix (☰ volume and mutes)', () => {
   const quiet = { volume: 0.4, mutes: { ambience: true, bloops: false, everything: false } }
 
   test('starts at full volume with nothing muted', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
 
     expect(ledger.snapshot().settings.mix).toEqual({ volume: 1, mutes: { ambience: false, bloops: false, everything: false } })
   })
 
   test('any change goes to the TV as a delta and into the snapshot', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
 
     expect(ledger.apply({ type: 'mix', ...quiet })).toMatchObject([{ type: 'mix.changed', mix: quiet }])
     expect(ledger.snapshot().settings.mix).toEqual(quiet)
   })
 
-  test('is global: it survives a restart and Go live', () => {
+  test('is per Household: it survives a restart and Go live', () => {
     const db = new Database(':memory:')
-    const ledger = openLedger(db, { ghostSeed })
+    const ledger = openV1Night(db, { ghostSeed })
     ledger.apply({ type: 'mix', ...quiet })
     const [{ event }] = ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
     ledger.apply({ type: 'goLive', eventId: event.id })
 
-    expect(openLedger(db, { ghostSeed }).snapshot().settings.mix).toEqual(quiet)
+    expect(openLedger(db, {}).household(1).snapshot().settings.mix).toEqual(quiet)
   })
 
   test.each([
@@ -777,7 +734,7 @@ describe('TV mix (☰ volume and mutes)', () => {
     ['a negative volume', { volume: -0.1, mutes: {} }],
     ['no volume', { mutes: {} }],
   ])('refuses %s', (_, mix) => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
 
     expect(() => ledger.apply({ type: 'mix', ...mix })).toThrow(BadCommand)
   })
@@ -787,7 +744,7 @@ describe('golden tickets: roll forward, add and release', () => {
   // A night racing a 30-kid ghost (range #3–#24), with tickets drawn at the start of each band.
   function night({ tickets = 1 } = {}) {
     let clockMs = 1_000_000_000
-    const ledger = openLedger(new Database(':memory:'), {
+    const ledger = openV1Night(new Database(':memory:'), {
       ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] },
       random: () => 0,
       now: () => clockMs,
@@ -883,7 +840,7 @@ describe('Add missed kids (backfill)', () => {
   const MIN = 60_000
   const NOW = 1_800_000_000_000
   function setup() {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed, now: () => NOW, switches: { goldenTickets: false } })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed, now: () => NOW, switches: { goldenTickets: false } })
     return ledger
   }
   const row = (startMs, count, minutes = 15) => ({ startMs, endMs: startMs + minutes * MIN, count })
@@ -956,7 +913,7 @@ describe('Add missed kids (backfill)', () => {
 
 describe('new costume alert', () => {
   test('a costume created live with Catch-up N announces itself ×(N+1)', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
     for (const id of ['a', 'b', 'c']) ledger.apply(tap(id))
 
     const [added] = ledger.apply(catchUp('door', 3, { tag: { name: 'Wednesday', emoji: '🖤' } }))
@@ -965,7 +922,7 @@ describe('new costume alert', () => {
   })
 
   test("a costume preset created in Setup doesn't", () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed })
 
     const [added] = ledger.apply({ type: 'createTag', eventId: ledger.snapshot().event.id, name: 'Witch', emoji: '🧙' })
 
@@ -973,7 +930,7 @@ describe('new costume alert', () => {
   })
 
   test('with the new-trend switch off, there is no alert', () => {
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed, switches: { newTrendAlert: false } })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed, switches: { newTrendAlert: false } })
 
     const [added] = ledger.apply(catchUp('door', 0))
 
@@ -985,7 +942,7 @@ describe('soundboard', () => {
   const board = [1, 2, 3, 4, 5, 6].map((n) => ({ label: `Sound ${n}`, file: `board-${n}.mp3` }))
   function setup(config = {}) {
     let clockMs = 1_000_000
-    const ledger = openLedger(new Database(':memory:'), { ghostSeed, soundboard: board, now: () => clockMs, ...config })
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed, soundboard: board, now: () => clockMs, ...config })
     return { ledger, wait: (ms) => (clockMs += ms) }
   }
 
@@ -1018,7 +975,7 @@ describe('soundboard', () => {
 describe('golden winners for the pumpkin patch', () => {
   test('a winner is marked golden on its delta and in the snapshot; nobody else is', () => {
     let clockMs = 1_000_000_000
-    const ledger = openLedger(new Database(':memory:'), {
+    const ledger = openV1Night(new Database(':memory:'), {
       ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] },
       random: () => 0, // the single ticket lands on #3
       now: () => clockMs,
@@ -1037,7 +994,7 @@ describe('golden winners for the pumpkin patch', () => {
 describe('End and Resume the night', () => {
   function night() {
     let clockMs = 1_000_000_000
-    const ledger = openLedger(new Database(':memory:'), {
+    const ledger = openV1Night(new Database(':memory:'), {
       ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] },
       random: () => 0, // tickets at #3, #10, #17
       now: () => clockMs,
@@ -1093,7 +1050,7 @@ describe('End and Resume the night', () => {
 describe('the recap reveals the golden numbers, and only after the night', () => {
   function night() {
     let clockMs = 1_000_000_000
-    const ledger = openLedger(new Database(':memory:'), {
+    const ledger = openV1Night(new Database(':memory:'), {
       ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] },
       random: () => 0, // #3, #10, #17
       now: () => clockMs,
@@ -1148,7 +1105,7 @@ describe('teens: counted, but never win a golden ticket', () => {
   // A night racing a 30-kid ghost (range #3–#24); random 0 puts the one ticket at #3.
   function night({ tickets = 1, random = () => 0 } = {}) {
     let clockMs = 1_000_000_000
-    const ledger = openLedger(new Database(':memory:'), {
+    const ledger = openV1Night(new Database(':memory:'), {
       ghostSeed: { name: 'Tiny 2025', buckets: [{ start: '18:00', end: '18:30', count: 30 }] },
       random,
       now: () => clockMs,
@@ -1228,7 +1185,7 @@ describe('teens: counted, but never win a golden ticket', () => {
       phone_name TEXT, tapped_at INTEGER NOT NULL, received_at INTEGER NOT NULL, late INTEGER NOT NULL DEFAULT 0,
       golden INTEGER NOT NULL DEFAULT 0, deleted_at INTEGER, source TEXT NOT NULL DEFAULT 'tap', backfill_batch_id INTEGER)`)
 
-    const ledger = openLedger(db, { ghostSeed })
+    const ledger = openV1Night(db, { ghostSeed })
     ledger.apply(tap('a'))
     ledger.apply(tap('b', { teen: true }))
 

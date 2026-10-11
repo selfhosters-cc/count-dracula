@@ -1,7 +1,7 @@
 # Households in the Ledger and the Household #1 migration
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by:
 
 ## What to build
@@ -35,12 +35,23 @@ The Ledger learns about Households. Today's data becomes Household #1. See [spec
 
 ## Acceptance criteria
 
-- [ ] `v1-final` is tagged on the last v1 code commit and pushed
-- [ ] The migration on a v1-built database (a test fixture made by the v1 schema) keeps every event, kid, tag, ticket, batch and moment, all in Household #1, and keeps the mix
-- [ ] Running it twice changes nothing; a fresh database gets the v2 schema with no Household
+- [x] `v1-final` is tagged on the last v1 code commit and pushed
+- [x] The migration on a v1-built database (a test fixture made by the v1 schema) keeps every event, kid, tag, ticket, batch and moment, all in Household #1, and keeps the mix
+- [x] Running it twice changes nothing; a fresh database gets the v2 schema with no Household
 - [ ] A copy of the production DB, pulled with `ssh proxmox pct pull`, migrates cleanly locally: "Halloween 2025 (counts)", the Rehearsal and Race against survive (the copy stays out of git)
-- [ ] Two Households each have exactly one live Event; Go live in one never touches the other
-- [ ] A command for another Household's event, tag or kid is refused
-- [ ] Create Household gives a live Rehearsal with the starter costumes, a join key and no golden tickets
-- [ ] `synchronous` reads back as NORMAL
-- [ ] `bun test` passes
+  - **Left for the user:** the agent wasn't allowed to read production. A copy of the local dev DB (v1 data: the 2025 ghost, the live Rehearsal racing it, 67 kids) migrated cleanly. The opening-day checklist repeats this on the real copy.
+- [x] Two Households each have exactly one live Event; Go live in one never touches the other
+- [x] A command for another Household's event, tag or kid is refused
+- [x] Create Household gives a live Rehearsal with the starter costumes, a join key and no golden tickets
+- [x] `synchronous` reads back as NORMAL
+- [x] `bun test` passes
+
+## Notes from the build
+
+- `v1-final` is on `4f369ed` (the last commit touching code; everything after is `.scratch/` and `CONTEXT.md`).
+- Interface: `openLedger(db, config)` → `createHousehold({ displayName, timeZone })`, `household(id)`, `householdByJoinKey(key)`, `households()`. `household(id)` has v1's `apply`, `snapshot`, `joinKey`, `events`, `tickets`, `batches`, `exportEvent`, plus `addPastCounts({ name, buckets })` for a counts-only past night (ticket 45 uses it).
+- The join key and the TV mix live on `households`; `seq` and the soundboard cooldown are per Household. `events.join_key` is left as v1's, unused.
+- The migration marks Household #1's v1 "Rehearsal" as a Rehearsal (spec §21 latitude).
+- Starter costumes: 🧙 Witch, 🦸 Superhero, 👸 Princess, 👻 Ghost, 🧛 Vampire, 💀 Skeleton, 🦖 Dinosaur, 🎃 Other.
+- The v1 test fixture is `test/fixtures/v1.sql`, a dump of a database built by the `v1-final` Ledger. The v1 Ledger tests run on `test/v1-night.js`, a Household set up the way a v1 first install was.
+- `ghostSeed` and `ghostSeedFromCsv` are gone; the HTTP layer reads Household #1 (or the join key's Household) until ticket 22.

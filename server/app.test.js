@@ -2,26 +2,31 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Database } from 'bun:sqlite'
 import { startServer } from './app.js'
+import { openLedger } from './ledger.js'
+import { setUpV1Night } from '../test/v1-night.js'
 
 const running = []
 afterEach(() => running.splice(0).forEach((app) => app.stop()))
 
+// Household #1, set up as a v1 first install was: racing a counts-only 2025 night.
 function start(configOverrides = {}, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
-  writeFileSync(join(dir, '2025.json'), JSON.stringify({
-    name: 'Halloween 2025 (counts)',
-    buckets: [{ start: '18:00', end: '18:30', count: 40 }],
-  }))
+  const db = new Database(join(dir, 'db.sqlite'), { create: true })
+  setUpV1Night(openLedger(db, {}), {
+    ghostSeed: { name: 'Halloween 2025 (counts)', buckets: [{ start: '18:00', end: '18:30', count: 40 }] },
+  })
+  db.close()
   const configPath = join(dir, 'config.json')
   writeFileSync(configPath, JSON.stringify({
     adminPin: '4321',
-    dbPath: ':memory:',
-    ghostSeed: '2025.json',
+    dbPath: 'db.sqlite',
     ...configOverrides,
   }))
   const app = startServer({ configPath, port: 0, ...options })
   running.push(app)
+  app.house = app.ledger.household(1)
   return app
 }
 
@@ -40,7 +45,7 @@ describe('startup', () => {
   })
 })
 
-function postTap(app, tap, { key = app.ledger.joinKey(), withKey = true } = {}) {
+function postTap(app, tap, { key = app.house.joinKey(), withKey = true } = {}) {
   const headers = { 'Content-Type': 'application/json' }
   if (withKey) headers['X-Join-Key'] = key
   return fetch(`${app.url}/api/taps`, { method: 'POST', headers, body: JSON.stringify(tap) })
@@ -196,7 +201,7 @@ describe('bad taps', () => {
 
     const res = await fetch(`${app.url}/api/taps`, {
       method: 'POST',
-      headers: { 'X-Join-Key': app.ledger.joinKey() },
+      headers: { 'X-Join-Key': app.house.joinKey() },
       body: 'kid please',
     })
 
@@ -231,7 +236,7 @@ describe('pages', () => {
 })
 
 describe('admin (Setup)', () => {
-  function admin(app, command, { pin = '4321', key = app.ledger.joinKey() } = {}) {
+  function admin(app, command, { pin = '4321', key = app.house.joinKey() } = {}) {
     return fetch(`${app.url}/api/admin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Join-Key': key, 'X-Admin-Pin': pin },
@@ -247,7 +252,7 @@ describe('admin (Setup)', () => {
     expect((await admin(app, create, { key: 'old-key' })).status).toBe(403)
     expect((await admin(app, { type: 'tap', id: 'x', tappedAt: 1 })).status).toBe(400) // not an admin command
     expect((await admin(app, create)).status).toBe(200)
-    expect(app.ledger.events().map((e) => e.name)).toContain('Halloween 2026')
+    expect(app.house.events().map((e) => e.name)).toContain('Halloween 2026')
   })
 
   test('lists events for Setup only with the PIN', async () => {
@@ -258,17 +263,17 @@ describe('admin (Setup)', () => {
     expect(res.status).toBe(200)
     const events = await res.json()
     expect(events.map((e) => e.name)).toEqual(['Rehearsal', 'Halloween 2025 (counts)'])
-    expect(JSON.stringify(events)).not.toContain(app.ledger.joinKey())
+    expect(JSON.stringify(events)).not.toContain(app.house.joinKey())
   })
 
   test('Change key hands back the new key, and the old one stops writing', async () => {
     const app = start()
-    const old = app.ledger.joinKey()
+    const old = app.house.joinKey()
 
     const res = await admin(app, { type: 'changeKey' })
 
     const { joinKey } = await res.json()
-    expect(joinKey).toBe(app.ledger.joinKey())
+    expect(joinKey).toBe(app.house.joinKey())
     expect(joinKey).not.toBe(old)
     expect((await postTap(app, aTap('a'), { key: old })).status).toBe(403)
     expect((await postTap(app, aTap('b'), { key: joinKey })).status).toBe(200)
@@ -301,7 +306,7 @@ describe('☰ menu', () => {
       })
 
     expect((await post('wrong')).status).toBe(403)
-    expect((await post(app.ledger.joinKey())).status).toBe(200)
+    expect((await post(app.house.joinKey())).status).toBe(200)
     expect((await stream.next()).data).toMatchObject({ type: 'mix.changed', mix: { volume: 0.5, mutes: { everything: true } } })
     stream.close()
   })
@@ -331,8 +336,8 @@ describe('export', () => {
   test('downloads the event as a CSV with the PIN; its non-deleted rows equal the TV count', async () => {
     const app = start()
     for (const id of ['a', 'b', 'c']) await postTap(app, aTap(id))
-    app.ledger.apply({ type: 'remove', kidId: 'b' })
-    const live = app.ledger.snapshot()
+    app.house.apply({ type: 'remove', kidId: 'b' })
+    const live = app.house.snapshot()
 
     expect((await exportCsv(app, live.event.id, 'nope')).status).toBe(403)
     const res = await exportCsv(app, live.event.id)
@@ -344,31 +349,15 @@ describe('export', () => {
     expect(kidRows).toHaveLength(3)
     expect(kidRows.filter((r) => r.split(',')[5] === '')).toHaveLength(live.kids.length)
   })
-
-  test("round trip: an export seeds next year's counts-only ghost with the same total", async () => {
-    const app = start()
-    for (const id of ['a', 'b', 'c', 'd']) await postTap(app, aTap(id))
-    app.ledger.apply({ type: 'remove', kidId: 'c' })
-    app.ledger.apply({ type: 'settings', eventId: app.ledger.snapshot().event.id, name: 'Halloween 2026' })
-    const csv = await (await exportCsv(app, app.ledger.snapshot().event.id)).text()
-    const dir = mkdtempSync(join(tmpdir(), 'count-dracula-seed-'))
-    writeFileSync(join(dir, 'halloween-2026.csv'), csv)
-
-    const nextYear = start({ ghostSeed: join(dir, 'halloween-2026.csv') })
-
-    const ghost = (await (await fetch(`${nextYear.url}/api/snapshot`)).json()).ghost
-    expect(ghost.total).toBe(3)
-    expect(ghost.label).toBe('2026')
-  })
 })
 
 describe('past events for /tv?event=<id>', () => {
   test("the snapshot of a past event, read without a key; an unknown event is 404", async () => {
     const app = start()
     await postTap(app, aTap('a'))
-    const rehearsal = app.ledger.snapshot().event.id
-    const [{ event }] = app.ledger.apply({ type: 'createEvent', name: 'Halloween 2026' })
-    app.ledger.apply({ type: 'goLive', eventId: event.id })
+    const rehearsal = app.house.snapshot().event.id
+    const [{ event }] = app.house.apply({ type: 'createEvent', name: 'Halloween 2026' })
+    app.house.apply({ type: 'goLive', eventId: event.id })
 
     const past = await (await fetch(`${app.url}/api/snapshot?event=${rehearsal}`)).json()
 
@@ -388,7 +377,7 @@ describe('tailnet auto-join', () => {
     const res = await join(app, 'count-dracula.example.com')
 
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ joinKey: app.ledger.joinKey() })
+    expect(await res.json()).toEqual({ joinKey: app.house.joinKey() })
   })
 
   test('refuses on any other address: LAN phones join with the QR code', async () => {
