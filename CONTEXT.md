@@ -1,12 +1,16 @@
 # Count Dracula
 
-A Halloween trick-or-treater counter: helpers' phones at the door tap each kid in, and a porch-facing TV celebrates every kid live. The night-level terms (Event, Kid, Kid number, Tag, Golden ticket, Join key, …) are defined in the [v1 spec's domain model](.scratch/count-dracula/spec.md#2-domain-model). This file adds the terms for running many households on one deployment.
+A Halloween trick-or-treater counter: helpers' phones at the door tap each kid in, and a porch-facing TV celebrates every kid live. The night-level terms (Kid, Kid number, Tag, Golden ticket, …) are defined in the [v1 spec's domain model](.scratch/count-dracula/spec.md#2-domain-model). This file adds the terms for running many households on one deployment, and its **Event** and **Join key** replace v1's.
 
 ## Language
 
 **Household**:
-One home that signs up and runs its own Halloween nights. It owns its Events, always has exactly one of them live, and keeps one time zone that every time of night is read in. Nothing it owns is visible to another Household unless it chooses to share.
+One home that signs up and runs its own Halloween nights. It owns its Events, has at most 3 of them Live or Ended at once (possibly none), and keeps one time zone that every time of night is read in. Nothing it owns is visible to another Household unless it chooses to share.
 _Avoid_: Account, tenant, user, customer
+
+**Event**:
+One night a Household counts, such as "Halloween 2026" or a test night. It moves through four states: **Upcoming**, then **Live** after Go live, **Ended** after End the night (late kids still count, and Resume makes it Live again), and **Past** (read-only) from noon the next day, local time, or earlier if a Manager closes it. Going live never changes another Event.
+_Avoid_: Night (in definitions), session, party, Rehearsal (a practice night is just an Event: reset it or make another)
 
 **Manager**:
 A person, signed in with their Google account, who runs one Household: its events, `/setup`, sharing and deletion. A Household can have several Managers, all equal.
@@ -17,27 +21,27 @@ A single-use link, valid for 7 days, that a Manager shares so another person can
 _Avoid_: Magic link, sign-in link
 
 **Helper**:
-Someone tapping kids in on a door phone. Has no account; the phone joins an event with its join key.
+Someone tapping kids in on a door phone. Has no account; the phone joins a Household with its join key and taps into one of its open Events.
 _Avoid_: User, volunteer, member
+
+**Join key**:
+The one secret a door phone holds to write to a Household: it writes to any of the Household's Live or Ended Events, and every write names its Event. It's kept across Events, so a phone set up for a test night works on the real one; Change join key cuts off every phone holding the old one.
+_Avoid_: Event key, password, TV link (that's read-only)
 
 **Operator**:
 Whoever runs the deployment itself, across all Households (today, us). A Manager whose email is on the operator list in `deploy/local.env`.
 _Avoid_: Admin, superuser, site admin
 
 **TV link**:
-The one secret link that lets a device watch a Household's live Event read-only, on the same TV page the porch shows. The porch TV and every remote viewer use the same link. It never expires; rotating it cuts off every device holding the old one, the Household's own porch TV included.
+The one secret link that lets a device watch a Household's open Events read-only, one Event at a time, on the same TV page the porch shows; with none open it shows a "No night on right now" screen. The porch TV and every remote viewer use the same link. It never expires; rotating it cuts off every device holding the old one, the Household's own porch TV included.
 _Avoid_: Share link (that's the Night summary's), watch link, viewer key, join key (that's for Helpers' writes)
 
 **TV pairing code**:
 A short code shown on a TV that has no TV link yet. A Manager enters or scans it to give that TV their Household's TV link. It expires after a few minutes and does nothing without a Manager.
 _Avoid_: TV code, share code, join code
 
-**Rehearsal**:
-A practice Event, marked as one: sign-up creates it live so a Household can test its TV and phones. It works exactly like a real night, shows a "🎭 Rehearsal" chip on the TV and phones, can be reset to 0 while live, and never counts toward nearby figures.
-_Avoid_: Test night, demo, practice mode
-
 **Goes live at**:
-The time a not-yet-live Event becomes live by itself (a scheduled Go live). Sign-up sets it on "Halloween 2026" to Oct 31, 4:00 pm in the Household's time zone; a Manager can change it or Go live early.
+The time an Upcoming Event becomes Live by itself (a scheduled Go live). It never changes another Event. Sign-up sets it on \"Halloween 2026\" to Oct 31, 4:00 pm in the Household's time zone; a Manager can change it or Go live early.
 _Avoid_: Start time, scheduled start, auto-start
 
 **Night summary**:

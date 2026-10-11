@@ -32,6 +32,7 @@ A build-ready **v2.1 addendum** to the [v2 spec](../multi-household/spec.md) plu
 <!-- one line per closed ticket: [title](issues/NN-slug.md) — gist -->
 
 - [Where the code assumes one live Event or the Rehearsal flag](issues/01-one-live-event-assumptions.md) — four seams carry it: `eventById()` defaulting to the live Event, `frozen` set only by Go live, join key / TV token resolving to a Household, one SSE channel and `seq` per Household; the Rehearsal flag is confined to nearby, Operator, auto-end, nudge, checklist, Reset and wording; three latent bugs once two are live, and zero live Events would 500.
+- [Live Events and their credentials](issues/02-live-events-and-credentials.md) — Upcoming → Live → Ended → Past (noon next day, or a Manager closes it); Go live never touches another Event; zero to 3 open per Household; join key and TV link stay per Household (every write names its Event, a TV shows one Event, "No night on right now" between); no delete while Live; Rehearsal retired.
 
 ## Not yet specified
 
