@@ -50,3 +50,4 @@ Resolved 2026-10-11 (HITL grilling).
 
 Glossary ([CONTEXT.md](../../../CONTEXT.md)): **Reset** added; **Event**'s _Avoid_ line points at it.
 
+Amended by [Going live and ending by themselves](05-auto-go-live-and-end.md): Reset keeps Goes live at only if it's still in the future.

@@ -35,12 +35,13 @@ A build-ready **v2.1 addendum** to the [v2 spec](../multi-household/spec.md) plu
 - [Live Events and their credentials](issues/02-live-events-and-credentials.md) — Upcoming → Live → Ended → Past (noon next day, or a Manager closes it); Go live never touches another Event; zero to 3 open per Household; join key and TV link stay per Household (every write names its Event, a TV shows one Event, "No night on right now" between); no delete while Live; Rehearsal retired.
 - [Resetting any Event](issues/03-resetting-any-event.md) — Live or Ended → back to Upcoming; clears kids, moments, golden tickets (redrawn at next Go live), summary and share links; keeps setup, tags at 0, Reports; Managers from `/setup`, typed name above 20 kids; a go-live stamp makes the outbox drop pre-reset taps; no practice marker.
 - [TVs and door phones across several live Events](issues/04-tvs-and-door-phones.md) — TV and door both show the open Event that went live most recently (no pin, no switch on the phone), switching quietly; queued taps keep their Event and are dropped if it's gone; only the on-screen Event plays sound; nothing open gives "No night on right now" on both; a dead key is forgotten; helper links are `/door?key=`.
+- [Going live and ending by themselves](issues/05-auto-go-live-and-end.md) — every Live Event auto-ends at 3 am (nothing stays Live past a night); Goes live at at the 3-open cap closes the oldest Ended Event or waits; the nudge only on the door's Event; ☰ Go live now for the soonest-scheduled Upcoming Event; tick moves are per-Event notes in `/setup`; Reset drops a Goes live at that has passed.
 
 ## Not yet specified
 
 - **Build order and cut rule for 50+:** how the build tickets split, and which can be switched off, once the event model's size is known from [Where the code assumes one live Event](issues/01-one-live-event-assumptions.md) and the decisions. Lands in [Assemble the v2.1 addendum](issues/14-assemble-the-addendum.md).
 - **Knock-on effects on the Operator dashboard's detail view and actions, and on Night summary share links and Reports**, beyond what tickets 06 and 07 ask: likely small, not yet sharp.
-- **The runbook's opening-day checklist** after the rework (test Household steps, the auto go-live/auto-end check), once [Going live and ending by themselves](issues/05-auto-go-live-and-end.md) and [Household #1](issues/10-household-1.md) settle.
+- **The runbook's opening-day checklist** after the rework (test Household steps, the auto go-live/auto-end check), once [Household #1](issues/10-household-1.md) settles ([Going live and ending by themselves](issues/05-auto-go-live-and-end.md) has: test a Household's auto go-live, 3 am end and noon Past).
 
 ## Out of scope
 
