@@ -61,15 +61,19 @@ A Household's optional, approximate place: a 5-character geohash cell (about 5 �
 _Avoid_: Address, position, postal code, pin
 
 **Area**:
-The fixed region (the Location's 4-character geohash parent, about 20 × 25 km) whose rounded totals a Household adds to and sees as "near you". It shows nothing until at least 5 Households in it are active.
+A fixed region, the Location's 4-character geohash parent (about 20 × 25 km). It's the unit nearby totals are added up in and the Operator counts Households by; a Household's "near you" is one, two or four of them.
 _Avoid_: Neighbourhood, radius, zone (that's the Household's time zone), nearby (that's the feature)
 
+**Near you**:
+What one Household's nearby figures cover: every Area its cell or the 8 cells around it fall in (its own Area alone, its own and the next across an edge, or 4 at a corner), so two houses either side of an Area edge see the same figures. It shows once at least one other Active Household is in it; there's no minimum crowd.
+_Avoid_: Radius, window (in UI text), local
+
 **Active Household**:
-For nearby figures, a Household whose open Event that went live most recently (the one its TV and door show) has counted at least one kid in the last 30 minutes. A Household is one house however many Events it has open, and its other open Events add nothing. Only Active Households count toward an Area's minimum of 5 and its totals.
+For nearby figures, a Household whose open Event that went live most recently (the one its TV and door show) has counted at least one kid in the last 30 minutes. A Household is one house however many Events it has open, and its other open Events add nothing. Only Active Households count toward nearby totals.
 _Avoid_: Live household, online household
 
 **Site-wide total**:
-How many Households have a Live or Ended Event right now, and the kids counted in each one's open Event that went live most recently, with the top costume counted in at least 3 of them. Rounded to 5s, refreshed every 10 minutes, and hidden below 5 Households. It shows on the door phone when there are no nearby figures, and on the public sign-up page.
+How many Households have a Live or Ended Event right now, and the kids counted in each one's open Event that went live most recently, with the top costume counted in at least 3 of them. Rounded to 5s, refreshed every 10 minutes, and hidden below 5 Households. It shows on the door phone when there are no nearby figures, and on the homepage.
 _Avoid_: Global count, total tonight (there's no single "tonight" across time zones)
 
 **Estimated past event**:
