@@ -3,6 +3,7 @@ import { atEventTime, clockTime as zoneClock, eventNow, minuteOfDay, slots, stam
 import qrcode from '/vendor/qrcode/qrcode.js'
 import { createLocationPicker } from '/location-picker.js'
 import { showFirstRun } from '/first-run.js'
+import { helperLink, helperWording } from '/door-view.js'
 
 const $ = (id) => document.getElementById(id)
 const HOUR = 3_600_000
@@ -57,12 +58,13 @@ async function admin(command, done) {
   return body
 }
 
-// ---- helper phones (spec §6): this phone, or someone else's by QR or a shared link
-const joinUrl = () => `${location.origin}/?key=${encodeURIComponent(joinKey)}`
+// ---- helper phones (spec v2.1 §4): this phone, or someone else's by QR or a shared link. Both open /door, and
+// the wording names the Household, never an Event: one key works on every night.
+const joinUrl = () => helperLink(location.origin, joinKey)
 
 $('count-here').addEventListener('click', () => {
   localStorage.setItem('cd.joinKey', joinKey)
-  location.href = '/'
+  location.href = '/door'
 })
 
 $('add-helper').addEventListener('click', () => {
@@ -70,10 +72,11 @@ $('add-helper').addEventListener('click', () => {
   qr.addData(joinUrl())
   qr.make()
   $('helper-qr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true })
+  $('helper-says').textContent = helperWording(house?.displayName)
   $('helper').hidden = !$('helper').hidden
 })
 
-$('share-join').addEventListener('click', () => share(joinUrl(), 'Help count trick-or-treaters'))
+$('share-join').addEventListener('click', () => share(joinUrl(), `Help count trick-or-treaters at ${house?.displayName ?? 'our door'}`))
 
 // The phone's share sheet, or Copy where there isn't one.
 async function share(url, title) {

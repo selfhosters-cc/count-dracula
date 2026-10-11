@@ -10,7 +10,11 @@ export function doorView(liveState, outbox, link = { connected: true }) {
     return { total: null, untagged: null, tags: [], recent: [], undo: null, goldenBanner: false, catchUp: { max: 0, preview: () => [] } }
   }
 
-  const outgoing = [...outbox.pending, ...outbox.unconfirmed]
+  // A queued tap keeps the Event and go-live stamp it was tapped under (spec v2.1 §4): it shows only on that
+  // board, and lands there or is refused, never on whatever the door has moved on to.
+  const board = liveState.event ?? null
+  const onBoard = (e) => e.type === 'remove' || ((e.eventId ?? null) === (board?.id ?? null) && (e.stamp ?? null) === (board?.wentLiveAt ?? null))
+  const outgoing = [...outbox.pending, ...outbox.unconfirmed].filter(onBoard)
   const removed = new Set(outgoing.filter((e) => e.type === 'remove').map((e) => e.kidId))
   const arrived = new Set(liveState.kids.map((k) => k.id))
 
@@ -61,6 +65,42 @@ export function doorView(liveState, outbox, link = { connected: true }) {
   }
 }
 
+// Which screen /door shows: the board while a night is open, "No night on right now" with none.
+export function doorScreen(liveState) {
+  if (!liveState) return 'connecting'
+  return liveState.event ? 'board' : 'no-night'
+}
+
+// A key the server refused (spec v2.1 §4). It only dies by Change join key or the Household going, so it's
+// forgotten then; a Suspended Household's key is kept, since Unsuspend restores everything.
+export function refusedKey({ hadKey, suspended }) {
+  if (suspended) return { forget: false, says: 'This Household is suspended by the Operator.' }
+  if (!hadKey) return { forget: false, says: "This phone hasn't joined a door yet. Ask your host for a link or QR code." }
+  return { forget: true, says: "This phone's link no longer works. Ask your host for a new link or QR code." }
+}
+
+// `/` with a ?key= or a remembered key goes to the door phone (spec v2.1 §11); otherwise null, and it stays.
+export function doorRedirect({ pathname, search, storedKey }) {
+  if (pathname !== '/') return null
+  if (new URLSearchParams(search).get('key')) return `/door${search}`
+  return storedKey ? '/door' : null
+}
+
+// Add a helper: the join link and its wording name the Household, never an Event, so a QR made for a test
+// night is right on the real one.
+export function helperLink(origin, key) {
+  return `${origin}/door?key=${encodeURIComponent(key)}`
+}
+
+export function helperWording(householdName) {
+  return `A helper scans this, or opens the link, to count at ${householdName || 'this door'} on any night.`
+}
+
+// ☰ "Go live on <Event> now" (spec v2.1 §5): the Upcoming Event with the soonest Goes live at, or null.
+export function goLiveNowTarget(events) {
+  return events.filter((e) => e.state === 'upcoming' && e.goesLiveAt != null).sort((a, b) => a.goesLiveAt - b.goesLiveAt)[0] ?? null
+}
+
 // Picks the kids the server will re-tag: the most recently *tapped* untagged ones it has
 // (ties go to the later arrival). Queued taps aren't candidates: "+ New" needs an empty outbox.
 function catchUpPreview(serverKids) {
@@ -78,8 +118,9 @@ function catchUpPreview(serverKids) {
   }
 }
 
-// "Quiet out there? 🌙 End the night" (v2 spec §7): a Live night, from 8:30 pm event time in the
-// Household's zone (and on through the small hours), with no kid for 30 minutes. Dismissing it hides it for 30.
+// "Quiet out there? 🌙 End the night" (spec v2.1 §5): only the door's Event (the one the phone shows), while
+// Live, from 8:30 pm event time in the Household's zone (and on through the small hours), with no kid for
+// 30 minutes. Dismissing it hides it for 30.
 const QUIET_MS = 30 * 60_000
 const NUDGE_FROM = 20 * 60 + 30
 const NIGHT_ENDS = 6 * 60 // after midnight still counts as late

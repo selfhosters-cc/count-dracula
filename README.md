@@ -94,7 +94,7 @@ bun start                                          # prints the TV and phone URL
 bun test
 ```
 
-- **Phone**: `http://<host>:3131/?key=<join key>` (the server prints it). Phones on a host listed in
+- **Phone**: `http://<host>:3131/door?key=<join key>` (the server prints it). Phones on a host listed in
   `autoJoinHosts` join automatically.
 - **TV**: `http://<host>:3131/tv`. Click **Start the night** once to turn the sound on. `/tv?border`
   checks for overscan.
@@ -134,7 +134,7 @@ door phones ──POST taps (+ join key)──▶ Bun server ──SSE: snapshot
   `snapshot()`) and the SSE hub.
 - `shared/night-maths.js`: pace, the ghost curve, the leaderboard, rush, recap stats. Shared by the server,
   the TV and the tests.
-- `public/`: the phone (`index.html`), the TV (`tv.html`), Setup and the tally sheet. Plain ES modules, no
+- `public/`: the door phone (`door.html` on `/door`), the TV (`tv.html`), Setup and the tally sheet. Plain ES modules, no
   build step.
 
 The full spec, with the reasoning behind each decision, is in

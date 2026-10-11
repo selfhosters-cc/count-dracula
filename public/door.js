@@ -1,13 +1,20 @@
-// The door phone (v1 spec §4–5): counting, the ☰ door menu, the soundboard.
+// The door phone on /door (v1 spec §4–5, v2.1 §4): counting, the ☰ door menu, the soundboard.
 import { connectLive } from '/live.js'
 import { createOutbox, uuid } from '/outbox.js'
-import { doorView, quietNudge } from '/door-view.js'
+import { doorRedirect, doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, quietNudge, refusedKey } from '/door-view.js'
+import { noNightLines } from '/no-night.js'
 import { phoneNearby } from '/nearby-text.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
 import { clockTime, eventNow, releaseOpen } from '/shared/night-maths.js'
 
 const $ = (id) => document.getElementById(id)
 const EMOJIS = ['🧙', '🧛', '🧟', '👻', '🎃', '🦸', '🕷️', '👑', '🦖', '🐶', '🐱', '🦄', '🤖', '🦇', '🧚', '🏴‍☠️', '🐉', '🤡', '❓']
+
+// `/` with a ?key= or a remembered key belongs on /door (spec v2.1 §11). Until the homepage, `/` with no key
+// is still this page, as in v2.
+const goTo = doorRedirect({ pathname: location.pathname, search: location.search, storedKey: localStorage.getItem('cd.joinKey') })
+if (goTo) location.replace(goTo)
+const onDoor = location.pathname === '/door'
 
 // The join key arrives as ?key=… once (a helper QR, Share join link, or Count on this device) and is remembered.
 const params = new URLSearchParams(location.search)
@@ -18,6 +25,17 @@ if (params.get('key')) {
   history.replaceState(null, '', location.pathname + (params.size ? `?${params}` : ''))
 }
 const joinKey = localStorage.getItem('cd.joinKey') ?? ''
+
+// A refused key (spec v2.1 §4): forgotten unless its Household is only Suspended, and the phone says so, with
+// one way on: the homepage. On `/` (v2's page, until the homepage) nothing changes.
+function refused({ suspended }) {
+  if (!onDoor) return
+  const { forget, says } = refusedKey({ hadKey: !!joinKey, suspended })
+  if (forget) localStorage.removeItem('cd.joinKey')
+  $('gone-text').textContent = says
+  $('gone-home').hidden = suspended
+  $('gone').hidden = false
+}
 
 let problem = ''
 
@@ -76,6 +94,7 @@ function start(phoneName) {
   $('who').style.display = 'none'
   const outbox = createOutbox({ send, storage: localStorage, clock, phoneName })
   const live = connectLive(`/api/stream?key=${encodeURIComponent(joinKey)}`) // EventSource can't send headers
+  live.onRefused(refused)
   let view = doorView(null, outbox)
   // Every write names the Event this phone shows and the go-live stamp it saw (spec v2.1 §4). With no night
   // on, there's none to name, and the server refuses the write.
@@ -106,8 +125,27 @@ function start(phoneName) {
     return tile
   }
 
+  // The Event on screen. When the door moves, anything begun on the old one (End's choices) goes with it.
+  let shownEventId
+  let ending = null // the Event End was pressed on, while its choices or confirm are up
   function render() {
     view = doorView(live.state, outbox, { connected: live.connected })
+    const screen = doorScreen(live.state)
+    const eventId = live.state?.event?.id ?? null
+    if (live.state && eventId !== shownEventId) {
+      shownEventId = eventId
+      ending = null
+      $('end-choices').hidden = true
+    }
+    // Nothing open: "No night on right now" and what's next, no board, no tap buttons (spec v2.1 §4).
+    $('app').classList.toggle('idle', screen === 'no-night')
+    $('no-night').hidden = screen !== 'no-night'
+    if (screen === 'no-night') {
+      const lines = noNightLines(live.state.next, Date.now())
+      $('no-night-next').textContent = lines.next ?? ''
+      $('no-night-countdown').textContent = lines.countdown ?? ''
+      closeSounds()
+    }
     renderGolden()
     $('nudge').hidden = !quietNudge(live.state, Date.now(), nudgeDismissedAt())
     const nearbyText = phoneNearby(live.state?.nearby) // the Area, or else the Site-wide total
@@ -116,7 +154,7 @@ function start(phoneName) {
     $('total').textContent = view.total ?? '–'
     $('untagged').textContent = view.untagged == null ? '' : `${view.untagged} untagged`
     $('pill').innerHTML = pillHtml(outbox.status)
-    $('problem').textContent = problem || (live.state && !live.state.event ? 'No night on right now' : '') // ticket 52's screen
+    $('problem').textContent = problem
     const wanted = view.tags.map(tileFor)
     const grid = $('grid')
     for (const [id, tile] of tiles) {
@@ -259,6 +297,12 @@ function start(phoneName) {
     $('release').textContent = `🎫 Release remaining tickets (${left})`
     renderSounds()
     $('unjoined').hidden = joined
+    // With nothing open, ☰ keeps its device items (and Go live now): no End, Resume or Release.
+    const open = !!live.state?.event
+    if (!open) $('release-box').hidden = true
+    $('end-night').hidden = !open
+    if (!open) $('end-choices').hidden = true
+    $('night-head').hidden = !open && $('go-live-now').hidden
     const ended = !!live.state?.event?.ended
     $('end-night').textContent = ended ? '☀️ Resume the night' : '🌙 End the night'
     for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release, #end-night')) c.disabled = !joined
@@ -285,8 +329,10 @@ function start(phoneName) {
     if (!delta || delta.type === 'mix.changed' || delta.type === 'event.ended' || 'golden' in delta) renderMenu()
   })
   // ---- the soundboard page: swipe left from counting (or tap the 🔊 edge tab), swipe right to come back
+  // A press names the Event on the TV, so with none open there's no soundboard.
+  const soundboard = () => (live.state?.event ? (live.state.settings.soundboard ?? []) : [])
   function renderSounds() {
-    const sounds = live.state?.settings.soundboard ?? []
+    const sounds = soundboard()
     $('sounds-tab').hidden = !sounds.length // switched off → no page, no tab
     $('sounds-from-menu').hidden = !sounds.length
     if (!sounds.length) closeSounds()
@@ -306,7 +352,7 @@ function start(phoneName) {
   }
   const soundsOpen = () => $('sounds').classList.contains('on')
   function openSounds() {
-    if (!(live.state?.settings.soundboard ?? []).length) return
+    if (!soundboard().length) return
     renderSounds()
     $('menu').classList.remove('on')
     $('sounds').classList.add('on')
@@ -355,6 +401,7 @@ function start(phoneName) {
   function nudgeDismissedAt() {
     return Number(localStorage.getItem('cd.nudgeDismissedAt') ?? -Infinity)
   }
+  // Its End names the Event it was shown for: the door's (spec v2.1 §5).
   $('nudge-end').addEventListener('click', () => {
     renderMenu()
     $('menu').classList.add('on')
@@ -365,35 +412,42 @@ function start(phoneName) {
     render()
   })
 
-  // "Go live on Halloween 2026 now" (spec §7): only on a phone where a Manager of this Household is signed
-  // in. It's a Setup command, so the server refuses it from a join key alone.
+  // "Go live on Halloween 2026 now" (spec v2.1 §5): only on a phone where a Manager of this Household is signed
+  // in, for the Upcoming Event with the soonest Goes live at, whether or not others are open. It's a Setup
+  // command, so the server refuses it from a join key alone, and at the 3-open cap like any Go live.
   let scheduled = null // { id, name } of the next night with a Goes live at, for a Manager's phone
   async function findScheduled() {
     scheduled = null
     const house = await fetch('/api/household').then((r) => (r.ok ? r.json() : null)).catch(() => null)
     if (house?.joinKey !== joinKey) return
     const events = await fetch('/api/events').then((r) => (r.ok ? r.json() : [])).catch(() => [])
-    scheduled = events.filter((e) => e.goesLiveAt != null && e.state === 'upcoming').sort((a, b) => a.goesLiveAt - b.goesLiveAt)[0] ?? null
+    scheduled = goLiveNowTarget(events)
   }
   async function renderGoLiveNow() {
     await findScheduled()
     $('go-live-now').hidden = !scheduled
     if (scheduled) $('go-live-now').textContent = `🎃 Go live on ${scheduled.name} now`
+    $('night-head').hidden = !live.state?.event && !scheduled
   }
   $('go-live-now').addEventListener('click', async () => {
-    if (!scheduled || !confirm(`Go live on ${scheduled.name} now? Tonight's board and the TV switch over, and phones keep counting.`)) return
+    if (!scheduled || !confirm(`Go live on ${scheduled.name} now? The TV and the door phones switch over to it.`)) return
     const res = await fetch('/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'goLive', eventId: scheduled.id }) }).catch(() => null)
-    toast(res?.ok ? `🎃 ${scheduled.name} is live` : "Couldn't go live: check the connection")
+    if (res?.status === 400) toast(await res.text()) // at the cap: "End or close one of your live nights first"
+    else toast(res?.ok ? `🎃 ${scheduled.name} is live` : "Couldn't go live: check the connection")
     $('menu').classList.remove('on')
   })
 
-  // 🌙 End the night / Resume. With tickets left, the spec's three choices instead of a plain yes/no.
+  // 🌙 End the night / Resume. With tickets left, the spec's three choices instead of a plain yes/no. The Event
+  // is named when End is pressed (the nudge's included), and the choices go if the door moves meanwhile.
   const nightCall = async (path, done) => {
     $('end-choices').hidden = true
-    const res = await post(path, night()).catch(() => null)
+    const named = ending ?? night()
+    ending = null
+    const res = await post(path, named).catch(() => null)
     toast(res?.ok ? done : "Couldn't reach the server")
   }
   $('end-night').addEventListener('click', () => {
+    ending = night()
     if (live.state?.event?.ended) return nightCall('/api/resume', '☀️ The night is back on')
     const left = live.state?.golden?.left ?? 0
     if (left > 0) {
@@ -402,10 +456,14 @@ function start(phoneName) {
       return
     }
     if (confirm('End the night? Straggler taps still count, and any phone can resume it.')) nightCall('/api/end', '🌙 Night ended')
+    else ending = null
   })
   $('end-release').addEventListener('click', () => nightCall('/api/release', '🎫 Released: the next kids win'))
   $('end-anyway').addEventListener('click', () => nightCall('/api/end', '🌙 Night ended: the tickets expired'))
-  $('end-cancel').addEventListener('click', () => ($('end-choices').hidden = true))
+  $('end-cancel').addEventListener('click', () => {
+    ending = null
+    $('end-choices').hidden = true
+  })
   $('release').addEventListener('click', async () => {
     const left = live.state?.golden?.left ?? 0
     if (!confirm(`Release the ${left} golden ticket${left === 1 ? '' : 's'} left? The next ${left} kid${left === 1 ? '' : 's'} at the door will win.`)) return
@@ -413,14 +471,18 @@ function start(phoneName) {
     toast(res?.ok ? `🎫 Released: the next ${left} kid${left === 1 ? '' : 's'} win` : "Couldn't release: check the connection")
   })
 
-  // A LAN phone that scans this joins without typing anything. Only ever drawn here, never on the TV.
+  // A phone that scans this joins without typing anything. Only ever drawn here, never on the TV. It names the
+  // Household, never an Event, so it's right on every night (spec v2.1 §4).
   $('helper-show').addEventListener('click', () => {
-    const url = `${location.origin}/?key=${encodeURIComponent(joinKey)}` // the public HTTPS address
+    const url = helperLink(location.origin, joinKey) // the public HTTPS address
     const qr = qrcode(0, 'M')
     qr.addData(url)
     qr.make()
     $('helper-qr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true })
-    $('helper-qr').append(Object.assign(document.createElement('p'), { textContent: url }))
+    $('helper-qr').append(
+      Object.assign(document.createElement('p'), { className: 'says', textContent: helperWording(live.state?.household) }),
+      Object.assign(document.createElement('p'), { textContent: url }),
+    )
     $('helper-qr').hidden = false
   })
 
@@ -520,7 +582,9 @@ function start(phoneName) {
 
 // First open: ask once, remember on the phone.
 const savedName = localStorage.getItem('cd.phoneName')
-if (savedName) {
+if (goTo) {
+  // on the way to /door
+} else if (savedName) {
   start(savedName)
 } else {
   $('who').style.display = 'flex'

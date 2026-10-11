@@ -10,9 +10,9 @@ const MAX_RETRY_MS = 5_000 // a random 0–5 s, so a server restart isn't met by
 const STALE_MS = 35_000 // the server pings every 15 s: two missed means the link is dead, even if still "open"
 
 // When EventSource gives up, asking for the snapshot tells three things apart: the credential refused outright
-// (a rotated TV link, a changed join key, a deleted or suspended Household: onRefused, and no more tries), the
-// server up but the stream turned away by a cap (onBusy, and tries again backing off up to a minute), and the
-// server unreachable (a dropped link: try again in 0–5 s).
+// (a rotated TV link, a changed join key, a deleted or suspended Household: onRefused({ suspended }), and no
+// more tries), the server up but the stream turned away by a cap (onBusy, and tries again backing off up to a
+// minute), and the server unreachable (a dropped link: try again in 0–5 s).
 const REFUSED = new Set([401, 403, 404])
 const MAX_BACKOFF_MS = 60_000
 
@@ -85,9 +85,9 @@ export function connectLive(url = '/api/stream') {
       // EventSource retries by itself (after the server's random `retry:`) unless the server answered with an error status.
       if (source.readyState !== EventSource.CLOSED) return
       const why = await whyClosed()
-      if (why === 'refused') {
+      if (why.refused) {
         live.refused = true
-        for (const listener of refusedListeners) listener()
+        for (const listener of refusedListeners) listener({ suspended: why.suspended })
         return
       }
       if (why === 'busy') {
@@ -99,10 +99,12 @@ export function connectLive(url = '/api/stream') {
     })
   }
 
+  // 'busy', 'down', or { refused: true, suspended } (a Suspended Household's credential isn't dead: spec v2.1 §4).
   async function whyClosed() {
     try {
-      const { status } = await fetch(url.replace('/api/stream', '/api/snapshot'))
-      return REFUSED.has(status) ? 'refused' : status === 200 ? 'busy' : 'down'
+      const res = await fetch(url.replace('/api/stream', '/api/snapshot'))
+      if (REFUSED.has(res.status)) return { refused: true, suspended: res.headers.get('X-Refused') === 'suspended' }
+      return res.status === 200 ? 'busy' : 'down'
     } catch {
       return 'down' // the server's unreachable: that's a dropped link, keep trying
     }

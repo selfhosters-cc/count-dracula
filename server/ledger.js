@@ -1017,6 +1017,10 @@ export function openLedger(db, config) {
         return household().join_key
       },
 
+      displayName() {
+        return household().display_name
+      },
+
       tvToken() {
         return household().tv_token
       },

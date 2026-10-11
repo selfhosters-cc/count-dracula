@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { doorView, quietNudge } from './door-view.js'
+import { doorRedirect, doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, quietNudge, refusedKey } from './door-view.js'
 
 function state(kidIds, tags = []) {
   return { tags, kids: kidIds.map((id, i) => ({ id, number: i + 1, tagId: null, tappedAt: i })) }
@@ -240,6 +240,7 @@ describe('the quiet nudge', () => {
 
   test('never on an ended night, with no night on, or with no snapshot', () => {
     expect(quietNudge(night({ ended: true }), local(21, 0))).toBe(false)
+    expect(quietNudge({ ...night(), event: { state: 'past', live: false, ended: false, clockShiftMs: 0 } }, local(21, 0))).toBe(false)
     expect(quietNudge({ ...night(), event: null }, local(21, 0))).toBe(false)
     expect(quietNudge(null, local(21, 0))).toBe(false)
   })
@@ -251,5 +252,92 @@ describe('the quiet nudge', () => {
   test('stays hidden for 30 minutes once dismissed', () => {
     expect(quietNudge(night(), local(21, 0), local(20, 40))).toBe(false)
     expect(quietNudge(night(), local(21, 10), local(20, 40))).toBe(true)
+  })
+})
+
+describe('queued taps across a switch (spec v2.1 §4)', () => {
+  const TEST_NIGHT = { id: 1, wentLiveAt: 100 }
+  const HALLOWEEN = { id: 2, wentLiveAt: 200 }
+  const board = (event, kidIds = []) => ({ event, tags: [], kids: kidIds.map((id, i) => ({ id, number: i + 1, tagId: null, tappedAt: i })) })
+  const queued = (id, night) => ({ id, tagId: null, tappedAt: 0, phoneName: 'Dad', eventId: night.id, stamp: night.wentLiveAt })
+
+  test("show only on the board of the Event and go-live stamp they were tapped under", () => {
+    const box = { pending: [queued('t1', TEST_NIGHT), queued('h1', HALLOWEEN)], unconfirmed: [queued('t2', TEST_NIGHT)], mine: new Set(['t1', 't2', 'h1']) }
+
+    const onHalloween = doorView(board(HALLOWEEN, ['a']), box)
+    expect(onHalloween.total).toBe(2)
+    expect(onHalloween.recent.map((r) => r.id)).toEqual(['h1', 'a'])
+    expect(onHalloween.undo.id).toBe('h1')
+    expect(doorView(board(TEST_NIGHT), box).total).toBe(2)
+  })
+
+  test('a tap queued under an earlier go-live of the same Event (before a reset) stays off the board', () => {
+    const box = { pending: [queued('old', { id: 2, wentLiveAt: 150 })], unconfirmed: [], mine: new Set(['old']) }
+
+    expect(doorView(board(HALLOWEEN), box).total).toBe(0)
+  })
+
+  test('with no night on, nothing queued is counted', () => {
+    const box = { pending: [queued('t1', TEST_NIGHT)], unconfirmed: [], mine: new Set(['t1']) }
+
+    expect(doorView(board(null), box).total).toBe(0)
+  })
+})
+
+describe('the door screen', () => {
+  test('is the board with a night on, "No night on right now" with none, and nothing before the first snapshot', () => {
+    expect(doorScreen({ event: { id: 2, state: 'live' } })).toBe('board')
+    expect(doorScreen({ event: { id: 2, state: 'ended' } })).toBe('board')
+    expect(doorScreen({ event: null, next: null })).toBe('no-night')
+    expect(doorScreen(null)).toBe('connecting')
+  })
+})
+
+describe('a refused key on /door', () => {
+  test('is forgotten, with "no longer works", when it was a key', () => {
+    expect(refusedKey({ hadKey: true, suspended: false })).toEqual({ forget: true, says: "This phone's link no longer works. Ask your host for a new link or QR code." })
+  })
+
+  test("is kept while its Household is Suspended, since Unsuspend restores everything", () => {
+    expect(refusedKey({ hadKey: true, suspended: true })).toEqual({ forget: false, says: 'This Household is suspended by the Operator.' })
+  })
+
+  test('a phone that never joined is asked to scan a code', () => {
+    expect(refusedKey({ hadKey: false, suspended: false })).toEqual({ forget: false, says: "This phone hasn't joined a door yet. Ask your host for a link or QR code." })
+  })
+})
+
+describe('where / goes (until the homepage)', () => {
+  test('a ?key= or a remembered key goes to /door, keeping the query', () => {
+    expect(doorRedirect({ pathname: '/', search: '?key=abc', storedKey: null })).toBe('/door?key=abc')
+    expect(doorRedirect({ pathname: '/', search: '', storedKey: 'abc' })).toBe('/door')
+  })
+
+  test('/ with no key stays, and /door never redirects', () => {
+    expect(doorRedirect({ pathname: '/', search: '', storedKey: null })).toBeNull()
+    expect(doorRedirect({ pathname: '/door', search: '?key=abc', storedKey: 'abc' })).toBeNull()
+  })
+})
+
+describe('Add a helper', () => {
+  test('builds /door?key= and names the Household, never an Event', () => {
+    expect(helperLink('https://count-dracula.example.com', 'a b/c')).toBe('https://count-dracula.example.com/door?key=a%20b%2Fc')
+    expect(helperWording('The Smiths')).toBe('A helper scans this, or opens the link, to count at The Smiths on any night.')
+    expect(helperWording(null)).toBe('A helper scans this, or opens the link, to count at this door on any night.')
+  })
+})
+
+describe('Go live now (a signed-in Manager)', () => {
+  const ev = (id, state, goesLiveAt = null) => ({ id, name: `Night ${id}`, state, goesLiveAt })
+
+  test('offers the Upcoming Event with the soonest Goes live at, whatever else is open', () => {
+    const events = [ev(1, 'live'), ev(2, 'upcoming', 500), ev(3, 'upcoming', 300), ev(4, 'upcoming'), ev(5, 'past', 100), ev(6, 'ended')]
+
+    expect(goLiveNowTarget(events)).toMatchObject({ id: 3, name: 'Night 3' })
+  })
+
+  test('is hidden with none scheduled', () => {
+    expect(goLiveNowTarget([ev(1, 'upcoming'), ev(2, 'live')])).toBeNull()
+    expect(goLiveNowTarget([])).toBeNull()
   })
 })

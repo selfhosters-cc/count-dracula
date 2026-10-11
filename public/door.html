@@ -39,8 +39,6 @@
     @keyframes pulse { to { filter: brightness(1.25); } }
     #flash.gold { color: #ffd23f; font-size: 44px; text-align: center; padding: 0 16px; }
     .head { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px 6px; }
-    .chip { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #ffffff18; color: var(--dim); margin-left: 6px; }
-    .chip[hidden] { display: none; }
     .head b { font-size: 28px; font-variant-numeric: tabular-nums; }
     .dim { font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
 
@@ -84,6 +82,7 @@
     #menu .mutes button[aria-pressed=true] { background: var(--orange); color: #1a0d00; }
     #menu .wide { display: block; width: 100%; height: 50px; border-radius: 12px; background: var(--panel2); font-weight: 800;
       text-align: center; line-height: 50px; color: var(--text); text-decoration: none; margin-top: 8px; }
+    #menu [hidden] { display: none; } /* .wide's display would otherwise beat the hidden attribute */
     /* The soundboard: its own page, swiped in from the right (or the 🔊 edge tab) */
     #sounds { position: absolute; inset: 0; z-index: 22; background: var(--bg); transform: translateX(100%);
       transition: transform .25s ease; display: flex; flex-direction: column; gap: 12px; padding: 14px 12px 18px; }
@@ -104,6 +103,7 @@
     #helper-qr { background: #fff; border-radius: 14px; padding: 14px; margin-top: 10px; text-align: center; }
     #helper-qr svg { width: min(72vw, 280px); height: auto; }
     #helper-qr p { color: #333; font-size: 12px; word-break: break-all; margin: 8px 0 0; }
+    #helper-qr p.says { color: #111; font-size: 15px; font-weight: 700; word-break: normal; }
     .unjoined { color: var(--amber); font-weight: 700; margin: 12px 0 0; }
 
     #recent { position: absolute; inset: 0; z-index: 20; background: #000a; display: none; align-items: flex-end; }
@@ -140,6 +140,25 @@
     .actions button { flex: 1; height: 58px; border-radius: 14px; background: var(--panel2); font-weight: 800; font-size: 18px; }
     .actions .primary { background: var(--orange); color: #1a0d00; }
 
+    /* Nothing open (spec v2.1 §4): no board and no tap buttons, just what's next. ☰ stays. */
+    .no-night { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+      padding: 16px; gap: 4px; }
+    .no-night[hidden] { display: none; }
+    .no-night .moon, #gone .moon { font-size: 64px; }
+    .no-night h1 { margin: 8px 0 4px; font-size: 26px; }
+    .no-night p { margin: 0; color: var(--dim); font-size: 18px; }
+    .no-night .countdown { color: var(--orange); font-weight: 800; font-variant-numeric: tabular-nums; }
+    #app.idle .head { justify-content: flex-end; }
+    #app.idle #grid, #app.idle .util, #app.idle .plus, #app.idle #count-line, #app.idle #untagged, #app.idle #sounds-tab { display: none; }
+    /* A refused key: forgotten, and the one way on is the homepage. */
+    #gone { position: absolute; inset: 0; z-index: 70; background: var(--bg); display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; }
+    #gone[hidden] { display: none; }
+    #gone p { font-size: 20px; font-weight: 700; margin: 0; max-width: 28rem; }
+    #gone .wide { display: block; width: min(100%, 18rem); height: 54px; line-height: 54px; border-radius: 14px; background: var(--orange);
+      color: #1a0d00; font-weight: 900; font-size: 18px; text-decoration: none; }
+    #gone .wide[hidden] { display: none; }
+
     #who { position: absolute; inset: 0; z-index: 60; background: var(--bg); display: none; flex-direction: column;
       align-items: center; justify-content: center; gap: 1rem; padding: 16px; }
     #who button, #who input { font-size: 1.5rem; padding: 0.8rem 1.5rem; border-radius: 0.6rem; width: 14rem; max-width: 100%; }
@@ -151,11 +170,17 @@
   <div id="app">
     <div id="pill"></div>
     <div id="problem"></div>
-    <div class="head"><span><b id="total">–</b> kids tonight <span class="chip" id="rehearsal-chip" hidden>🎭 Rehearsal</span></span>
+    <div class="head"><span id="count-line"><b id="total">–</b> kids tonight</span>
       <span><span class="dim" id="untagged"></span><button class="menu" id="menu-open" aria-label="Menu">☰</button></span></div>
     <div class="nearby-line" id="nearby" hidden></div>
     <div class="golden" id="golden" hidden>⭐ NEXT KID IS GOLDEN — get the prize ready</div>
     <div class="nudge" id="nudge" hidden><button id="nudge-end">Quiet out there? 🌙 End the night</button><button id="nudge-dismiss" aria-label="Not yet">✕</button></div>
+    <div class="no-night" id="no-night" hidden>
+      <div class="moon">🌙</div>
+      <h1>No night on right now</h1>
+      <p id="no-night-next"></p>
+      <p class="countdown" id="no-night-countdown"></p>
+    </div>
     <div class="grid" id="grid">
       <button class="tile new" id="new">+ New</button>
     </div>
@@ -184,7 +209,7 @@
           <h4>Golden tickets</h4>
           <button class="wide" id="release">🎫 Release remaining tickets</button>
         </div>
-        <h4>The night</h4>
+        <h4 id="night-head">The night</h4>
         <button class="wide" id="go-live-now" hidden></button>
         <button class="wide" id="end-night">🌙 End the night</button>
         <div id="end-choices" hidden>
@@ -236,6 +261,12 @@
       </form>
     </div>
 
+    <div id="gone" hidden>
+      <div class="moon">🦇</div>
+      <p id="gone-text"></p>
+      <a class="wide" id="gone-home" href="/">OK</a>
+    </div>
+
     <form id="who">
       <h1>Who's tapping?</h1>
       <button type="button" data-name="Dad">Dad</button>
@@ -246,6 +277,6 @@
     </form>
   </div>
 
-  <script type="module" src="/index.js"></script>
+  <script type="module" src="/door.js"></script>
 </body>
 </html>

@@ -19,7 +19,7 @@ import { toCsv } from './export.js'
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
-const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html', '/privacy': '/privacy.html', '/summary': '/summary.html' }
+const PAGES = { '/': '/door.html', '/door': '/door.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html', '/privacy': '/privacy.html', '/summary': '/summary.html' }
 const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink', 'setLocation', 'passFirstRun', 'setLastYear', 'close'])
 
 // What a TV-link holder gets (spec §9): what the TV draws, without each kid's phone name.
@@ -109,6 +109,9 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     const door = house.doorEvent()
     return door ? house.snapshot(door.id) : house.idleSnapshot()
   }
+  // A phone's (or a Manager's) read also names the Household, for Add a helper's wording. A TV's never does:
+  // the TV link is watched by remote viewers.
+  const phoneSnapshot = (house) => ({ ...doorSnapshot(house), household: house.displayName() })
 
   // The first tick runs now, with nearby ready for any night it ends.
   tick()
@@ -119,11 +122,18 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   const stopBackups = backups?.start({ also: () => accounts.pruneDeletions() }) ?? (() => {})
 
   const routes = {
+    // The door phone lives on /door (spec v2.1 §11): a helper's ?key= link to / goes there. Until the homepage
+    // (ticket 59), / with no key is still the door page, whose script sends a remembered key on to /door.
+    'GET /': (req) => {
+      const { search, searchParams } = new URL(req.url)
+      if (searchParams.get('key')) return new Response(null, { status: 302, headers: { Location: `/door${search}` } })
+      return serveStatic('/', req, contact)
+    },
     // The door's Event, for a phone, a TV or a Manager; ?event=<id> reads one of the Household's events (a past
     // night's recap on /tv?event=<id>), for a Manager only.
     'GET /api/snapshot': async (req, server) => {
       const id = new URL(req.url).searchParams.get('event')
-      if (id == null) return read((req, house, credential) => Response.json(withNearby(credential.kind === 'tv' ? tvSnapshot(doorSnapshot(house)) : doorSnapshot(house), house)))(req, server)
+      if (id == null) return read((req, house, credential) => Response.json(withNearby(credential.kind === 'tv' ? tvSnapshot(doorSnapshot(house)) : phoneSnapshot(house), house)))(req, server)
       return manager((req, house) => {
         const snap = house.snapshot(Number(id))
         return snap ? Response.json(snap) : notFound()
@@ -139,7 +149,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       // A full TV gets 503, which the TV page shows as "This TV is full, try again soon" and retries.
       if (refusal) return new Response(refusal === 'tvFull' ? 'This TV is full, try again soon' : 'Too many connections', { status: refusal === 'tvFull' ? 503 : 429 })
       return kind === 'phone'
-        ? hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(doorSnapshot(house), house) })
+        ? hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(phoneSnapshot(house), house) })
         : hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(tvSnapshot(doorSnapshot(house)), house), shape: tvDelta })
     }),
 
@@ -475,7 +485,14 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   function read(handler) {
     return async (req, server) => {
       const credential = credentialOf(req)
-      if (!credential) return new Response('Join with a helper code, or sign in', { status: 403 })
+      if (!credential) {
+        // A Suspended Household's key or TV link isn't dead (Unsuspend restores everything), so the door
+        // phone is told, and keeps its key; any other refused key is one to forget (spec v2.1 §4).
+        const key = req.headers.get('X-Join-Key') ?? new URL(req.url).searchParams.get('key')
+        const owner = key ? (ledger.householdByJoinKey(key) ?? ledger.householdByTvToken(key)) : null
+        if (owner != null && ledger.isSuspended(owner)) return new Response('This Household is suspended by the Operator', { status: 403, headers: { 'X-Refused': 'suspended' } })
+        return new Response('Join with a helper code, or sign in', { status: 403 })
+      }
       const res = await handler(req, ledger.household(credential.householdId), credential, server)
       return credential.session ? renew(res, credential.session, req) : res
     }

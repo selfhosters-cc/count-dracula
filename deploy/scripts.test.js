@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openLedger } from '../server/ledger.js'
@@ -68,5 +68,20 @@ describe('deploy/access-request.js', () => {
 
     expect(code).toBe(1)
     expect(out).toContain('No Manager with that email')
+  })
+})
+
+describe('deploy/caddy-site.caddy log masking', () => {
+  // The site's request>uri regexps, applied the way Caddy does ("${1}" is JS's "$1").
+  const caddy = readFileSync(join(import.meta.dir, 'caddy-site.caddy'), 'utf8')
+  const uriBlock = caddy.slice(caddy.indexOf('request>uri multi_regexp'), caddy.indexOf('request>headers>Referer'))
+  const rules = [...uriBlock.matchAll(/regexp "((?:[^"\\]|\\.)*)" "([^"]*)"/g)].map(([, find, put]) => [new RegExp(find, 'g'), put.replaceAll('${1}', '$1')])
+  const mask = (uri) => rules.reduce((out, [find, put]) => out.replace(find, put), uri)
+
+  test("/door?key= is masked by the existing key= regexp (spec v2.1 §4)", () => {
+    expect(rules.length).toBeGreaterThan(0)
+    expect(mask('/door?key=s3cret-key')).toBe('/door?key=REDACTED')
+    expect(mask('/?key=s3cret-key')).toBe('/?key=REDACTED')
+    expect(mask('/api/stream?key=s3cret&x=1')).toBe('/api/stream?key=REDACTED&x=1')
   })
 })
