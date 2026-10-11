@@ -25,7 +25,7 @@ A single-use link, valid for 7 days, that a Manager shares so another person can
 _Avoid_: Magic link, sign-in link
 
 **Helper**:
-Someone tapping kids in on a door phone. Has no account; the phone joins a Household with its join key and taps into one of its open Events.
+Someone tapping kids in on a door phone. Has no account; the phone joins a Household with its join key and taps into the Event its TV link shows. A Helper never picks an Event.
 _Avoid_: User, volunteer, member
 
 **Join key**:
@@ -37,7 +37,7 @@ Whoever runs the deployment itself, across all Households (today, us). A Manager
 _Avoid_: Admin, superuser, site admin
 
 **TV link**:
-The one secret link that lets a device watch a Household's open Events read-only, one Event at a time, on the same TV page the porch shows; with none open it shows a "No night on right now" screen. The porch TV and every remote viewer use the same link. It never expires; rotating it cuts off every device holding the old one, the Household's own porch TV included.
+The one secret link that lets a device watch a Household's open Events read-only, one Event at a time: the open Event that went live most recently, on the same TV page the porch shows, switching by itself. With none open it shows a "No night on right now" screen. The porch TV and every remote viewer use the same link. It never expires; rotating it cuts off every device holding the old one, the Household's own porch TV included.
 _Avoid_: Share link (that's the Night summary's), watch link, viewer key, join key (that's for Helpers' writes)
 
 **TV pairing code**:
