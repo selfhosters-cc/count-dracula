@@ -69,7 +69,7 @@ How many Households have a Live or Ended Event right now, and the kids counted i
 _Avoid_: Global count, total tonight (there's no single "tonight" across time zones)
 
 **Estimated past event**:
-A counts-only past Event a Household without a past night gets by typing in last year's total. The total is spread over a fixed typical half-hour curve to give a ghost to race, and it's labelled "last year (estimated)" wherever it shows.
+A counts-only past Event a Household gets by typing in last year's total. The total is spread over a fixed typical half-hour curve to give a ghost to race, and it's labelled "last year (estimated)" wherever it shows. It's the Household's default Race against: every Event racing nothing races it, Events made later included, and clearing it sets them back to None.
 _Avoid_: Fake ghost, seed, Expected kids (that's this year's guess for the golden range)
 
 **Suspended**:
