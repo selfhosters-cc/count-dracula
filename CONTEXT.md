@@ -16,6 +16,10 @@ _Avoid_: Night (in definitions), session, party, Rehearsal (a practice night is 
 Puts a Live or Ended Event back to Upcoming with no kids, golden tickets, Night summary or share links; its setup (name, Race against, costume tags, and Goes live at if it's still ahead) stays. Managers do it from `/setup`; it goes live again by Go live or at its Goes live at.
 _Avoid_: Clear, wipe, restart, Reset the Rehearsal
 
+**Test night**:
+The Event sign-up makes live, so a new Household can try its TV and a phone straight away: starter costumes, no golden tickets. It's an ordinary Event with no marker (it auto-ends at 3 am and goes Past at noon); the server only remembers which Event it was, by id, never by name. A sign-up on Halloween evening gets none.
+_Avoid_: Rehearsal, practice night, demo
+
 **Manager**:
 A person, signed in with their Google account, who runs one Household: its events, `/setup`, sharing and deletion. A Household can have several Managers, all equal.
 _Avoid_: Admin, owner, user, account
@@ -93,5 +97,5 @@ A Household no Manager has signed in to for 2 years. It's deleted with everythin
 _Avoid_: Inactive, dormant, stale (Stale is an Operator-dashboard status on the night)
 
 **Abandoned sign-up**:
-A Household that never counted a kid outside its starter Rehearsal and that no Manager has signed in to for 60 days. It's deleted like an Idle Household, just sooner.
+A Household that never counted a kid on any Event but its Test night and that no Manager has signed in to for 60 days. It's deleted like an Idle Household, just sooner.
 _Avoid_: Unused account, trial, bot account
