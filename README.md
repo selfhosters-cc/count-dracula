@@ -65,6 +65,29 @@ phones. A TV facing the porch celebrates every kid live and races tonight's coun
 | ![A golden ticket takeover: KID #278 WINS!](docs/screenshots/tv-golden.png) | ![The giant headstone for kid #300](docs/screenshots/tv-milestone.png) |
 | ![The Ghost soundboard button: ghosts rise across the TV](docs/screenshots/tv-soundboard.png) | ![The end-of-night recap](docs/screenshots/tv-recap.png) |
 
+### Near you: what the neighbourhood is up to
+
+Every household counting on the same night adds to a shared picture, without anyone giving away where they live.
+
+- **Opt in with a rough location.** A household picks its spot on a map in Setup (it's optional, and first-run
+  offers a Skip). Only a cell a few kilometres across is stored: the exact point never leaves the phone. No
+  location, no sharing.
+- **"Near you" on the TV and phones**, refreshed every 10 minutes:
+  - TV: *"🏘️ Near you tonight: ~90 kids in the last half hour · 14 houses counting · 🧙 Witch on top"*
+  - door phone: *"🏘️ Near you: ~90 kids in 30 min · 14 houses"*
+- **Totals only, never one house.** Kid counts are rounded to 5s and lag up to 10 minutes. A "house counting"
+  is one that counted a kid in the last half hour. No place names, no map, no list. The top costume only shows
+  when at least 3 houses counted it, and never a blocked word.
+- **No minimum crowd, and no edges.** It shows as soon as one other house near you is counting. "Near you" is
+  your area (about 20 × 25 km) plus the next one when you're close to its edge, so a town split by an area line
+  sees the same figures on both sides.
+- **Count Dracula tonight.** With no location, or nobody counting nearby, the phone shows the whole site's total
+  instead (*"🎃 Count Dracula tonight: 212 houses · ~3,140 kids"*). The homepage shows it too: *"Counting now"*
+  during a night, *"Last night"* until noon the next day. It's hidden below 5 houses.
+- **The Night summary** keeps the neighbourhood's figures as they stood when your night ended.
+- **Switches.** Whoever runs the site can turn nearby and the site-wide total off together (`"nearby": false` under
+  `switches` in `config.json`), or just the edge-crossing (`"nearbyEdges": false`). Both are on by default.
+
 ### Setup (`/setup`, for a household's signed-in Managers)
 
 - **Events**: create a night (copying last year's costumes), **Go live**, change the join key, view, export
