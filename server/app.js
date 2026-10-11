@@ -16,7 +16,7 @@ import { toCsv } from './export.js'
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
-const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html' }
+const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html', '/privacy': '/privacy.html' }
 const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink', 'setLocation', 'passFirstRun', 'resetRehearsal'])
 
 // What a TV-link holder gets (spec §9): what the TV draws, without each kid's phone name.
@@ -25,6 +25,7 @@ const tvSnapshot = (snap) => ({ ...snap, kids: snap.kids.map(withoutPhone) })
 const tvDelta = (delta) => (delta.kid ? { ...delta, kid: withoutPhone(delta.kid) } : delta)
 
 const PAUSE_SIGN_UPS = 'pauseSignUps'
+const DEFAULT_CONTACT = 'privacy@count-dracula.example.com'
 const OPERATOR_ACTIONS = new Set(['rename', 'timeZone', 'suspend', 'unsuspend'])
 
 // The sign-in cookie (spec §3): 90 days, renewed with use; the session itself lives server-side.
@@ -36,7 +37,7 @@ const sessionCookie = (token, maxAge = 90 * 86_400) => `${SESSION_COOKIE}=${toke
 export function startServer({ configPath, port, heartbeatMs, env = process.env, google, now = Date.now, canSignUp, tickMs = 60_000, limits = LIMITS, log = console.log }) {
   const config = loadConfig(configPath)
   const guard = createGuard({ now, limits, log })
-  const contact = env.OPERATOR_CONTACT || 'privacy@count-dracula.example.com' // the one contact address (spec §5)
+  const contact = env.OPERATOR_CONTACT || DEFAULT_CONTACT // the one contact address (spec §5)
   const db = new Database(config.dbPath, { create: true })
   const ledger = openLedger(db, { ...config, now })
   const accounts = openAccounts(db, {
@@ -291,7 +292,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const session = accounts.session(tokenOf(req))
       if (!session) return redirect('/signup')
       if (ledger.isSuspended(session.householdId)) return page('Suspended', `<p>This Household is suspended by the Operator.</p><p>Questions: <a href="mailto:${esc(contact)}">${esc(contact)}</a></p>`, 403)
-      return renew(await serveStatic(pathname, req), session, req)
+      return renew(await serveStatic(pathname, req, contact), session, req)
     }
   }
 
@@ -362,7 +363,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     if (handler) return handler(req, server)
     // The TV link's page: the same TV page; it reads its token from the address.
     if (req.method === 'GET' && pathname.startsWith('/tv/k/')) return serveStatic('/tv', req)
-    if (req.method === 'GET') return serveStatic(pathname, req)
+    if (req.method === 'GET') return serveStatic(pathname, req, contact)
     return notFound()
   }
 
@@ -388,7 +389,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   }
 }
 
-async function serveStatic(pathname, req) {
+async function serveStatic(pathname, req, contact = DEFAULT_CONTACT) {
   const [dir, rest] = pathname.startsWith('/shared/')
     ? [SHARED_DIR, pathname.slice('/shared'.length)]
     : pathname.startsWith('/kiosk/')
@@ -406,6 +407,8 @@ async function serveStatic(pathname, req) {
   // The launchers say __ORIGIN__ wherever they need the server's address: filled in with the address
   // they were downloaded from (https via Caddy on the tailnet, or the LAN address).
   if (dir === KIOSK_DIR) return new Response((await file.text()).replaceAll('__ORIGIN__', originOf(req)), { headers: { 'Content-Type': file.type } })
+  // Pages that offer help or the privacy contact say __CONTACT__: filled in with OPERATOR_CONTACT, never committed.
+  if (path.endsWith('.html')) return new Response((await file.text()).replaceAll('__CONTACT__', esc(contact)), { headers: { 'Content-Type': file.type } })
   return new Response(file)
 }
 

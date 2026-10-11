@@ -26,6 +26,8 @@ A Manager shares a night's slides by a public link. Strangers can report the pag
 - **`/operator`:** the Reports column fills in, and Households with an open Report are flagged. The detail view lists them with **Dismiss**, which deletes the reason.
 - Delete my Household also deletes its share links and Reports.
 
+- **`/privacy` (from [ticket 33](33-privacy-page.md)):** add, under *What's public*: share-link holders see that night's slides, the display name per the share's toggle, nearby only as "near you"; extend the pass-it-on line to "or turn sharing off in Setup"; under *How long*: Report reasons are deleted when the Operator dismisses the Report. Left out until they exist.
+
 ## Acceptance criteria
 
 - [ ] A share link opens the slides in a signed-out browser; with the toggle on, no display name appears anywhere in the page or its data

@@ -45,6 +45,7 @@
     .checks li > span { display: block; }
     .checks li.done::marker { content: '✓  '; color: var(--ok); }
     .checks li.done [data-todo], .checks li:not(.done) [data-done] { display: none; }
+    a.link { color: var(--orange); }
     .link-button { background: none; padding: 0; color: var(--orange); font-weight: 700; }
     #first-run { position: fixed; inset: 0; z-index: 5; background: var(--bg); overflow: auto; padding: 16px; }
     .first-run { max-width: 560px; margin: 0 auto; }
@@ -194,13 +195,15 @@
         <label for="h-name">Household name</label>
         <div class="row"><input id="h-name" maxlength="40" autocomplete="off"><button type="submit">Save</button></div>
       </form>
-      <p class="muted">Signed in as <span id="signed-in"></span> · time zone <span id="h-zone"></span></p>
+      <p class="muted">Signed in as <span id="signed-in"></span> · time zone <span id="h-zone"></span> · <a href="/privacy" class="link">Privacy and House rules</a></p>
       <form method="post" action="/auth/signout"><button type="submit">Sign out</button></form>
       <h2 style="margin-top: 18px">Delete my household</h2>
       <p class="muted">Deletes this household and every night, kid and costume in it, straight away. It can't be undone.</p>
       <button id="delete-household" class="danger">Delete my household…</button>
     </section>
   </div>
+
+  <footer class="muted" style="text-align: center; padding: 6px 0 20px">Help: <a href="mailto:__CONTACT__" class="link">email us</a> · <a href="/help/tv" class="link">TV help</a></footer>
 
   <div id="first-run" hidden></div>
   <div id="qr-full" hidden><div id="qr-full-code"></div><p>Tap anywhere to close</p></div>

@@ -21,6 +21,8 @@ More Managers join a Household by Invite link, and Managers can leave or be remo
 - Delete my Household also deletes invites.
 - Invite tokens appear only in a URL shape that [ticket 35](35-public-host-on-caddy.md)'s masking covers; add the shape there if it's new.
 
+- **`/privacy` (from [ticket 33](33-privacy-page.md)):** add, under *Deleting*: *"Leaving a Household deletes your account details. The Household's nights stay with the other Managers."* It was left out until leaving exists.
+
 ## Acceptance criteria
 
 - [ ] A second Google account opens an invite and becomes an equal Manager; the same link then fails

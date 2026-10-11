@@ -25,6 +25,8 @@ Households with a Location see rounded, delayed totals for their Area. Without t
 - **Phone:** one line under the count, *"🏘️ Near you: ~90 kids in 30 min · 14 houses"*. Below the minimum, or without a Location, it shows *"🎃 Count Dracula tonight: 212 houses · ~3,140 kids"*. Below the site minimum, it's hidden.
 - **Switch:** one Operator-wide switch in `config.json` turns nearby and the Site-wide total off everywhere (including [ticket 46](46-site-total-on-sign-up.md)'s line).
 
+- **`/privacy` (from [ticket 33](33-privacy-page.md)):** add, under *What's public*: the Area figures (rounded, at least 5 Households) and the Site-wide total, never pointing at one Household. Left out until they exist.
+
 ## Acceptance criteria
 
 - [ ] 4 active Households in an Area show nothing; 5 show figures

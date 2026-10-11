@@ -19,6 +19,8 @@
     button { width: 100%; margin-top: 12px; border: 0; border-radius: 10px; padding: 12px 14px; font-weight: 700; cursor: pointer; background: var(--panel2); }
     button.primary { background: var(--orange); color: #1a0d00; }
     .muted { color: var(--dim); font-size: 13px; }
+    a { color: var(--orange); }
+    footer { text-align: center; padding: 8px 0 16px; }
   </style>
 </head>
 <body>
@@ -32,7 +34,7 @@
       <input id="name" name="displayName" maxlength="40" required autocomplete="off" placeholder="The Smiths on Elm St">
       <input type="hidden" name="timeZone">
       <button class="primary" type="submit">Continue with Google</button>
-      <p class="muted">By continuing you agree to the Privacy notice and House rules.</p>
+      <p class="muted">By continuing you agree to the <a href="/privacy">Privacy notice and House rules</a>.</p>
     </form>
   </section>
 
@@ -43,6 +45,8 @@
       <button type="submit">Sign in with Google</button>
     </form>
   </section>
+
+  <footer class="muted"><a href="/privacy">Privacy and House rules</a> · Help: <a href="mailto:__CONTACT__">email us</a></footer>
 
   <script type="module" src="/signup.js"></script>
 </body>

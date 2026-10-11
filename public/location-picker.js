@@ -34,7 +34,7 @@ export function createLocationPicker(container, { cell = null, save, onSkip = nu
   const saveButton = h('button', { type: 'button', className: 'primary', textContent: 'Save this square', disabled: true })
   const cancelButton = h('button', { type: 'button', textContent: 'Cancel' })
   const panel = h('div', { className: 'picker-panel', hidden: true }, mapBox, h('p', { className: 'muted', textContent: 'Tap your area on the map, or use your location.' }), h('div', { className: 'row' }, locateButton, saveButton, cancelButton), status)
-  const note = h('p', { className: 'muted', textContent: 'Only a ~5 km square is saved · Privacy' })
+  const note = h('p', { className: 'muted' }, 'Only a ~5 km square is saved · ', h('a', { href: '/privacy', textContent: 'Privacy', style: 'color: var(--orange)' }))
   container.replaceChildren(summary, buttons, panel, note)
 
   function render() {
