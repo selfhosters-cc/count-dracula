@@ -37,6 +37,9 @@
     .backfill label { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; color: var(--text); font-size: 14px; }
     .backfill input { width: 5em; padding: 6px; }
     .backfill input:disabled { opacity: .35; }
+    .helper { margin-top: 10px; }
+    #helper-qr { background: #fff; border-radius: 14px; padding: 12px; width: min(72vw, 260px); }
+    #helper-qr svg { width: 100%; height: auto; display: block; }
   </style>
 </head>
 <body>
@@ -48,6 +51,15 @@
       <h2>Live now: <span id="live-name"></span></h2>
       <p class="muted"><span id="live-kids"></span> kids · join key <code id="join-key"></code> · time zone <span id="time-zone"></span></p>
       <div class="row">
+        <button id="count-here" class="primary">📱 Count on this phone</button>
+        <button id="add-helper">➕ Add a helper</button>
+      </div>
+      <div id="helper" class="helper" hidden>
+        <div id="helper-qr"></div>
+        <p class="muted">A helper scans this with their phone's camera, or you send them the link.</p>
+        <div class="row"><button id="share-join" class="primary">Share join link</button></div>
+      </div>
+      <div class="row" style="margin-top: 8px">
         <button id="export-live">⬇ Export event</button>
         <button id="add-ticket">🎫 Add a golden ticket</button>
         <button id="change-key" class="danger">Change join key</button>
@@ -125,6 +137,7 @@
 
   <script type="module">
     import { atEventTime, clockTime as zoneClock, eventNow, minuteOfDay, slots } from '/shared/night-maths.js'
+    import qrcode from '/vendor/qrcode/qrcode.js'
 
     const $ = (id) => document.getElementById(id)
     const HOUR = 3_600_000
@@ -176,6 +189,35 @@
       if (done) say(done)
       return body
     }
+
+    // ---- helper phones (spec §6): this phone, or someone else's by QR or a shared link
+    const joinUrl = () => `${location.origin}/?key=${encodeURIComponent(joinKey)}`
+
+    $('count-here').addEventListener('click', () => {
+      localStorage.setItem('cd.joinKey', joinKey)
+      location.href = '/'
+    })
+
+    $('add-helper').addEventListener('click', () => {
+      const qr = qrcode(0, 'M')
+      qr.addData(joinUrl())
+      qr.make()
+      $('helper-qr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true })
+      $('helper').hidden = !$('helper').hidden
+    })
+
+    $('share-join').addEventListener('click', async () => {
+      const url = joinUrl()
+      if (navigator.share) {
+        try {
+          return await navigator.share({ title: 'Help count trick-or-treaters', url })
+        } catch (err) {
+          if (err.name === 'AbortError') return // they closed the share sheet
+        }
+      }
+      await navigator.clipboard.writeText(url)
+      say('Join link copied')
+    })
 
     // ---- your household: its name, signing out, and deleting it
     $('name-form').addEventListener('submit', async (e) => {
@@ -392,7 +434,10 @@
       if (!confirm('Change the join key? Every phone using the old key stops counting until it rejoins.')) return
       const done = await admin({ type: 'changeKey' }, 'Join key changed')
       if (done) {
+        // This phone counts on with the new key if it had the old one; everyone else rejoins.
+        if (localStorage.getItem('cd.joinKey') === joinKey) localStorage.setItem('cd.joinKey', done.joinKey)
         joinKey = done.joinKey
+        $('helper').hidden = true
         render()
       }
     })

@@ -1,8 +1,7 @@
-// The HTTP layer stays thin: find the credential's Household (a join key, or a Manager's session for Setup),
-// parse the body, call apply on that Household, publish the deltas. Until every read carries a credential
-// (v2 ticket 22), phone reads act on the join key's Household, or Household #1.
+// The HTTP layer stays thin: find the credential's Household, parse the body, call apply on that Household,
+// publish the deltas. Every read and write carries a credential (v2 spec §3): a phone's join key, or a
+// Manager's session. There's no Household in any URL: the credential carries it.
 import { Database } from 'bun:sqlite'
-import { networkInterfaces } from 'node:os'
 import { resolve, sep } from 'node:path'
 import { loadConfig } from './config.js'
 import { BadCommand, openLedger } from './ledger.js'
@@ -25,9 +24,8 @@ const sessionCookie = (token, maxAge = 90 * 86_400) => `${SESSION_COOKIE}=${toke
 // google, now and canSignUp are seams for the tests.
 export function startServer({ configPath, port, heartbeatMs, env = process.env, google, now = Date.now, canSignUp }) {
   const config = loadConfig(configPath)
-  let lanUrl = config.lanUrl // resolved once the server is listening, if the config doesn't say
   const db = new Database(config.dbPath, { create: true })
-  const ledger = openLedger(db, { ...config, now, lanUrl: () => lanUrl })
+  const ledger = openLedger(db, { ...config, now })
   const accounts = openAccounts(db, {
     ledger,
     google: google ?? googleClient({ clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }),
@@ -39,14 +37,19 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   const hub = createHub({ heartbeatMs })
 
   const routes = {
-    // ?event=<id> reads any of the Household's events (a past night's recap on /tv?event=<id>); otherwise the live one.
-    'GET /api/snapshot': read((req, house) => {
+    // The live event, for a phone or a Manager; ?event=<id> reads one of the Household's events (a past
+    // night's recap on /tv?event=<id>), for a Manager only.
+    'GET /api/snapshot': async (req, server) => {
       const id = new URL(req.url).searchParams.get('event')
-      const snap = house.snapshot(id == null ? undefined : Number(id))
-      return snap ? Response.json(snap) : notFound()
-    }),
-    'GET /api/stream': read((req, house, server) =>
-      hub.attach(req, server, { householdId: house.id, kind: 'phone', credential: house.joinKey(), snapshot: () => house.snapshot() })),
+      if (id == null) return read((req, house) => Response.json(house.snapshot()))(req, server)
+      return manager((req, house) => {
+        const snap = house.snapshot(Number(id))
+        return snap ? Response.json(snap) : notFound()
+      })(req, server)
+    },
+    // EventSource can't send headers, so a phone's key comes as ?key= (masked in the Caddy log).
+    'GET /api/stream': read((req, house, credential, server) =>
+      hub.attach(req, server, { householdId: house.id, kind: 'phone', credential: credential.token, snapshot: () => house.snapshot() })),
     'POST /api/taps': write(async (req, house) => {
       const { id, tagId, tappedAt, phoneName, teen } = await req.json()
       hub.publish(house.id, house.apply({ type: 'tap', id, tagId, tappedAt, phoneName, teen }))
@@ -55,13 +58,6 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const { kidId } = await req.json()
       hub.publish(house.id, house.apply({ type: 'remove', kidId }))
     }),
-    // Tailnet phones join on first open: the key is handed out only on the private *.int name.
-    'GET /api/join': (req) => {
-      const host = (req.headers.get('Host') ?? '').replace(/:\d+$/, '').toLowerCase()
-      if (!config.autoJoinHosts.includes(host)) return new Response('Scan a helper code to join', { status: 403 })
-      const house = firstHousehold()
-      return house ? Response.json({ joinKey: house.joinKey() }) : notFound()
-    },
     // ---- Signing in (spec §3). The sign-up page posts here; Google sends the person back to the callback.
     'POST /auth/google/start': async (req) => {
       const form = await req.formData()
@@ -91,11 +87,9 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     },
 
     // ---- Setup (spec §6): a signed-in Manager of the Household.
-    'GET /setup': async (req) => {
-      const session = accounts.session(tokenOf(req))
-      if (!session) return redirect('/signup')
-      return renew(await serveStatic('/setup', req), session, req)
-    },
+    'GET /setup': managerPage('/setup'),
+    // The print tally sheet, opened from /setup.
+    'GET /tally': managerPage('/tally'),
     'GET /api/household': manager((req, house, session) => {
       const { displayName, timeZone } = ledger.households().find((h) => h.id === house.id)
       return Response.json({ id: house.id, displayName, timeZone, joinKey: house.joinKey(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
@@ -121,8 +115,11 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     'POST /api/admin': manager(async (req, house) => {
       const command = await req.json()
       if (!ADMIN_COMMANDS.has(command?.type)) throw new BadCommand(`Not a Setup command: ${command?.type}`)
+      const oldKey = house.joinKey()
       const deltas = house.apply(command)
       hub.publish(house.id, deltas)
+      // Change join key cuts off the old key's streams as well as its writes.
+      if (house.joinKey() !== oldKey) hub.close({ householdId: house.id, credential: oldKey })
       return Response.json({ deltas, joinKey: house.joinKey() })
     }),
     // ☰ "🌙 End the night" / "Resume the night": any phone with the join key.
@@ -153,19 +150,35 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     }),
   }
 
-  function firstHousehold() {
-    const [first] = ledger.households()
-    return first ? ledger.household(first.id) : null
+  // A phone's join key (X-Join-Key, or ?key= on the stream) or a Manager's session cookie, and its
+  // Household: { householdId, kind: 'key' | 'session', token }, or null.
+  function credentialOf(req) {
+    const key = req.headers.get('X-Join-Key') ?? new URL(req.url).searchParams.get('key')
+    if (key) {
+      const householdId = ledger.householdByJoinKey(key)
+      return householdId == null ? null : { householdId, kind: 'key', token: key }
+    }
+    const token = tokenOf(req)
+    const session = accounts.session(token)
+    return session ? { householdId: session.householdId, kind: 'session', token, session } : null
   }
 
-  // Reads act on the Household of the join key, if one is given, or else Household #1 (until ticket 22).
+  // The live night's reads: a join key or a Manager's session.
   function read(handler) {
-    return (req, server) => {
-      const key = req.headers.get('X-Join-Key') ?? new URL(req.url).searchParams.get('key')
-      const id = key ? ledger.householdByJoinKey(key) : null
-      const house = id == null ? firstHousehold() : ledger.household(id)
-      if (!house) return notFound()
-      return handler(req, house, server)
+    return async (req, server) => {
+      const credential = credentialOf(req)
+      if (!credential) return new Response('Join with a helper code, or sign in', { status: 403 })
+      const res = await handler(req, ledger.household(credential.householdId), credential, server)
+      return credential.session ? renew(res, credential.session, req) : res
+    }
+  }
+
+  // A page only a signed-in Manager opens; anyone else goes to sign-in.
+  function managerPage(pathname) {
+    return async (req) => {
+      const session = accounts.session(tokenOf(req))
+      if (!session) return redirect('/signup')
+      return renew(await serveStatic(pathname, req), session, req)
     }
   }
 
@@ -225,8 +238,6 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     },
   })
 
-  lanUrl ??= lanAddress(server.port)
-
   return {
     url: server.url.origin,
     ledger,
@@ -261,15 +272,6 @@ async function serveStatic(pathname, req) {
 function originOf(req) {
   const proto = req.headers.get('X-Forwarded-Proto') ?? new URL(req.url).protocol.slice(0, -1)
   return `${proto}://${req.headers.get('Host') ?? new URL(req.url).host}`
-}
-
-// This machine's first LAN IPv4 address: what a helper's phone on the home Wi-Fi can reach.
-function lanAddress(port) {
-  for (const addresses of Object.values(networkInterfaces())) {
-    const lan = addresses?.find((a) => a.family === 'IPv4' && !a.internal)
-    if (lan) return `http://${lan.address}:${port}`
-  }
-  return null
 }
 
 function tokenOf(req) {

@@ -243,18 +243,13 @@
     const $ = (id) => document.getElementById(id)
     const EMOJIS = ['🧙', '🧛', '🧟', '👻', '🎃', '🦸', '🕷️', '👑', '🦖', '🐶', '🐱', '🦄', '🤖', '🦇', '🧚', '🏴‍☠️', '🐉', '🤡', '❓']
 
-    // The join key arrives as ?key=… once (QR code or tailnet hand-off) and is remembered.
+    // The join key arrives as ?key=… once (a helper QR, Share join link, or Count on this phone) and is remembered.
     const params = new URLSearchParams(location.search)
     if (params.get('key')) {
       localStorage.setItem('cd.joinKey', params.get('key'))
       // Take it out of the address bar, so a reload after "Change key" can't put the old one back.
       params.delete('key')
       history.replaceState(null, '', location.pathname + (params.size ? `?${params}` : ''))
-    }
-    // On the tailnet (HTTPS) name, the server hands the key over on first open; elsewhere it says no.
-    if (!localStorage.getItem('cd.joinKey')) {
-      const res = await fetch('/api/join').catch(() => null)
-      if (res?.ok) localStorage.setItem('cd.joinKey', (await res.json()).joinKey)
     }
     const joinKey = localStorage.getItem('cd.joinKey') ?? ''
 
@@ -314,7 +309,7 @@
     function start(phoneName) {
       $('who').style.display = 'none'
       const outbox = createOutbox({ send, storage: localStorage, clock, phoneName })
-      const live = connectLive()
+      const live = connectLive(`/api/stream?key=${encodeURIComponent(joinKey)}`) // EventSource can't send headers
       let view = doorView(null, outbox)
       // The optimistic "#N" just shown; corrected if the server numbers that kid differently.
       let lastFlash = null
@@ -606,8 +601,7 @@
 
       // A LAN phone that scans this joins without typing anything. Only ever drawn here, never on the TV.
       $('helper-show').addEventListener('click', () => {
-        const base = live.state?.settings.lanUrl ?? location.origin
-        const url = `${base}/?key=${encodeURIComponent(joinKey)}`
+        const url = `${location.origin}/?key=${encodeURIComponent(joinKey)}` // the public HTTPS address
         const qr = qrcode(0, 'M')
         qr.addData(url)
         qr.make()

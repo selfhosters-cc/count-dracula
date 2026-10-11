@@ -1,7 +1,7 @@
 # Every read and write carries a credential
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 19, 21
 
 ## What to build
@@ -31,11 +31,20 @@ Reads stop being open. Every request reaches only its own Household. Helper phon
 
 ## Acceptance criteria
 
-- [ ] A table-driven test hits every route with no credential, with another Household's key or session, and with the right one: only the right one works
-- [ ] `/tv?event=<id>` and the tally sheet need a Manager of that Household
-- [ ] After Change join key, old-key streams close and old-key writes get 403
-- [ ] A phone joined on the Rehearsal keeps working after Go live
-- [ ] No `lanUrl`, `autoJoinHosts`, `/api/join` or `lanAddress` left in the code
-- [ ] The helper QR encodes the public HTTPS URL
-- [ ] Count on this phone and Share join link work on a phone (checked in the browser)
-- [ ] `bun test` passes
+- [x] A table-driven test hits every route with no credential, with another Household's key or session, and with the right one: only the right one works
+- [x] `/tv?event=<id>` and the tally sheet need a Manager of that Household
+- [x] After Change join key, old-key streams close and old-key writes get 403
+- [x] A phone joined on the Rehearsal keeps working after Go live
+- [x] No `lanUrl`, `autoJoinHosts`, `/api/join` or `lanAddress` left in the code
+- [x] The helper QR encodes the public HTTPS URL
+- [x] Count on this phone and Share join link work on a phone (checked in the browser)
+- [x] `bun test` passes
+
+## Notes from the build
+
+- A request's credential is a join key (`X-Join-Key`, or `?key=` on `/api/stream`) or the `cd_session` cookie. The live snapshot and stream take either; writes take the key; Setup, `/api/snapshot?event=<id>`, `/tally` and `/setup` take a session (the pages redirect to `/signup` without one).
+- Until [ticket 23](23-tv-link.md), a bare `/tv` works in a browser signed in as a Manager (its stream rides on the session cookie), and nowhere else.
+- The join key stays on `households` (ticket 17). Change join key closes the streams opened with the old key; `/setup` moves this phone onto the new key if it had the old one.
+- Join links and QRs use `location.origin`, which is the public HTTPS address behind Caddy.
+- `server/credentials.test.js` is the table of every Household route: none, made-up, another Household's and the right credential.
+- `deploy/README.md` still describes the tailnet auto-join; ticket 34 rewrites it.

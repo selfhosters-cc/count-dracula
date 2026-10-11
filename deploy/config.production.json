@@ -1,10 +1,6 @@
 {
   "port": 3131,
   "dbPath": "/var/lib/count-dracula/count-dracula.sqlite",
-  "lanUrl": "http://__IP__:3131",
-  "autoJoinHosts": [
-    "__HOST__"
-  ],
   "switches": {
     "milestones": true,
     "goldenTickets": true,

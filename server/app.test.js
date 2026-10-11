@@ -40,10 +40,10 @@ async function managerCookie(app) {
 }
 
 describe('startup', () => {
-  test('reads the config file: switches reach the snapshot, which needs no key', async () => {
+  test("reads the config file: switches reach a phone's snapshot", async () => {
     const app = start({ switches: { pumpkinPatch: false } })
 
-    const res = await fetch(`${app.url}/api/snapshot`)
+    const res = await fetch(`${app.url}/api/snapshot`, { headers: { 'X-Join-Key': app.house.joinKey() } })
 
     expect(res.status).toBe(200)
     const snap = await res.json()
@@ -65,7 +65,7 @@ function aTap(id) {
 }
 
 async function liveCount(app) {
-  const snap = await (await fetch(`${app.url}/api/snapshot`)).json()
+  const snap = await (await fetch(`${app.url}/api/snapshot`, { headers: { 'X-Join-Key': app.house.joinKey() } })).json()
   return snap.kids.length
 }
 
@@ -100,7 +100,7 @@ describe('join key', () => {
 
 async function openStream(app) {
   const controller = new AbortController()
-  const res = await fetch(`${app.url}/api/stream`, { signal: controller.signal })
+  const res = await fetch(`${app.url}/api/stream?key=${app.house.joinKey()}`, { signal: controller.signal })
   const { next } = readFrames(res)
   return { res, next, close: () => controller.abort() }
 }
@@ -316,24 +316,6 @@ describe('☰ menu', () => {
     expect((await stream.next()).data).toMatchObject({ type: 'mix.changed', mix: { volume: 0.5, mutes: { everything: true } } })
     stream.close()
   })
-
-  test('"Add a helper" uses the LAN URL from the config file', async () => {
-    const app = start({ lanUrl: 'http://192.168.1.50:3131' })
-
-    const snap = await (await fetch(`${app.url}/api/snapshot`)).json()
-
-    expect(snap.settings.lanUrl).toBe('http://192.168.1.50:3131')
-  })
-
-  test("without one, it falls back to this machine's LAN address and port", async () => {
-    const app = start()
-
-    const snap = await (await fetch(`${app.url}/api/snapshot`)).json()
-
-    expect(snap.settings.lanUrl).toMatch(/^http:\/\/(\d{1,3}\.){3}\d{1,3}:\d+$/)
-    expect(snap.settings.lanUrl).not.toContain('127.0.0.1')
-    expect(snap.settings.lanUrl.endsWith(`:${new URL(app.url).port}`)).toBe(true)
-  })
 })
 
 describe('export', () => {
@@ -358,40 +340,20 @@ describe('export', () => {
 })
 
 describe('past events for /tv?event=<id>', () => {
-  test("the snapshot of a past event, read without a key; an unknown event is 404", async () => {
+  test("the snapshot of a past event, for a Manager; an unknown event is 404", async () => {
     const app = start()
     await postTap(app, aTap('a'))
     const rehearsal = app.house.snapshot().event.id
     const [{ event }] = app.house.apply({ type: 'createEvent', name: 'Halloween 2026' })
     app.house.apply({ type: 'goLive', eventId: event.id })
 
-    const past = await (await fetch(`${app.url}/api/snapshot?event=${rehearsal}`)).json()
+    const headers = { Cookie: await managerCookie(app) }
+    const past = await (await fetch(`${app.url}/api/snapshot?event=${rehearsal}`, { headers })).json()
 
     expect(past.event).toMatchObject({ name: 'Rehearsal', frozen: true })
     expect(past.kids).toHaveLength(1)
     expect(past.recap).not.toBeNull()
-    expect((await fetch(`${app.url}/api/snapshot?event=99999`)).status).toBe(404)
-  })
-})
-
-describe('tailnet auto-join', () => {
-  const join = (app, host) => fetch(`${app.url}/api/join`, { headers: host ? { Host: host } : {} })
-
-  test('hands the join key to a phone that came in on the private tailnet name', async () => {
-    const app = start({ autoJoinHosts: ['count-dracula.example.com'] })
-
-    const res = await join(app, 'count-dracula.example.com')
-
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ joinKey: app.house.joinKey() })
-  })
-
-  test('refuses on any other address: LAN phones join with the QR code', async () => {
-    const app = start({ autoJoinHosts: ['count-dracula.example.com'] })
-
-    expect((await join(app)).status).toBe(403)
-    expect((await join(app, 'evil.example.com')).status).toBe(403)
-    expect((await join(start(), 'count-dracula.example.com')).status).toBe(403) // not configured: never
+    expect((await fetch(`${app.url}/api/snapshot?event=99999`, { headers })).status).toBe(404)
   })
 })
 
@@ -401,7 +363,7 @@ describe('teens', () => {
 
     await postTap(app, { ...aTap('a'), teen: true })
 
-    const snap = await (await fetch(`${app.url}/api/snapshot`)).json()
+    const snap = await (await fetch(`${app.url}/api/snapshot`, { headers: { 'X-Join-Key': app.house.joinKey() } })).json()
     expect(snap.kids[0].teen).toBe(true)
   })
 })

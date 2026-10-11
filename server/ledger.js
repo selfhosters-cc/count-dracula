@@ -117,7 +117,6 @@ export function openLedger(db, config) {
   const switches = { ...DEFAULT_SWITCHES, ...config.switches }
   const now = config.now ?? Date.now
   const random = config.random ?? Math.random
-  const lanUrl = typeof config.lanUrl === 'function' ? config.lanUrl : () => config.lanUrl ?? null
   const soundboard = (config.soundboard ?? []).slice(0, 6).map((s, i) => ({ slot: i + 1, ...s }))
 
   db.exec('PRAGMA journal_mode = WAL')
@@ -754,7 +753,7 @@ export function openLedger(db, config) {
           ghost: ghostOf(event),
           golden: goldenSummary(event),
           recap: recapOf(event),
-          settings: { switches, mix: currentMix(), lanUrl: lanUrl(), soundboard: switches.soundboard ? soundboard : [] },
+          settings: { switches, mix: currentMix(), soundboard: switches.soundboard ? soundboard : [] },
           timeZone: household().time_zone,
           seq,
         }

@@ -139,7 +139,7 @@ describe('snapshot', () => {
       },
       golden: { left: 5, nextIsGolden: false },
       recap: null,
-      settings: { switches: expect.any(Object), mix: expect.any(Object), lanUrl: null, soundboard: [] },
+      settings: { switches: expect.any(Object), mix: expect.any(Object), soundboard: [] },
       timeZone: 'America/Toronto',
       seq: 1,
     })
