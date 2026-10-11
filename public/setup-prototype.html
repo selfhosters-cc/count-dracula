@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE — /setup with several live Events</title>
+  <!--
+    PROTOTYPE, throwaway (events-rework ticket 08). Not linked from anywhere, stub data, no server calls.
+    Three variants of /setup for a Household with several Events, several open, switchable via ?variant=A|B|C,
+    and four scenarios via ?scenario=. Every button changes in-memory state only.
+  -->
+  <style>
+    :root { --bg: #14101c; --panel: #221a2e; --panel2: #2d2340; --text: #f5efe6; --dim: #a99cbc;
+      --orange: #ff7a1a; --danger: #ff5a6e; --ok: #6c6; --blue: #7ab8ff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; padding-bottom: 90px; }
+    .shell { max-width: 720px; margin-inline: auto; padding: 16px; }
+    @media (min-width: 900px) { .shell { max-width: 1120px; display: grid; grid-template-columns: minmax(0, 720px) 320px; gap: 24px; } }
+    h1 { margin: 0 0 12px; font-size: 24px; }
+    h2 { margin: 0 0 10px; font-size: 18px; display: flex; gap: 8px; align-items: center; }
+    h3 { margin: 14px 0 6px; font-size: 15px; }
+    section, .card { background: var(--panel); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+    label { display: block; color: var(--dim); font-size: 13px; margin: 10px 0 4px; }
+    input, select, button { font: inherit; color: inherit; }
+    input, select { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ffffff30; background: var(--bg); }
+    button { border: 0; border-radius: 10px; padding: 10px 14px; background: var(--panel2); font-weight: 700; cursor: pointer; }
+    button.primary { background: var(--orange); color: #1a0d00; }
+    button.danger { color: var(--danger); }
+    button.small { padding: 6px 10px; font-size: 14px; }
+    button:disabled { opacity: .4; cursor: default; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .row > * { flex: 1; min-width: 0; }
+    .row > button, .row > .fit, .row > .pill, .row > b { flex: 0 0 auto; }
+    .row > b { max-width: 100%; }
+    .muted { color: var(--dim); font-size: 13px; }
+    .item { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #ffffff10; flex-wrap: wrap; }
+    .item:last-child { border-bottom: 0; }
+    .item .grow { flex: 1; min-width: 8em; }
+    code { background: var(--bg); padding: 2px 6px; border-radius: 6px; }
+    a.link, .link-button { color: var(--orange); font-weight: 700; }
+    .link-button { background: none; padding: 0; }
+    details > summary { cursor: pointer; color: var(--dim); }
+    [hidden] { display: none !important; }
+    .pill { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 99px; letter-spacing: .02em; white-space: nowrap; }
+    .pill.Live { background: #6c63; color: var(--ok); }
+    .pill.Ended { background: #ff7a1a33; color: var(--orange); }
+    .pill.Upcoming { background: #7ab8ff2a; color: var(--blue); }
+    .pill.Past { background: #ffffff14; color: var(--dim); }
+    .pill.door { background: var(--orange); color: #1a0d00; }
+    .note { background: #ff7a1a1c; border-left: 3px solid var(--orange); border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 14px; }
+    .note .row { margin-top: 6px; }
+    .big { font-size: 34px; font-weight: 800; }
+    .help-q { flex: 0 0 auto; width: 26px; height: 26px; padding: 0; border-radius: 99px; font-size: 14px; background: var(--panel2); color: var(--dim); margin-left: auto; }
+    @media (min-width: 900px) { .help-q { display: none; } }
+    .help-inline { background: var(--bg); border-radius: 10px; padding: 10px; font-size: 14px; color: var(--dim); margin: 0 0 10px; }
+    aside.help { display: none; }
+    @media (min-width: 900px) { aside.help { display: block; position: sticky; top: 16px; align-self: start; background: var(--panel); border-radius: 14px; padding: 14px; color: var(--dim); font-size: 14px; max-height: calc(100vh - 32px); overflow: auto; } }
+    aside.help h2 { color: var(--text); }
+    .door-line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--panel2); border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; font-size: 14px; }
+    .door-line b { color: var(--text); }
+    /* B: tabs and drill-in */
+    .tabs { position: sticky; top: 0; z-index: 3; display: flex; gap: 4px; background: var(--bg); padding: 8px 0; margin-bottom: 8px; }
+    .tabs button { flex: 1; background: var(--panel); }
+    .tabs button[aria-selected="true"] { background: var(--orange); color: #1a0d00; }
+    .night-row { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; background: var(--panel); padding: 12px; border-radius: 12px; margin-bottom: 8px; font-weight: 400; }
+    .night-row .grow { flex: 1; min-width: 0; }
+    .night-row .chev { color: var(--dim); font-size: 20px; }
+    .group-title { color: var(--dim); font-size: 13px; text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 6px; }
+    /* C: chip strip and lifecycle */
+    .chips { position: sticky; top: 0; z-index: 3; display: flex; gap: 6px; overflow-x: auto; background: var(--bg); padding: 8px 0 10px; margin-bottom: 6px; scrollbar-width: thin; }
+    .chip { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; background: var(--panel); border: 2px solid transparent; border-radius: 12px; padding: 8px 12px; font-weight: 700; max-width: 12em; }
+    .chip small { font-weight: 400; color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .chip[aria-pressed="true"] { border-color: var(--orange); }
+    .chip .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .steps { display: flex; gap: 4px; margin: 10px 0; }
+    .steps span { flex: 1; text-align: center; font-size: 12px; padding: 6px 2px; border-radius: 8px; background: var(--bg); color: var(--dim); }
+    .steps span.on { background: var(--orange); color: #1a0d00; font-weight: 800; }
+    .steps span.was { color: var(--text); }
+    /* prototype chrome */
+    #proto-bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 50; display: flex; gap: 6px; align-items: center;
+      background: #fff; color: #111; border-radius: 99px; padding: 6px 8px; box-shadow: 0 6px 24px #0009; font-size: 13px; max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center; }
+    #proto-bar button { background: #111; color: #fff; padding: 6px 10px; border-radius: 99px; }
+    #proto-bar select { width: auto; max-width: 9.5em; background: #eee; color: #111; padding: 4px 6px; border: 0; }
+    #proto-bar .lbl { font-weight: 800; padding: 0 4px; white-space: nowrap; }
+    #proto-bar { flex-wrap: nowrap; }
+    @media (max-width: 600px) { #proto-bar .long { display: none; } }
+    #toast { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 60; background: var(--ok); color: #071; padding: 8px 14px; border-radius: 10px; font-weight: 700; }
+    #toast.err { background: var(--danger); color: #300; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <main id="app"></main>
+    <aside class="help" id="help-col"></aside>
+  </div>
+  <div id="toast" hidden></div>
+  <div id="proto-bar">
+    <button id="prev" aria-label="Previous variant">←</button>
+    <span class="lbl" id="vlabel"></span>
+    <button id="next" aria-label="Next variant">→</button>
+    <select id="scenario" aria-label="Scenario"></select>
+  </div>
+
+<script>
+// ───────────────────────── stub data ─────────────────────────
+const SCENARIOS = {
+  halloween: { label: 'Halloween 7:10 pm, a test night still Live', now: 'Oct 31, 7:10 pm', events: [
+    { id: 1, name: 'Halloween 2026', state: 'Live', wentLive: 1600, wentLiveText: 'Oct 31, 4:00 pm', kids: 132, race: 'est', expected: 150, golden: 5, goldenWon: 2, goes: 'Oct 31, 4:00 pm' },
+    { id: 2, name: 'Afternoon test', state: 'Live', wentLive: 1405, wentLiveText: 'Oct 31, 2:05 pm', kids: 4, race: 'est', expected: 0, golden: 0, goldenWon: 0 },
+    { id: 3, name: 'Practice night', state: 'Past', wentLive: 1015, wentLiveText: 'Oct 15, 6:00 pm', kids: 9, race: 'est', expected: 10, golden: 2, goldenWon: 1, sharing: true },
+    { id: 4, name: 'Halloween 2025 (counts)', state: 'Past', imported: true, kids: 141 },
+  ] },
+  morning: { label: 'Oct 31, 10 am: test auto-ended, Halloween scheduled', now: 'Oct 31, 10:00 am', events: [
+    { id: 1, name: 'Halloween 2026', state: 'Upcoming', kids: 0, race: 'est', expected: 150, golden: 5, goes: 'Oct 31, 4:00 pm' },
+    { id: 2, name: 'Dress rehearsal', state: 'Ended', wentLive: 1030, wentLiveText: 'Oct 30, 6:00 pm', kids: 11, race: 'est', expected: 10, golden: 2, goldenWon: 1,
+      notes: [{ kind: 'auto', text: 'Ended automatically at 3:00 am. Late kids still count until noon.' }] },
+    { id: 4, name: 'Halloween 2025 (counts)', state: 'Past', imported: true, kids: 141 },
+  ] },
+  nothing: { label: 'Oct 20: nothing open', now: 'Oct 20, 8:00 pm', events: [
+    { id: 1, name: 'Halloween 2026', state: 'Upcoming', kids: 0, race: 'est', expected: 150, golden: 5, goes: 'Oct 31, 4:00 pm' },
+    { id: 5, name: 'Street party', state: 'Upcoming', kids: 0, race: 'none', expected: 40, golden: 3 },
+    { id: 3, name: 'Practice night', state: 'Past', wentLive: 1015, wentLiveText: 'Oct 15, 6:00 pm', kids: 9, race: 'est', expected: 10, golden: 2, goldenWon: 1 },
+  ] },
+  cap: { label: 'Oct 31, 4:01 pm: at the 3-open cap, Halloween waiting', now: 'Oct 31, 4:01 pm', events: [
+    { id: 1, name: 'Halloween 2026', state: 'Upcoming', kids: 0, race: 'est', expected: 150, golden: 5, goes: 'Oct 31, 4:00 pm',
+      notes: [{ kind: 'wait', text: "Couldn't go live at 4:00 pm: 3 nights are open. It'll go live as soon as you end or close one." }] },
+    { id: 2, name: 'Afternoon test', state: 'Live', wentLive: 1405, wentLiveText: 'Oct 31, 2:05 pm', kids: 4, race: 'est', golden: 0, goldenWon: 0 },
+    { id: 6, name: 'Kids testing the TV', state: 'Live', wentLive: 1500, wentLiveText: 'Oct 31, 3:00 pm', kids: 37, race: 'none', golden: 0, goldenWon: 0 },
+    { id: 7, name: 'Sound check', state: 'Live', wentLive: 1530, wentLiveText: 'Oct 31, 3:30 pm', kids: 2, race: 'none', golden: 0, goldenWon: 0 },
+  ] },
+}
+const HOUSE = { name: 'The Harker House', key: 'b7f2-91kq', tv: 'https://count-dracula.example.com/tv?key=Qm3x…9Za', zone: 'America/Toronto', estimate: 120,
+  managers: ['mina@example.com (you)', 'jonathan@example.com'], location: 'Area around Exampletown' }
+const TAGS = ['🧛 Vampire', '🎃 Pumpkin', '🦸 Superhero', '👻 Ghost', '🧙 Witch']
+
+const HELP = {
+  door: ['Door & TV', 'Your TV and every helper\'s phone show one night: the open night that went live most recently. Nobody picks it. When Halloween goes live, everything moves onto it by itself.'],
+  nights: ['Your nights', 'A night is Upcoming until it goes live, Live while you count, Ended when you press End the night (or at 3 am), and Past at noon the next day. Up to 3 can be open at once. Reset puts a Live or Ended night back to Upcoming, as if it never happened.'],
+  helpers: ['Helpers and the join key', 'One link for the whole household: it works on every night, test nights and the real one. Change join key cuts off every phone that has it.'],
+  tv: ['Your TV', 'The TV link always shows the night the door is on. Pair a TV with the code on its screen, or send the link to family far away. Rotate TV link cuts every screen off.'],
+  estimate: ['Last year (estimated)', 'No count from last year? Guess. Every night that races nothing races the estimate, so the TV shows a ghost to beat.'],
+  settings: ['Night settings', 'Race against picks the ghost. Expected kids shapes the pace line and, with no ghost, where golden tickets land. Goes live at starts the night by itself.'],
+  costumes: ['Costumes', 'These are the buttons on the door phones for this night. Copy them from another night when you make one.'],
+  missed: ['Add missed kids', 'Type a count per 15-minute row. They\'re added as untagged kids and never celebrate. This is also how you count into a night the door isn\'t on.'],
+  summary: ['Night summary', 'Every ended night has a summary. Share it with one link; hide your household name if you like. Turning sharing off kills the link.'],
+  past: ['Past nights', 'Read-only. Race against any of them next year.'],
+  location: ['Location', 'Optional. Puts you in an Area so the TV can say how many kids nearby houses have seen.'],
+  managers: ['Managers', 'Everyone here runs the household equally.'],
+  account: ['Your account', 'Signing out doesn\'t stop the door phones or the TV.'],
+}
+
+// ───────────────────────── state ─────────────────────────
+const params = new URLSearchParams(location.search)
+const VARIANTS = { A: 'One page, a card per night', B: 'Tabs: Tonight · Nights · Household', C: 'Night switcher at the top' }
+const VKEYS = Object.keys(VARIANTS)
+let variant = VKEYS.includes(params.get('variant')) ? params.get('variant') : 'A'
+let scenarioKey = SCENARIOS[params.get('scenario')] ? params.get('scenario') : 'halloween'
+let events, ui
+function loadScenario() {
+  events = structuredClone(SCENARIOS[scenarioKey].events)
+  for (const e of events) { e.notes ??= []; e.sharing ??= false; e.goldenWon ??= 0 }
+  ui = { tab: 'tonight', open: null, selected: null, help: {}, helper: false }
+}
+loadScenario()
+
+const open = e => e.state === 'Live' || e.state === 'Ended'
+const openEvents = () => events.filter(open)
+const doorEvent = () => openEvents().sort((a, b) => b.wentLive - a.wentLive)[0] ?? null
+const nextUpcoming = () => events.find(e => e.state === 'Upcoming' && e.goes)
+const byState = s => events.filter(e => e.state === s)
+const ev = id => events.find(e => e.id === +id)
+let clock = 1900 // stub "now" for go-live stamps
+
+function toast(msg, err) { const t = document.getElementById('toast'); t.textContent = msg; t.className = err ? 'err' : ''; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2600) }
+
+// ───────────────────────── actions (in memory) ─────────────────────────
+const ACT = {
+  golive(id) { const e = ev(id); if (openEvents().length >= 3) return toast('End or close one of your live nights first', true)
+    e.state = 'Live'; e.wentLive = ++clock; e.wentLiveText = 'just now'; e.notes = []; toast(`${e.name} is live`) },
+  end(id) { const e = ev(id); e.state = 'Ended'; e.notes = e.notes.filter(n => n.kind !== 'auto'); toast(`${e.name} ended`) },
+  resume(id) { const e = ev(id); e.state = 'Live'; e.notes = e.notes.filter(n => n.kind !== 'auto'); toast(`${e.name} is live again`) },
+  close(id) { const e = ev(id); e.state = 'Past'; e.notes = []; toast(`${e.name} closed`)
+    const w = events.find(x => x.notes.some(n => n.kind === 'wait')); if (w && openEvents().length < 3) { w.notes = []; ACT.golive(w.id) } },
+  reset(id) { const e = ev(id); if (!confirm(`Reset ${e.name}? Its ${e.kids} kids are deleted and it goes back to Upcoming.`)) return
+    e.state = 'Upcoming'; e.kids = 0; e.goldenWon = 0; e.wentLive = 0; e.notes = []; e.sharing = false; toast(`${e.name} is Upcoming again`) },
+  del(id) { const e = ev(id); if (e.state === 'Live') return toast('End the night first', true)
+    if (!confirm(`Delete ${e.name}?`)) return; events = events.filter(x => x !== e); if (ui.open === e.id) ui.open = null; if (ui.selected === e.id) ui.selected = null; toast('Deleted') },
+  share(id) { const e = ev(id); e.sharing = !e.sharing },
+  ticket(id) { ev(id).golden++; toast('A golden ticket is hidden') },
+  missed(id) { ev(id).kids += 3; toast('3 missed kids added') },
+  create() { const id = Math.max(...events.map(e => e.id)) + 1; events.push({ id, name: 'New night', state: 'Upcoming', kids: 0, race: 'est', expected: 0, golden: 5, notes: [], goldenWon: 0 }); toast('Made “New night”'); return id },
+  helper() { ui.helper = !ui.helper },
+  stub(what) { toast(`(prototype) ${what}`) },
+}
+
+// ───────────────────────── shared bits ─────────────────────────
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const pill = e => `<span class="pill ${e.state}">${e.state}</span>`
+const doorPill = e => e === doorEvent() ? '<span class="pill door">On the door & TV</span>' : ''
+const btn = (label, act, id, cls = '') => `<button class="${cls}" data-act="${act}" data-id="${id ?? ''}">${label}</button>`
+const H = (key, title, tag = 'h2') => `<${tag} data-help="${key}">${title}<button class="help-q" data-q="${key}" aria-label="Help">?</button></${tag}>${ui.help[key] ? `<p class="help-inline">${HELP[key][1]}</p>` : ''}`
+const sec = (key, title, body, attrs = '') => `<section data-help="${key}" ${attrs}>${H(key, title)}${body}</section>`
+
+function raceName(e) { return e.race === 'est' ? `Last year (estimated, ${HOUSE.estimate})` : e.race === 'none' ? 'None' : e.race }
+function whenLine(e) {
+  if (e.imported) return `${e.kids} kids · imported counts`
+  if (e.state === 'Upcoming') return e.goes ? `Goes live by itself ${e.goes}` : 'Goes live when you press Go live'
+  if (e.state === 'Live') return `${e.kids} kids · live since ${e.wentLiveText}`
+  if (e.state === 'Ended') return `${e.kids} kids · ended, late kids count until noon`
+  return `${e.kids} kids · ${e.wentLiveText ?? ''}`
+}
+function notesHtml(e) {
+  return e.notes.map(n => `<div class="note">${esc(n.text)}${n.kind === 'auto' ? `<div class="row">${btn('Resume', 'resume', e.id, 'small fit')}${btn('Close now', 'close', e.id, 'small fit')}<a class="link fit" href="#">✨ Summary</a></div>` : ''}</div>`).join('')
+}
+// The lifecycle buttons that make sense for this state, primary first.
+function lifecycle(e, small = true) {
+  const s = small ? 'small fit' : 'fit'
+  if (e.imported) return btn('Delete', 'del', e.id, `danger ${s}`)
+  if (e.state === 'Upcoming') return btn('▶ Go live', 'golive', e.id, `primary ${s}`) + btn('Delete', 'del', e.id, `danger ${s}`)
+  if (e.state === 'Live') return btn('■ End the night', 'end', e.id, `primary ${s}`) + btn('↺ Reset', 'reset', e.id, `danger ${s}`)
+  if (e.state === 'Ended') return btn('▶ Resume', 'resume', e.id, s) + btn('Close now', 'close', e.id, s) + btn('↺ Reset', 'reset', e.id, `danger ${s}`) + btn('Delete', 'del', e.id, `danger ${s}`)
+  return btn('Delete', 'del', e.id, `danger ${s}`)
+}
+// Night tools for one Event: the ones that make sense in its state.
+function tools(e) {
+  if (e.imported) return ''
+  const t = []
+  if (e.state === 'Live') t.push(btn('🎫 Add a golden ticket', 'ticket', e.id, 'small fit'))
+  if (open(e)) t.push(btn('➕ Add missed kids', 'missed', e.id, 'small fit'))
+  if (e.state !== 'Upcoming') t.push(btn('⬇ CSV', 'stub', 'CSV export', 'small fit'), `<a class="link fit" href="#">🖨 Tally sheet</a>`)
+  if (e.state === 'Ended' || e.state === 'Past') t.push(`<a class="link fit" href="#">✨ Night summary</a>`, `<label class="fit" style="display:flex;gap:6px;align-items:center;margin:0;color:var(--text)"><input type="checkbox" style="width:auto" data-act="share" data-id="${e.id}" ${e.sharing ? 'checked' : ''}> Sharing on</label>`)
+  return `<div class="row" style="margin-top:8px">${t.join('')}</div>`
+}
+function settingsForm(e) {
+  if (e.imported) return '<p class="muted">Imported counts can only be raced against or deleted.</p>'
+  return `<label>Name</label><input value="${esc(e.name)}">
+    <label>Race against</label><select><option>${raceName(e)}</option><option>None</option><option>Practice night</option><option>Halloween 2025 (counts)</option></select>
+    <div class="row"><div><label>Expected kids</label><input type="number" value="${e.expected ?? 0}"></div><div><label>Visit window (s)</label><input type="number" value="20"></div></div>
+    <details style="margin-top:10px"><summary>Advanced</summary><label>Clock shift (hours)</label><input type="number" value="0"><label>Golden tickets (drawn at Go live)</label><input type="number" value="${e.golden ?? 0}"></details>
+    ${e.state === 'Upcoming' ? `<label>Goes live by itself at (America/Toronto; empty: only when you press Go live)</label><input value="${e.goes ?? ''}" placeholder="—">` : ''}
+    <p>${btn('Save settings', 'stub', 'Saved', 'primary')}</p>`
+}
+const costumes = e => e.imported ? '' : `<div>${TAGS.map(t => `<div class="item"><span class="grow">${t}</span><span class="muted">${e.state === 'Upcoming' ? 0 : Math.floor(e.kids / 5)}</span></div>`).join('')}</div><div class="row" style="margin-top:6px"><input placeholder="New costume name"><button class="fit">Add</button></div>`
+
+function doorLine() {
+  const d = doorEvent(), n = nextUpcoming()
+  return d ? `<span>📺📱 Door & TV are on <b>${esc(d.name)}</b></span>${pill(d)}<span class="muted">${d.kids} kids</span>`
+    : `<span>📺📱 <b>No night on right now</b></span><span class="muted">${n ? `${esc(n.name)} goes live ${n.goes}` : 'Nothing scheduled'}</span>`
+}
+function helperBox() {
+  return `<div class="row">${btn('📱 Count on this device', 'stub', 'Opens /door', 'primary')}${btn('➕ Add a helper', 'helper')}</div>
+    ${ui.helper ? `<div style="margin-top:10px"><div style="background:#fff;color:#111;border-radius:12px;padding:30px;width:200px;text-align:center">[QR /door?key=…]</div><p class="muted">A helper scans this to count at The Harker House, on whichever night is on.</p>${btn('Share join link', 'stub', 'Share sheet', 'primary')}</div>` : ''}`
+}
+const joinKey = () => `<p class="muted">Join key <code>${HOUSE.key}</code> · works on every night</p>
+  <p>${btn('📱 Count on this device', 'stub', 'Opens /door', 'primary')} ${btn('➕ Add a helper', 'helper')}</p>
+  ${ui.helper ? `<div style="background:#fff;color:#111;border-radius:12px;padding:30px;width:200px;text-align:center;margin-bottom:8px">[QR /door?key=…]</div>` : ''}
+  <p>${btn('Change join key', 'stub', 'Join key changed', 'danger small')}</p>`
+const tvBox = () => `<label>Pair a TV: the code on its screen</label><div class="row"><input placeholder="K7Q-M4X"><button class="primary">Pair a TV</button></div>
+  <p class="muted">Anyone with this link watches whichever night the door is on.</p><p><code style="word-break:break-all;display:block">${HOUSE.tv}</code></p>
+  <div class="row"><button>Share</button><button>Copy</button><button>Show QR</button></div>
+  <div class="row" style="margin-top:8px"><button>Use this screen as the TV</button><button class="danger">Rotate TV link</button></div>`
+const estimateBox = () => `<label>About how many kids came last year?</label><div class="row"><input type="number" value="${HOUSE.estimate}"><button>Save</button><button class="danger">Clear</button></div>
+  <p class="muted">Every night racing None races this instead.</p>`
+const createBox = () => `<input placeholder="Night name, e.g. Halloween 2026"><div class="row" style="margin-top:6px"><select><option>Copy costumes from Halloween 2026</option></select>${btn('Make it', 'create', '', 'primary')}</div>`
+const householdTail = () =>
+  sec('location', '📍 Location (optional)', `<p class="muted">${HOUSE.location}</p><button class="small">Change</button>`) +
+  sec('managers', '👥 Managers', HOUSE.managers.map(m => `<div class="item">${m}</div>`).join('') + `<p><button class="primary">➕ Invite a Manager</button></p><p><button class="danger">Leave this household</button></p>`) +
+  sec('account', 'Your account', `<p class="muted">Signed in as mina@example.com · time zone ${HOUSE.zone}</p><div class="row"><button class="fit">Sign out</button><button class="danger fit">Delete my household…</button></div>`)
+
+// ───────────────────────── Variant A: one page, a card per night ─────────────────────────
+function variantA() {
+  const order = ['Live', 'Ended', 'Upcoming']
+  const active = events.filter(e => e.state !== 'Past').sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state) || (b.wentLive ?? 0) - (a.wentLive ?? 0))
+  const card = e => `<div class="card" style="background:var(--panel2)">
+      <div class="row"><b style="font-size:17px">${esc(e.name)}</b>${pill(e)}${doorPill(e)}</div>
+      <p class="muted" style="margin:6px 0">${whenLine(e)}</p>${notesHtml(e)}
+      <div class="row">${lifecycle(e)}</div>${tools(e)}
+      <details style="margin-top:10px" ${ui.open === e.id ? 'open' : ''} data-open="${e.id}"><summary>Settings and costumes</summary>${settingsForm(e)}<h3>Costumes</h3>${costumes(e)}</details>
+    </div>`
+  return `<h1>🧛 ${HOUSE.name}</h1>
+    <div class="door-line" data-help="door">${doorLine()}</div>
+    ${sec('nights', '🌙 Your nights', `${active.map(card).join('') || '<p class="muted">No nights yet.</p>'}<h3>Make a night</h3>${createBox()}`)}
+    ${sec('helpers', '📱 Helpers', joinKey())}
+    ${sec('tv', '📺 Your TV', tvBox())}
+    ${sec('estimate', '👻 Last year (estimated)', estimateBox())}
+    ${sec('past', 'Past nights', byState('Past').map(e => `<details class="item" style="display:block"><summary><b style="color:var(--text)">${esc(e.name)}</b> <span class="muted">${whenLine(e)}</span></summary>${tools(e)}<div class="row" style="margin-top:8px">${lifecycle(e)}</div></details>`).join('') || '<p class="muted">None yet.</p>')}
+    ${householdTail()}`
+}
+
+// ───────────────────────── Variant B: tabs + drill-in ─────────────────────────
+function variantB() {
+  const tab = (k, l) => `<button role="tab" aria-selected="${ui.tab === k}" data-act="tab" data-id="${k}">${l}</button>`
+  let body
+  if (ui.open && ev(ui.open)) {
+    const e = ev(ui.open)
+    body = `<p><button class="link-button" data-act="back">‹ All nights</button></p>
+      <h1 style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${esc(e.name)} ${pill(e)} ${doorPill(e)}</h1>
+      <p class="muted">${whenLine(e)}</p>${notesHtml(e)}
+      <div class="row" style="margin-bottom:14px">${lifecycle(e, false)}</div>
+      ${e.imported ? '' : sec('missed', 'Night tools', tools(e))}
+      ${sec('settings', 'Settings', settingsForm(e))}
+      ${e.imported ? '' : sec('costumes', 'Costumes', costumes(e))}`
+  } else if (ui.tab === 'tonight') {
+    const d = doorEvent(), n = nextUpcoming(), others = openEvents().filter(e => e !== d)
+    body = (d ? `<section data-help="door"><div class="row"><span class="muted">On the door & TV</span>${pill(d)}<button class="help-q" data-q="door">?</button></div>
+        ${ui.help.door ? `<p class="help-inline">${HELP.door[1]}</p>` : ''}
+        <div class="big">${d.kids} <span style="font-size:18px">kids</span></div><b>${esc(d.name)}</b><p class="muted">${whenLine(d)}${d.golden ? ` · golden tickets ${d.goldenWon}/${d.golden} won` : ''}</p>${notesHtml(d)}
+        <div class="row">${lifecycle(d, false)}</div>${tools(d)}
+        <p><button class="link-button" data-act="drill" data-id="${d.id}">Settings and costumes ›</button></p></section>`
+      : `<section data-help="door">${H('door', 'No night on right now')}<p class="muted">${n ? `${esc(n.name)} goes live by itself ${n.goes}. The TV and door phones show a countdown.` : 'Nothing is scheduled.'}</p>
+        ${n ? `<div class="row">${btn(`▶ Go live on ${esc(n.name)} now`, 'golive', n.id, 'primary fit')}</div>` : ''}</section>`)
+      + (others.length ? sec('nights', 'Also open', others.map(e => `<div class="item"><span class="grow"><b>${esc(e.name)}</b> ${pill(e)}<br><span class="muted">${whenLine(e)}</span></span>${lifecycle(e)}<button class="small fit" data-act="drill" data-id="${e.id}">›</button></div>${notesHtml(e)}`).join('')) : '')
+      + events.filter(e => e.notes.some(n => n.kind === 'wait')).map(e => `<section>${notesHtml(e)}<button class="link-button" data-act="drill" data-id="${e.id}">${esc(e.name)} ›</button></section>`).join('')
+      + sec('helpers', '📱 Helpers', helperBox())
+  } else if (ui.tab === 'nights') {
+    const row = e => `<button class="night-row" data-act="drill" data-id="${e.id}"><span class="grow"><b>${esc(e.name)}</b> ${pill(e)} ${doorPill(e)}<br><span class="muted">${whenLine(e)}</span>${e.notes.length ? `<br><span style="color:var(--orange);font-size:13px">● ${esc(e.notes[0].text.split('.')[0])}</span>` : ''}</span><span class="chev">›</span></button>`
+    const grp = (t, list) => list.length ? `<div class="group-title">${t}</div>${list.map(row).join('')}` : ''
+    body = `<div data-help="nights">${H('nights', '🌙 Your nights')}</div>
+      ${grp(`Open (${openEvents().length} of 3)`, openEvents().sort((a, b) => b.wentLive - a.wentLive))}${grp('Coming up', byState('Upcoming'))}${grp('Past', byState('Past'))}
+      ${sec('nights', 'Make a night', createBox())}`
+  } else {
+    body = `${sec('helpers', '📱 Helpers and the join key', joinKey())}${sec('tv', '📺 Your TV', tvBox())}${sec('estimate', '👻 Last year (estimated)', estimateBox())}
+      <section><label>Household name (this appears on anything you share)</label><div class="row"><input value="${HOUSE.name}"><button>Save</button></div></section>${householdTail()}`
+  }
+  return `<h1>🧛 ${HOUSE.name}</h1><div class="tabs" role="tablist">${tab('tonight', 'Tonight')}${tab('nights', `Nights${openEvents().length > 1 ? ` (${openEvents().length} open)` : ''}`)}${tab('house', 'Household')}</div>${body}`
+}
+
+// ───────────────────────── Variant C: night switcher at the top ─────────────────────────
+function variantC() {
+  const order = ['Live', 'Ended', 'Upcoming', 'Past']
+  const list = [...events].sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state) || (b.wentLive ?? 0) - (a.wentLive ?? 0))
+  if (ui.selected !== 'house' && !ev(ui.selected)) ui.selected = (doorEvent() ?? list[0])?.id ?? 'house'
+  const chip = e => `<button class="chip" aria-pressed="${ui.selected === e.id}" data-act="select" data-id="${e.id}"><span class="nm">${e === doorEvent() ? '📺 ' : ''}${esc(e.name)}</span><small>${e.state}${e.state === 'Live' || e.state === 'Ended' ? ` · ${e.kids} kids` : e.goes ? ` · ${e.goes}` : ''}${e.notes.length ? ' · ●' : ''}</small></button>`
+  const chips = `<div class="chips">${list.map(chip).join('')}<button class="chip" data-act="newC"><span class="nm">＋ New night</span><small>&nbsp;</small></button><button class="chip" aria-pressed="${ui.selected === 'house'}" data-act="select" data-id="house"><span class="nm">🏠 Household</span><small>helpers, TV, Managers</small></button></div>`
+  let body
+  if (ui.selected === 'house') {
+    body = `${sec('helpers', '📱 Helpers and the join key', joinKey())}${sec('tv', '📺 Your TV', tvBox())}${sec('estimate', '👻 Last year (estimated)', estimateBox())}${householdTail()}`
+  } else {
+    const e = ev(ui.selected), st = ['Upcoming', 'Live', 'Ended', 'Past'], at = st.indexOf(e.state)
+    body = `<section data-help="nights">
+        <div class="row"><h2 style="margin:0">${esc(e.name)}</h2>${doorPill(e)}<button class="help-q" data-q="nights">?</button></div>
+        ${ui.help.nights ? `<p class="help-inline">${HELP.nights[1]}</p>` : ''}
+        ${e.imported ? '' : `<div class="steps">${st.map((s, i) => `<span class="${i === at ? 'on' : i < at ? 'was' : ''}">${s}</span>`).join('')}</div>`}
+        <p class="muted">${whenLine(e)}</p>${notesHtml(e)}<div class="row">${lifecycle(e, false)}</div>
+        ${e !== doorEvent() && open(e) ? `<p class="muted">The door & TV are on ${esc(doorEvent().name)}. Kids for this night go in with Add missed kids.</p>` : ''}
+      </section>
+      ${e.imported ? '' : sec('missed', 'Night tools', tools(e))}
+      ${sec('settings', 'Settings', settingsForm(e))}
+      ${e.imported ? '' : sec('costumes', 'Costumes', costumes(e))}`
+  }
+  return `<h1>🧛 ${HOUSE.name}</h1><div class="door-line" data-help="door">${doorLine()}<span style="flex:1"></span>${btn('📱 Count here', 'stub', 'Opens /door', 'small primary fit')}</div>${chips}${body}`
+}
+
+// ───────────────────────── render, help column, switcher ─────────────────────────
+function render() {
+  document.getElementById('app').innerHTML = ({ A: variantA, B: variantB, C: variantC })[variant]()
+  document.getElementById('vlabel').innerHTML = `${variant}<span class="long"> — ${VARIANTS[variant]}</span>`
+  const u = new URL(location); u.searchParams.set('variant', variant); u.searchParams.set('scenario', scenarioKey); history.replaceState(null, '', u)
+  watchHelp()
+}
+let helpObs
+function watchHelp() {
+  helpObs?.disconnect()
+  const col = document.getElementById('help-col')
+  const show = k => { const [t, b] = HELP[k] ?? HELP.nights; col.innerHTML = `<h2>❔ ${t}</h2><p>${b}</p><p class="muted">Follows the section in view. On phones: the ? by each heading. <a class="link" href="#">TV help</a></p>` }
+  helpObs = new IntersectionObserver(es => { const v = es.filter(x => x.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]; if (v) show(v.target.dataset.help) }, { rootMargin: '-10% 0px -60% 0px' })
+  document.querySelectorAll('#app [data-help]').forEach(el => helpObs.observe(el))
+  show(document.querySelector('#app [data-help]')?.dataset.help)
+}
+
+document.addEventListener('click', ev_ => {
+  const q = ev_.target.closest('[data-q]'); if (q) { ui.help[q.dataset.q] = !ui.help[q.dataset.q]; return render() }
+  const b = ev_.target.closest('[data-act]'); if (!b) return
+  const { act, id } = b.dataset
+  if (ev_.target.closest('a')) ev_.preventDefault()
+  if (act === 'tab') { ui.tab = id; ui.open = null } else if (act === 'drill') ui.open = +id
+  else if (act === 'back') ui.open = null
+  else if (act === 'select') ui.selected = id === 'house' ? 'house' : +id
+  else if (act === 'newC') ui.selected = ACT.create()
+  else if (act === 'create') { const nid = ACT.create(); if (variant === 'B') ui.open = nid; if (variant === 'A') ui.open = nid }
+  else if (act === 'stub') ACT.stub(id)
+  else ACT[act](id)
+  render()
+})
+document.addEventListener('toggle', e => { if (e.target.dataset?.open) ui.open = e.target.open ? +e.target.dataset.open : (ui.open === +e.target.dataset.open ? null : ui.open) }, true)
+document.querySelectorAll('a[href="#"]').forEach(a => a.addEventListener('click', e => e.preventDefault()))
+document.addEventListener('click', e => { if (e.target.closest('a[href="#"]')) e.preventDefault() })
+
+const cycle = d => { variant = VKEYS[(VKEYS.indexOf(variant) + d + VKEYS.length) % VKEYS.length]; ui.open = null; render(); scrollTo(0, 0) }
+document.getElementById('prev').onclick = () => cycle(-1)
+document.getElementById('next').onclick = () => cycle(1)
+addEventListener('keydown', e => { if (e.target.closest('input, textarea, select, [contenteditable]')) return; if (e.key === 'ArrowLeft') cycle(-1); if (e.key === 'ArrowRight') cycle(1) })
+const sel = document.getElementById('scenario')
+sel.innerHTML = Object.entries(SCENARIOS).map(([k, s]) => `<option value="${k}" ${k === scenarioKey ? 'selected' : ''}>${s.now}</option>`).join('')
+sel.title = SCENARIOS[scenarioKey].label
+sel.onchange = () => { scenarioKey = sel.value; sel.title = SCENARIOS[scenarioKey].label; loadScenario(); render() }
+render()
+</script>
+</body>
+</html>
