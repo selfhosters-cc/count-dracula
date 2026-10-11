@@ -61,11 +61,11 @@ The fixed region (the Location's 4-character geohash parent, about 20 × 25 km) 
 _Avoid_: Neighbourhood, radius, zone (that's the Household's time zone), nearby (that's the feature)
 
 **Active Household**:
-For nearby figures, a Household whose live, non-Rehearsal Event has counted at least one kid in the last 30 minutes. Only Active Households count toward an Area's minimum of 5 and its totals.
+For nearby figures, a Household whose open Event that went live most recently (the one its TV and door show) has counted at least one kid in the last 30 minutes. A Household is one house however many Events it has open, and its other open Events add nothing. Only Active Households count toward an Area's minimum of 5 and its totals.
 _Avoid_: Live household, online household
 
 **Site-wide total**:
-The kids counted right now across every Household with a live, non-Rehearsal Event, and how many such Households there are, with the top costume counted in at least 3 of them. Rounded to 5s, refreshed every 10 minutes, and hidden below 5 Households. It shows on the door phone when there are no nearby figures, and on the public sign-up page.
+How many Households have a Live or Ended Event right now, and the kids counted in each one's open Event that went live most recently, with the top costume counted in at least 3 of them. Rounded to 5s, refreshed every 10 minutes, and hidden below 5 Households. It shows on the door phone when there are no nearby figures, and on the public sign-up page.
 _Avoid_: Global count, total tonight (there's no single "tonight" across time zones)
 
 **Estimated past event**:
