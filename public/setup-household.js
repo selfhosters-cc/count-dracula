@@ -1,6 +1,6 @@
 // /setup's Household tab (spec v2.1 §9): helpers and the join key, Your TV, Last year (estimated), the name,
 // Location, Managers and the account. Its sections are static in setup.html; this wires them and fills them in.
-// core: { house(), admin(command, done), say(text, isError), share(url, title), load(), helperBox(place),
+// core: { house(), events(), admin(command, done), say(text, isError), share(url, title), load(), helperBox(place),
 //   zoneDay(ms), setHouse(house) }
 import qrcode from '/vendor/qrcode/qrcode.js'
 import { createLocationPicker } from '/location-picker.js'
@@ -79,7 +79,10 @@ export function wireHousehold(core) {
   })
   $('delete-household').addEventListener('click', async () => {
     const name = house().displayName
-    const typed = prompt(`Delete "${name}" and everything in it, for good? Type its name to confirm.`)
+    const nights = core.events().filter((e) => !e.estimated)
+    const kids = nights.reduce((sum, e) => sum + (e.counted ?? 0), 0)
+    const typed = prompt(`Delete "${name}" for good: ${nights.length} night${nights.length === 1 ? '' : 's'} and ${kids} kid${kids === 1 ? '' : 's'} counted, `
+      + `signed in as ${house().manager.email}? It can't be undone. Type the household's name to confirm.`)
     if (typed == null) return
     if (typed !== name) return say("That didn't match, so nothing was deleted", true)
     const res = await fetch('/api/household/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: typed }) })

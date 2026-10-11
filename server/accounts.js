@@ -36,7 +36,7 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
       return google.authUrl({ state, nonce, redirectUri })
     },
 
-    // Google's callback. Returns { token, householdId, created } or { refused } with one of
+    // Google's callback. Returns { token, householdId, created, already } or { refused } with one of
     // 'state' | 'unverified' | 'noHousehold' | 'paused' | 'alreadyManager' | 'invite' (with `why`). A state works once.
     async finishSignIn({ code, state, redirectUri, ip }) {
       const started = pending.get(state)
@@ -52,7 +52,9 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
         // One Household per Manager: an invite to another one is refused, and left unused.
         if (invited && invited.householdId !== known.household_id) return { refused: 'alreadyManager' }
         db.query('UPDATE managers SET email = ?, name = ?, last_sign_in_at = ? WHERE id = ?').run(identity.email, identity.name ?? null, now(), known.id)
-        return { token: startSession(known.id), householdId: known.household_id, created: false }
+        // Start counting (a name was typed) with an account that already runs a Household: signed in to that one,
+        // and told so, never a second Household.
+        return { token: startSession(known.id), householdId: known.household_id, created: false, already: started.displayName != null }
       }
       if (invited) {
         if (invited.status !== 'ok') return { refused: 'invite', why: invited.status }

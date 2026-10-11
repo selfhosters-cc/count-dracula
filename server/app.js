@@ -324,7 +324,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
         return page('Sign-in didn\'t work', '<p>Google sign-in didn\'t work. <a href="/#start">Try again</a>.</p>', 502)
       }
       if (result.refused) return REFUSALS[result.refused](result)
-      return redirect('/setup', { 'Set-Cookie': sessionCookie(result.token) })
+      return redirect(result.already ? '/setup?already=1' : '/setup', { 'Set-Cookie': sessionCookie(result.token) })
     },
     'POST /auth/signout': (req) => {
       accounts.signOut(tokenOf(req))

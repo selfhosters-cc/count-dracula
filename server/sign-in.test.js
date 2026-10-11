@@ -72,6 +72,19 @@ describe('signing up', () => {
     expect(events.filter((e) => e.live)).toMatchObject([{ name: 'Test night', state: 'live' }])
   })
 
+  test('Start counting with an account that already runs a Household lands in it, told so, and makes nothing', async () => {
+    const server = start({ fresh: true })
+    const first = await signIn(server, ALICE, { displayName: 'The Smiths' })
+    expect(first.headers.get('Location')).toBe('/setup')
+
+    const again = await signIn(server, ALICE, { displayName: 'A test house' })
+    const plain = await signIn(server, ALICE)
+
+    expect(again.headers.get('Location')).toBe('/setup?already=1')
+    expect(plain.headers.get('Location')).toBe('/setup') // Sign in, not Start counting: nothing to tell
+    expect(server.db().query('SELECT display_name FROM households').all()).toEqual([{ display_name: 'The Smiths' }])
+  })
+
   test('the same account signing in again reaches the same Household and never makes a second', async () => {
     const server = start()
     const first = await household(server.app, cookieOf(await signIn(server, ALICE, { displayName: 'The Smiths' })))
