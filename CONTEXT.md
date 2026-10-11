@@ -12,6 +12,10 @@ _Avoid_: Account, tenant, user, customer
 One night a Household counts, such as "Halloween 2026" or a test night. It moves through four states: **Upcoming**, then **Live** after Go live, **Ended** after End the night (late kids still count, and Resume makes it Live again), and **Past** (read-only) from noon the next day, local time, or earlier if a Manager closes it. Going live never changes another Event.
 _Avoid_: Night (in definitions), session, party, Rehearsal (a practice night is just an Event: reset it or make another)
 
+**Reset**:
+Puts a Live or Ended Event back to Upcoming with no kids, golden tickets, Night summary or share links; its setup (name, Goes live at, Race against, costume tags) stays. Managers do it from `/setup`; it goes live again by Go live or at its Goes live at.
+_Avoid_: Clear, wipe, restart, Reset the Rehearsal
+
 **Manager**:
 A person, signed in with their Google account, who runs one Household: its events, `/setup`, sharing and deletion. A Household can have several Managers, all equal.
 _Avoid_: Admin, owner, user, account
