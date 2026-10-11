@@ -320,6 +320,8 @@ const context = () => ({ events, door: doorEvent(events), timeZone: timeZone(), 
 
 function render() {
   $('house-name').textContent = house.displayName
+  $('who-email').textContent = house.manager.email
+  $('who').hidden = false
   const night = shownNight()
   if (screen.event != null && !night) { // deleted meanwhile: back to the tab it opened from
     screen = { tab: screen.tab, event: null }

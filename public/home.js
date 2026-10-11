@@ -95,3 +95,11 @@ $('code-form').addEventListener('submit', async (e) => {
   say('')
   location.href = `/door?key=${encodeURIComponent(code.join)}`
 })
+
+// Just signed out (POST /auth/signout): say so, then tidy the address bar.
+if (new URLSearchParams(location.search).has('signed-out')) {
+  $('signed-out-note').hidden = false
+  $('still-counting').hidden = !storedKey() // signing out never touches the door's join code on this phone
+  history.replaceState(null, '', '/#sign-in')
+}
+

@@ -398,9 +398,11 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const form = await req.formData()
       return signedIn(accounts.finishEmailSignIn({ token: String(form.get('token') ?? ''), ip }))
     },
+    // Sign out of Count Dracula only: our session goes, the Google account is never touched. It lands on the
+    // homepage's sign-in (#sign-in), so a phone that also counts at a door isn't bounced on to /door.
     'POST /auth/signout': (req) => {
       accounts.signOut(tokenOf(req))
-      return redirect('/', { 'Set-Cookie': sessionCookie('', 0) })
+      return redirect('/?signed-out=1#sign-in', { 'Set-Cookie': sessionCookie('', 0) })
     },
 
     // ---- Invite links (spec §3). The link is /invite?key=<token>, a shape the Caddy log masks.

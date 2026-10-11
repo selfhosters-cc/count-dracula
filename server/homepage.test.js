@@ -132,13 +132,14 @@ describe('every "go sign in" points at /', () => {
     }
   })
 
-  test('sign-out goes to /', async () => {
+  test("sign-out ends only our session and lands on the homepage, told so (not bounced to a phone's door)", async () => {
     const { app, google } = boot()
     const cookie = cookieOf(await signIn({ app, google }, { sub: 'a', email: 'a@example.com' }, { displayName: 'The Smiths' }))
 
     const res = await fetch(`${app.url}/auth/signout`, { method: 'POST', headers: { Cookie: cookie }, redirect: 'manual' })
 
-    expect(res.headers.get('Location')).toBe('/')
+    expect(res.headers.get('Location')).toBe('/?signed-out=1#sign-in')
+    expect(res.headers.get('Set-Cookie')).toMatch(/Max-Age=0/)
   })
 
   test('backing out at Google goes to /', async () => {
