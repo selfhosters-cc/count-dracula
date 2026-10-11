@@ -36,7 +36,7 @@ describe('/ is the homepage', () => {
 
     expect(res.status).toBe(200)
     expect(res.headers.get('Content-Type')).toStartWith('text/html')
-    expect(html).toContain('<script type="module" src="/home.js"></script>')
+    expect(html).toMatch(/<script type="module" src="\/home\.js\?v=[\w-]+"><\/script>/)
     expect(html).not.toContain('/door.js')
     expect(html).toContain('Count your trick-or-treaters on your phones, while a TV on the porch cheers every kid.')
   })
@@ -133,6 +133,26 @@ describe('caching, so a deploy is seen at once (Cloudflare keeps .js 4 hours whe
     for (const path of ['/tv.png', '/og-home.png']) {
       expect({ path, cache: await cacheOf(path) }).toEqual({ path, cache: 'public, max-age=86400' })
     }
+  })
+})
+
+describe("every script has this build's address (Cloudflare forces browsers to keep .js 4 hours)", () => {
+  test("pages and modules all name this build's scripts, the same way, so a phone never runs old code", async () => {
+    const { app } = boot()
+    const html = await (await get(app, '/door')).text()
+    const build = html.match(/src="\/door\.js\?v=([\w-]+)"/)?.[1]
+    expect(build).toBeTruthy()
+
+    const door = await (await get(app, `/door.js?v=${build}`)).text()
+    expect(door).toContain(`from '/door-view.js?v=${build}'`)
+    expect(door).toContain(`from '/outbox.js?v=${build}'`)
+    expect(door).not.toMatch(/from '[^']+\.js'/) // nothing left unstamped
+    const home = await (await get(app, `/home.js?v=${build}`)).text()
+    expect(home).toContain(`from '/shared/codes.js?v=${build}'`)
+    const view = await (await get(app, `/setup-night.js?v=${build}`)).text()
+    expect(view).toContain(`from './setup-dom.js?v=${build}'`) // relative imports too
+    expect(view).toContain(`from '../shared/race-against.js?v=${build}'`)
+    expect((await get(app, `/door-view.js?v=${build}`)).status).toBe(200)
   })
 })
 

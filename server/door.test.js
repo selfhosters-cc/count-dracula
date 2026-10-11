@@ -42,7 +42,7 @@ describe('/door', () => {
 
     expect(res.status).toBe(200)
     expect(res.headers.get('Content-Type')).toStartWith('text/html')
-    expect(await res.text()).toContain('<script type="module" src="/door.js"></script>')
+    expect(await res.text()).toMatch(/<script type="module" src="\/door\.js\?v=[\w-]+"><\/script>/)
   })
 
   test('/?key= goes to /door?key=, keeping the whole query', async () => {

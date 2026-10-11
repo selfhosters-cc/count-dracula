@@ -791,13 +791,22 @@ async function serveStatic(pathname, req, contact = DEFAULT_CONTACT) {
   if (dir === KIOSK_DIR) return new Response((await file.text()).replaceAll('__ORIGIN__', originOf(req)), { headers: { 'Content-Type': file.type, ...cache } })
   // Pages that offer help or the privacy contact say __CONTACT__: filled in with OPERATOR_CONTACT, never committed.
   // __ORIGIN__ is this site's address, for the share page's link-preview tags, which want absolute URLs.
-  if (path.endsWith('.html')) return new Response((await file.text()).replaceAll('__CONTACT__', esc(contact)).replaceAll('__ORIGIN__', esc(originOf(req))), { headers: { 'Content-Type': file.type, ...cache } })
+  if (path.endsWith('.html')) return new Response(stampScripts((await file.text()).replaceAll('__CONTACT__', esc(contact)).replaceAll('__ORIGIN__', esc(originOf(req)))), { headers: { 'Content-Type': file.type, ...cache } })
+  if (path.endsWith('.js')) return new Response(stampImports(await file.text()), { headers: { 'Content-Type': file.type, ...cache } })
   // Plain files revalidate cheaply: Last-Modified, and a 304 when the browser's copy is current.
   const modified = new Date(Math.floor(file.lastModified / 1000) * 1000)
   const since = Date.parse(req.headers.get('If-Modified-Since') ?? '')
   if (!Number.isNaN(since) && since >= modified.getTime()) return new Response(null, { status: 304, headers: cache })
   return new Response(file, { headers: { ...cache, 'Last-Modified': modified.toUTCString() } })
 }
+
+// Every script's address carries this build (?v=), in the pages' <script> tags and in every import, so no cache
+// can hand a new page last deploy's code: Cloudflare forces browsers to keep .js for 4 hours whatever we send.
+// Both spellings of an import ('/x.js', './x.js') get the same stamp, so each module still loads once.
+const BUILD = Date.now().toString(36)
+const stampScripts = (html) => html.replace(/(<script\b[^>]*\ssrc=")(\/(?!\/)[^"?#]+\.js)"/g, `$1$2?v=${BUILD}"`)
+const stampImports = (js) =>
+  js.replace(/(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])((?:\.{1,2}\/|\/(?!\/))[^'"?#\s]+\.js)\2/g, `$1$2$3?v=${BUILD}$2`)
 
 // Told nothing, Cloudflare keeps .js and .css at its edge and in browsers for 4 hours, so a deploy's new page would
 // run last deploy's scripts. Pages, scripts, styles and data revalidate on every load; pictures, fonts and sounds,
