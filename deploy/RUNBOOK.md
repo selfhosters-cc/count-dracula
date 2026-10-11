@@ -17,29 +17,14 @@ Done in order. Sign-up opens at step 7.
 
 ### Step 1. `v1-final` and a copy of today's database
 
-The tag is already pushed (on the last v1 code commit). Check it, then copy the v1 database and keep a copy here.
+The tag is already pushed (on the last v1 code commit). `deploy/v1-final.sh` checks it, copies the live database
+on LXC 118 into `/var/lib/count-dracula/v1-final/`, pulls it into `~/count-dracula-backups/`, and practises the
+migration on a scratch copy (it's the ticket 17 check): Household #1 with "Halloween 2025 (counts)", the live
+Rehearsal racing it, in America/Toronto.
+
 Not with `cp`: the database is in WAL mode, and until a checkpoint its rows live in the `-wal` file beside it, so a
-copied `.sqlite` alone can be empty. `deploy/copy-db.js` makes a `VACUUM INTO` copy, which includes them, without
-stopping v1:
-
-```bash
-git ls-remote --tags origin v1-final                    # → the v1 commit (4f369ed…)
-out=$(ssh proxmox "cat > /tmp/copy-db.js && pct push 118 /tmp/copy-db.js /tmp/copy-db.js && rm /tmp/copy-db.js && pct exec 118 -- /usr/local/bin/bun /tmp/copy-db.js /etc/count-dracula/config.json /var/lib/count-dracula/v1-final" < deploy/copy-db.js)
-ssh proxmox "pct pull 118 $out /tmp/v1-final.sqlite" && scp proxmox:/tmp/v1-final.sqlite ~/count-dracula-backups/v1-final-${out##*count-dracula-} && ssh proxmox rm /tmp/v1-final.sqlite
-ls -l ~/count-dracula-backups/                           # tens of KB, not 4096 bytes
-```
-
-Practise the migration on that copy here (it's the ticket 17 check): a scratch copy opens as Household #1 with
-"Halloween 2025 (counts)", the Rehearsal and its Race against.
-
-```bash
-cp "$(ls -1t ~/count-dracula-backups/v1-final-*.sqlite | head -n 1)" /tmp/practice.sqlite
-bun -e "
-  import { Database } from 'bun:sqlite'; import { openLedger } from './server/ledger.js'
-  const h = openLedger(new Database('/tmp/practice.sqlite'), {}).household(1)
-  console.log(h.events().map((e) => [e.name, e.kids, e.live]), h.snapshot().ghost?.label, h.snapshot().timeZone)"
-rm /tmp/practice.sqlite*
-```
+copied `.sqlite` alone can be empty. The script makes a `VACUUM INTO` copy (`deploy/copy-db.js`), which includes them,
+without stopping v1.
 
 **`v1-final` is a rollback only until the first stranger signs up.** After that the tag and copy are kept, never used.
 
