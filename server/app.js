@@ -26,7 +26,7 @@ const tvDelta = (delta) => (delta.kid ? { ...delta, kid: withoutPhone(delta.kid)
 
 const PAUSE_SIGN_UPS = 'pauseSignUps'
 const DEFAULT_CONTACT = 'privacy@count-dracula.example.com'
-const OPERATOR_ACTIONS = new Set(['rename', 'timeZone', 'suspend', 'unsuspend'])
+const OPERATOR_ACTIONS = new Set(['rename', 'timeZone', 'suspend', 'unsuspend', 'invite'])
 
 // The sign-in cookie (spec §3): 90 days, renewed with use; the session itself lives server-side.
 const SESSION_COOKIE = 'cd_session'
@@ -147,6 +147,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const { householdId, action, value } = await req.json()
       const house = ledger.household(householdId)
       if (!house || !OPERATOR_ACTIONS.has(action)) return new Response('No such household or action', { status: 400 })
+      if (action === 'invite') {
+        // The recovery path for a locked-out Manager: the Operator copies the link and sends it themselves.
+        const url = inviteUrl(req, accounts.makeInvite(house.id, null))
+        log(`operator action=invite household=${house.id} by=${session.manager.email}`)
+        return Response.json({ url })
+      }
       if (action === 'rename') house.apply({ type: 'rename', displayName: value })
       if (action === 'timeZone') hub.publish(house.id, house.apply({ type: 'setTimeZone', timeZone: value }))
       if (action === 'suspend' || action === 'unsuspend') {
@@ -168,7 +174,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       if (!guard.take('signIn', clientIp(req, server))) return page('Slow down', '<p>Too many sign-ins from here. Try again in a while.</p>', 429)
       const form = await req.formData()
       try {
-        return redirect(accounts.beginSignIn({ displayName: form.get('displayName'), timeZone: form.get('timeZone'), redirectUri: callbackUrl(req) }))
+        return redirect(accounts.beginSignIn({ displayName: form.get('displayName'), timeZone: form.get('timeZone'), invite: form.get('invite'), redirectUri: callbackUrl(req) }))
       } catch (err) {
         if (err instanceof BadCommand) return page('Pick another name', `<p>${esc(err.message)}.</p><p><a href="/signup">Back</a></p>`, 400)
         throw err
@@ -184,13 +190,48 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
         console.error('google sign-in failed:', err.message)
         return page('Sign-in didn\'t work', '<p>Google sign-in didn\'t work. <a href="/signup">Try again</a>.</p>', 502)
       }
-      if (result.refused) return REFUSALS[result.refused]()
+      if (result.refused) return REFUSALS[result.refused](result)
       return redirect('/setup', { 'Set-Cookie': sessionCookie(result.token) })
     },
     'POST /auth/signout': (req) => {
       accounts.signOut(tokenOf(req))
       return redirect('/signup', { 'Set-Cookie': sessionCookie('', 0) })
     },
+
+    // ---- Invite links (spec §3). The link is /invite?key=<token>, a shape the Caddy log masks.
+    'GET /invite': (req) => {
+      const key = new URL(req.url).searchParams.get('key') ?? ''
+      const invite = accounts.inviteStatus(key)
+      if (invite.status !== 'ok') return page('Invite link', `<p>${INVITE_PROBLEMS[invite.status]}</p>`, 410)
+      return page(
+        'You\'re invited',
+        `<p>Help run ${invite.displayName ? `<b>${esc(invite.displayName)}</b>'s` : 'a'} trick-or-treat night on Count Dracula, as one of its Managers.</p>
+<form method="post" action="/auth/google/start"><input type="hidden" name="invite" value="${esc(key)}"><button style="font:inherit;font-weight:700;padding:12px 16px;border:0;border-radius:10px;background:#ff7a1a;color:#1a0d00">Continue with Google</button></form>
+<p style="color:#a99cbc;font-size:13px">By continuing you agree to the <a href="/privacy">Privacy notice and House rules</a>.</p>`,
+        200,
+      )
+    },
+    'GET /api/managers': manager((req, house, session) =>
+      Response.json({
+        me: session.manager.id,
+        managers: accounts.managers(house.id),
+        invites: accounts.unusedInvites(house.id).map(({ token, ...invite }) => ({ ...invite, key: token, url: inviteUrl(req, token) })),
+      })),
+    'POST /api/invites': manager((req, house, session) => {
+      if (!guard.take('invite', house.id)) return tooMany()
+      return Response.json({ url: inviteUrl(req, accounts.makeInvite(house.id, session.manager.id)) })
+    }),
+    'POST /api/invites/revoke': manager(async (req, house) => {
+      accounts.revokeInvite(house.id, (await req.json()).key)
+    }),
+    'POST /api/managers/remove': manager(async (req, house) => {
+      accounts.removeManager(house.id, (await req.json()).managerId)
+    }),
+    // Leave: you go, with your account details; the Household stays with the others.
+    'POST /api/managers/leave': manager((req, house, session) => {
+      accounts.removeManager(house.id, session.manager.id)
+      return new Response('Left', { headers: { 'Set-Cookie': sessionCookie('', 0) } })
+    }),
 
     // ---- Setup (spec §6): a signed-in Manager of the Household.
     'GET /setup': managerPage('/setup'),
@@ -359,9 +400,18 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     return res
   }
 
-  // Google's callback on this host: the public one in production, the request's own in development.
+  // This site's address: the public one in production, the request's own in development.
+  function publicOrigin(req) {
+    return env.PUBLIC_HOST ? `https://${env.PUBLIC_HOST}` : originOf(req)
+  }
+
+  // Google's callback on this host.
   function callbackUrl(req) {
-    return `${env.PUBLIC_HOST ? `https://${env.PUBLIC_HOST}` : originOf(req)}/auth/google/callback`
+    return `${publicOrigin(req)}/auth/google/callback`
+  }
+
+  function inviteUrl(req, token) {
+    return `${publicOrigin(req)}/invite?key=${token}`
   }
 
   function route(req, server) {
@@ -475,6 +525,16 @@ const REFUSALS = {
   unverified: () => page('Email not verified', '<p>Google hasn\'t verified this account\'s email yet, so it can\'t sign in.</p>', 403),
   noHousehold: () => page('No household yet', '<p>This Google account doesn\'t run a household here yet. <a href="/signup">Sign up</a> to start one.</p>', 404),
   paused: () => page('Sign-ups are paused', '<p>Sign-ups are paused, try again later.</p>', 503),
+  alreadyManager: () => page('One household each', "<p>You already manage a household here, and a Google account can only manage one. To help this one, use another Google account.</p><p><a href=\"/setup\">Go to your household</a></p>", 409),
+  invite: ({ why }) => page('Invite link', `<p>${INVITE_PROBLEMS[why] ?? INVITE_PROBLEMS.unknown}</p>`, 410),
+}
+
+// Why an Invite link didn't work, in the words the invited person sees.
+const INVITE_PROBLEMS = {
+  used: 'This invite link has already been used. Ask a Manager for a new one.',
+  expired: 'This invite link has expired: they last 7 days. Ask a Manager for a new one.',
+  revoked: 'This invite link was cancelled. Ask a Manager for a new one.',
+  unknown: "This invite link doesn't work. Check it was copied whole, or ask a Manager for a new one.",
 }
 
 function notFound() {

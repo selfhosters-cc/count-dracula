@@ -192,6 +192,64 @@ $('check-night-skip').addEventListener('click', () => {
   renderChecklist()
 })
 
+// ---- Managers and invites (spec §3)
+async function loadManagers() {
+  const res = await fetch('/api/managers')
+  if (!res.ok) return
+  const { me, managers, invites } = await res.json()
+  $('managers').replaceChildren(
+    ...managers.map((m) =>
+      h('div', { className: 'item' },
+        h('span', { className: 'grow', textContent: `${m.name || m.email}${m.id === me ? ' (you)' : ''}` }),
+        ...(m.name ? [h('span', { className: 'muted', textContent: m.email })] : []),
+        ...(m.id === me ? [] : [h('button', { className: 'danger', textContent: 'Remove', onclick: () => removeManager(m) })]),
+      ),
+    ),
+  )
+  $('invites').replaceChildren(
+    ...invites.map((i) =>
+      h('div', { className: 'item' },
+        h('span', { className: 'grow muted', textContent: `Invite from ${i.madeByName || i.madeByEmail || 'the Operator'}, until ${zoneDay(i.expiresAt)}` }),
+        h('button', { textContent: 'Share', onclick: () => share(i.url, 'Help run our trick-or-treat night') }),
+        h('button', { className: 'danger', textContent: 'Revoke', onclick: () => revokeInvite(i) }),
+      ),
+    ),
+  )
+  $('leave').hidden = managers.length < 2 // the last Manager deletes the household instead
+}
+
+async function managerCall(path, body, done) {
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) })
+  if (!res.ok) {
+    say(await res.text(), true)
+    return null
+  }
+  if (done) say(done)
+  await loadManagers()
+  return res
+}
+
+$('invite').addEventListener('click', async () => {
+  const res = await managerCall('/api/invites', {})
+  if (res) await share((await res.json()).url, 'Help run our trick-or-treat night')
+  await loadManagers()
+})
+
+function removeManager(m) {
+  if (confirm(`Remove ${m.name || m.email}? Their account details are deleted; the household and its nights stay.`)) managerCall('/api/managers/remove', { managerId: m.id }, 'Removed')
+}
+
+function revokeInvite(i) {
+  if (confirm('Cancel this invite link?')) managerCall('/api/invites/revoke', { key: i.key }, 'Invite cancelled')
+}
+
+$('leave').addEventListener('click', async () => {
+  if (!confirm('Leave this household? Your account details are deleted. The household and its nights stay with the other Managers.')) return
+  const res = await fetch('/api/managers/leave', { method: 'POST' })
+  if (!res.ok) return say(await res.text(), true)
+  location.href = '/signup'
+})
+
 // ---- your household: its name, signing out, and deleting it
 $('name-form').addEventListener('submit', async (e) => {
   e.preventDefault()
@@ -430,6 +488,7 @@ $('change-key').addEventListener('click', async () => {
 
 await load()
 $('admin').hidden = false
+loadManagers()
 
 // First-run until screen 3 has been passed once; not when a TV's QR brought us here to pair.
 const firstRun = !house.firstRunPassed && !new URLSearchParams(location.search).has('pair')

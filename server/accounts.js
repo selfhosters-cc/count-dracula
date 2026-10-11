@@ -7,6 +7,7 @@ const SESSION_MS = 90 * 86_400_000
 const RENEW_AFTER_MS = 86_400_000 // a used session is pushed out to 90 days again at most once a day
 const STATE_MS = 10 * 60_000 // a sign-in has 10 minutes to come back from Google
 const DELETIONS_KEPT_MS = 61 * 86_400_000 // "gone within 2 months" (spec §16)
+const INVITE_MS = 7 * 86_400_000
 
 export function openAccounts(db, { ledger, google, now = Date.now, household1Email = '', operatorEmails = [], canSignUp = () => true }) {
   const pending = new Map() // state → { nonce, displayName, timeZone, expiresAt }
@@ -32,18 +33,18 @@ export function openAccounts(db, { ledger, google, now = Date.now, household1Ema
   return {
     // The sign-up or sign-in button: remembers what to do when Google sends the person back, and
     // returns Google's address to send them to. A sign-up carries the display name and the browser's zone.
-    beginSignIn({ displayName, timeZone, redirectUri }) {
-      const name = displayName == null || String(displayName).trim() === '' ? null : displayNameOf(displayName)
+    beginSignIn({ displayName, timeZone, invite = null, redirectUri }) {
+      const name = invite || displayName == null || String(displayName).trim() === '' ? null : displayNameOf(displayName)
       const at = now()
       for (const [state, p] of pending) if (p.expiresAt < at) pending.delete(state)
       const state = randomToken()
       const nonce = randomToken()
-      pending.set(state, { nonce, displayName: name, timeZone: isTimeZone(timeZone) ? timeZone : 'UTC', expiresAt: at + STATE_MS })
+      pending.set(state, { nonce, displayName: name, invite: invite || null, timeZone: isTimeZone(timeZone) ? timeZone : 'UTC', expiresAt: at + STATE_MS })
       return google.authUrl({ state, nonce, redirectUri })
     },
 
     // Google's callback. Returns { token, householdId, created } or { refused } with one of
-    // 'state' | 'unverified' | 'noHousehold' | 'paused'. A state works once.
+    // 'state' | 'unverified' | 'noHousehold' | 'paused' | 'alreadyManager' | 'invite' (with `why`). A state works once.
     async finishSignIn({ code, state, redirectUri, ip }) {
       const started = pending.get(state)
       pending.delete(state)
@@ -53,9 +54,19 @@ export function openAccounts(db, { ledger, google, now = Date.now, household1Ema
       if (!identity.emailVerified) return { refused: 'unverified' }
 
       const known = managerBySub(identity.sub)
+      const invited = started.invite ? inviteStatus(started.invite) : null
       if (known) {
+        // One Household per Manager: an invite to another one is refused, and left unused.
+        if (invited && invited.householdId !== known.household_id) return { refused: 'alreadyManager' }
         db.query('UPDATE managers SET email = ?, name = ?, last_sign_in_at = ? WHERE id = ?').run(identity.email, identity.name ?? null, now(), known.id)
         return { token: startSession(known.id), householdId: known.household_id, created: false }
+      }
+      if (invited) {
+        if (invited.status !== 'ok') return { refused: 'invite', why: invited.status }
+        return db.transaction(() => {
+          db.query('UPDATE invites SET used_at = ? WHERE token = ?').run(now(), started.invite)
+          return { ...join(invited.householdId, identity), created: false }
+        })()
       }
       if (claimsHousehold1(identity)) return { ...join(1, identity), created: false }
       if (!started.displayName) return { refused: 'noHousehold' }
@@ -96,6 +107,46 @@ export function openAccounts(db, { ledger, google, now = Date.now, household1Ema
       return db.query('SELECT email FROM managers WHERE household_id = ? ORDER BY id').all(householdId).map((r) => r.email)
     },
 
+    // ---- Invite links (spec §3): single use, 7 days. madeBy is a Manager's id, or null for the Operator's.
+    makeInvite(householdId, madeBy = null) {
+      const token = randomToken()
+      db.query('INSERT INTO invites (token, household_id, made_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)').run(token, householdId, madeBy, now(), now() + INVITE_MS)
+      return token
+    },
+
+    // What a link says before anyone signs in: { status: 'ok' | 'used' | 'expired' | 'revoked' | 'unknown', householdId, displayName }.
+    inviteStatus,
+
+    unusedInvites(householdId) {
+      return db
+        .query(`
+          SELECT i.token, i.created_at AS createdAt, i.expires_at AS expiresAt, m.name AS madeByName, m.email AS madeByEmail
+          FROM invites i LEFT JOIN managers m ON m.id = i.made_by
+          WHERE i.household_id = ? AND i.used_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > ?
+          ORDER BY i.created_at
+        `)
+        .all(householdId, now())
+    },
+
+    revokeInvite(householdId, token) {
+      const { changes } = db.query('UPDATE invites SET revoked_at = ? WHERE token = ? AND household_id = ? AND used_at IS NULL').run(now(), token, householdId)
+      if (!changes) throw new BadCommand('No such invite')
+    },
+
+    // ---- Managers (spec §3): all equal. Leaving or being removed hard-deletes the Manager at once.
+    managers(householdId) {
+      return db.query('SELECT id, email, name FROM managers WHERE household_id = ? ORDER BY id').all(householdId)
+    },
+
+    removeManager(householdId, managerId) {
+      const manager = db.query('SELECT id FROM managers WHERE id = ? AND household_id = ?').get(managerId, householdId)
+      if (!manager) throw new BadCommand('No such Manager in your household')
+      if (db.query('SELECT COUNT(*) AS n FROM managers WHERE household_id = ?').get(householdId).n < 2) {
+        throw new BadCommand("The last Manager can't go: Delete my household instead")
+      }
+      deleteManager(managerId)
+    },
+
     signOut(token) {
       db.query('DELETE FROM sessions WHERE token = ?').run(token)
     },
@@ -108,12 +159,29 @@ export function openAccounts(db, { ledger, google, now = Date.now, household1Ema
       if (confirm !== house.displayName) throw new BadCommand(`Type "${house.displayName}" to delete it`)
       db.transaction(() => {
         db.query('DELETE FROM sessions WHERE manager_id IN (SELECT id FROM managers WHERE household_id = ?)').run(householdId)
+        db.query('DELETE FROM invites WHERE household_id = ?').run(householdId)
         db.query('DELETE FROM managers WHERE household_id = ?').run(householdId)
         ledger.deleteHousehold(householdId)
         db.query('INSERT INTO deletions (household_id, deleted_at) VALUES (?, ?)').run(householdId, now())
       })()
       pruneDeletions()
     },
+  }
+
+  function inviteStatus(token) {
+    const invite = db.query('SELECT i.*, h.display_name FROM invites i JOIN households h ON h.id = i.household_id WHERE i.token = ?').get(token)
+    if (!invite) return { status: 'unknown', householdId: null, displayName: null }
+    const status = invite.used_at ? 'used' : invite.revoked_at ? 'revoked' : invite.expires_at <= now() ? 'expired' : 'ok'
+    return { status, householdId: invite.household_id, displayName: invite.display_name }
+  }
+
+  // Their Google id, email, name and sessions go; invites they made stay, made by nobody.
+  function deleteManager(managerId) {
+    db.transaction(() => {
+      db.query('DELETE FROM sessions WHERE manager_id = ?').run(managerId)
+      db.query('UPDATE invites SET made_by = NULL WHERE made_by = ?').run(managerId)
+      db.query('DELETE FROM managers WHERE id = ?').run(managerId)
+    })()
   }
 
   // The deletions log keeps a row 2 months (spec §16): long enough to re-delete after restoring a backup.

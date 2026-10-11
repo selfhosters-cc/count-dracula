@@ -90,6 +90,22 @@ const MIGRATIONS = [
   (db) => {
     db.exec('CREATE TABLE site_switches (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
   },
+
+  // 7 → 8: Invite links (v2 spec §3). made_by goes to NULL when its Manager leaves: the invite stays.
+  (db) => {
+    db.exec(`
+      CREATE TABLE invites (
+        token TEXT PRIMARY KEY,
+        household_id INTEGER NOT NULL REFERENCES households(id),
+        made_by INTEGER REFERENCES managers(id),
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        used_at INTEGER,
+        revoked_at INTEGER
+      );
+      CREATE INDEX invites_by_household ON invites (household_id);
+    `)
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.
