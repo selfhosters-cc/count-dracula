@@ -75,6 +75,8 @@
     #menu { position: absolute; inset: 0; z-index: 25; background: #000a; display: none; align-items: flex-end; }
     #menu.on { display: flex; }
     #menu .panel { background: var(--panel); width: 100%; border-radius: 22px 22px 0 0; max-height: 90%; overflow: auto; padding: 0 16px 18px; }
+    #menu .who { color: var(--dim); font-size: 13px; margin: 0 0 8px; overflow-wrap: anywhere; }
+    #menu form { margin: 0; }
     #menu h4 { margin: 16px 0 8px; color: var(--dim); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
     #menu input[type=range] { width: 100%; accent-color: var(--orange); height: 36px; }
     #menu .mutes { display: flex; gap: 8px; }
@@ -229,6 +231,10 @@
           <p id="tv-qr-says" aria-live="polite"></p>
         </div>
         <a class="wide" href="/setup">⚙️ Setup</a>
+        <h4>This phone</h4>
+        <p class="who" id="menu-who" hidden>Signed in as <b id="menu-who-email"></b>. Signing out keeps this phone counting.</p>
+        <form method="post" action="/auth/signout" id="menu-signout" hidden><button class="wide" type="submit">↩ Sign out of Count Dracula</button></form>
+        <button class="wide" id="stop-counting">🚪 Stop counting on this phone</button>
       </div>
     </div>
 

@@ -413,6 +413,9 @@ function start(phoneName) {
   async function findScheduled() {
     scheduled = null
     const house = await fetch('/api/household').then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    // This phone: who's signed in, if anyone, and Sign out (Count Dracula's session only; the door's code stays).
+    $('menu-who').hidden = $('menu-signout').hidden = !house
+    if (house) $('menu-who-email').textContent = house.manager?.email ?? ''
     if (house?.joinKey !== joinKey) return
     const events = await fetch('/api/events').then((r) => (r.ok ? r.json() : [])).catch(() => [])
     scheduled = goLiveNowTarget(events)
@@ -429,6 +432,19 @@ function start(phoneName) {
     if (res?.status === 400) toast(await res.text()) // at the cap: "End or close one of your live nights first"
     else toast(res?.ok ? `🎃 ${scheduled.name} is live` : "Couldn't go live: check the connection")
     $('menu').classList.remove('on')
+  })
+
+  // 🚪 Stop counting on this phone: it forgets the door's code and goes to the homepage. Not while taps wait to
+  // send, or they'd be lost.
+  $('stop-counting').addEventListener('click', () => {
+    const waiting = outbox.pending.length
+    if (waiting) return toast(`${waiting} tap${waiting === 1 ? " hasn't" : "s haven't"} sent yet: try again once ${waiting === 1 ? 'it has' : 'they have'}`)
+    const where = live.state?.household ? `${live.state.household}'s door` : 'this door'
+    if (!confirm(`Stop counting at ${where} on this phone? It forgets the door. To help again, scan the QR or enter the code.`)) return
+    try {
+      localStorage.removeItem('cd.joinKey')
+    } catch {}
+    location.href = '/'
   })
 
   // 🌙 End the night / Resume. With tickets left, the spec's three choices instead of a plain yes/no. The Event
