@@ -69,6 +69,16 @@ const MIGRATIONS = [
       CREATE INDEX paired_devices_by_household ON paired_devices (household_id);
     `)
   },
+
+  // 4 → 5: nights that go live and end by themselves (v2 spec §7).
+  (db, { now }) => {
+    db.exec(`
+      ALTER TABLE events ADD COLUMN goes_live_at INTEGER;
+      ALTER TABLE events ADD COLUMN went_live_at INTEGER;
+      ALTER TABLE events ADD COLUMN ended_automatically INTEGER NOT NULL DEFAULT 0;
+    `)
+    db.query('UPDATE events SET went_live_at = ? WHERE live = 1').run(now())
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

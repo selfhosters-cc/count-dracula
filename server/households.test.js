@@ -114,7 +114,7 @@ describe('two Households', () => {
 
     expect(a.events().filter((e) => e.live).map((e) => e.name)).toEqual(['Halloween 2026'])
     expect(b.events().filter((e) => e.live).map((e) => e.name)).toEqual(['Rehearsal'])
-    expect(b.events().map((e) => e.name)).toEqual(['Rehearsal'])
+    expect(b.events().map((e) => e.name)).toEqual(['Halloween 2026', 'Rehearsal'])
   })
 
   test("keep their own taps, seq, join key and TV mix", () => {

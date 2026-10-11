@@ -120,6 +120,7 @@ describe('snapshot', () => {
         ended: false,
         frozen: false,
         rehearsal: false,
+        endedAutomatically: false,
         clockShiftMs: 0,
         visitWindowMs: 15_000,
       },

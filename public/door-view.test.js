@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { doorView } from './door-view.js'
+import { doorView, quietNudge } from './door-view.js'
 
 function state(kidIds, tags = []) {
   return { tags, kids: kidIds.map((id, i) => ({ id, number: i + 1, tagId: null, tappedAt: i })) }
@@ -212,5 +212,44 @@ describe('golden banner', () => {
     ['golden tickets switched off', live(null), empty, { connected: true }],
   ])('hides when %s', (_, state, box, link) => {
     expect(doorView(state, box, link).goldenBanner).toBe(false)
+  })
+})
+
+describe('the quiet nudge', () => {
+  // Toronto, Oct 31 2026: EDT, UTC-4.
+  const local = (hh, mm) => Date.parse(`2026-10-31T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00-04:00`)
+  const night = ({ lastTap = local(20, 0), rehearsal = false, ended = false, shift = 0 } = {}) => ({
+    event: { live: true, rehearsal, ended, clockShiftMs: shift },
+    kids: lastTap == null ? [] : [{ id: 'a', tappedAt: lastTap - 3_600_000 }, { id: 'b', tappedAt: lastTap }],
+    timeZone: 'America/Toronto',
+  })
+  const MIN = 60_000
+
+  test('shows after 8:30 pm local with 30 minutes and no tap', () => {
+    expect(quietNudge(night({ lastTap: local(20, 0) }), local(20, 30))).toBe(true)
+    expect(quietNudge(night({ lastTap: local(20, 0) }), local(20, 29))).toBe(false)
+    expect(quietNudge(night({ lastTap: local(20, 10) }), local(20, 35))).toBe(false)
+    expect(quietNudge(night({ lastTap: local(17, 0) }), local(20, 15))).toBe(false) // quiet, but not 8:30 yet
+    expect(quietNudge(night({ lastTap: local(22, 0) }), local(22, 45) + 2 * 60 * MIN)).toBe(true) // after midnight too
+  })
+
+  test('reads 8:30 in the Household\'s zone and its Clock shift', () => {
+    expect(quietNudge({ ...night(), timeZone: 'America/Vancouver' }, local(21, 0))).toBe(false) // 6:00 pm there
+    expect(quietNudge(night({ lastTap: local(16, 0), shift: 4 * 60 * MIN }), local(16, 45))).toBe(true) // 8:45 pm event time
+  })
+
+  test('never on a Rehearsal, an ended night, or no snapshot', () => {
+    expect(quietNudge(night({ rehearsal: true }), local(21, 0))).toBe(false)
+    expect(quietNudge(night({ ended: true }), local(21, 0))).toBe(false)
+    expect(quietNudge(null, local(21, 0))).toBe(false)
+  })
+
+  test('a night with no kids at all is quiet too', () => {
+    expect(quietNudge(night({ lastTap: null }), local(20, 45))).toBe(true)
+  })
+
+  test('stays hidden for 30 minutes once dismissed', () => {
+    expect(quietNudge(night(), local(21, 0), local(20, 40))).toBe(false)
+    expect(quietNudge(night(), local(21, 10), local(20, 40))).toBe(true)
   })
 })

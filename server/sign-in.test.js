@@ -65,7 +65,7 @@ describe('signing up', () => {
     expect(house).toMatchObject({ displayName: 'The Smiths', timeZone: 'America/Vancouver', manager: { email: 'alice@example.com' }, operator: false })
     expect(house.id).not.toBe(1)
     const events = await (await fetch(`${server.app.url}/api/events`, as(cookie))).json()
-    expect(events).toMatchObject([{ name: 'Rehearsal', live: true }])
+    expect(events.filter((e) => e.live)).toMatchObject([{ name: 'Rehearsal', rehearsal: true }])
   })
 
   test('the same account signing in again reaches the same Household and never makes a second', async () => {
@@ -249,7 +249,7 @@ describe('/setup on a session', () => {
     expect((await fetch(`${server.app.url}/api/export?event=${aliceEvent.id}`, as(bob))).status).toBe(404)
 
     const aliceEvents = await (await fetch(`${server.app.url}/api/events`, as(alice))).json()
-    expect(aliceEvents.map((e) => e.name)).toEqual(['Rehearsal'])
+    expect(aliceEvents.map((e) => e.name)).toEqual(['Halloween 2026', 'Rehearsal'])
   })
 
   test('a Manager can set the display name, at most 40 characters', async () => {
@@ -284,7 +284,7 @@ describe('Delete my Household', () => {
     await stream.next()
     await signIn(server, BOB, { displayName: 'Casa Bob' })
     const owned = ownedBy(server.db(), id)
-    expect(owned.events.length).toBe(2)
+    expect(owned.events.length).toBe(3) // the Rehearsal, "Halloween 2026" and the new one
 
     const res = await fetch(`${server.app.url}/api/household/delete`, as(cookie, { method: 'POST', body: JSON.stringify({ confirm: 'The Smiths' }) }))
 

@@ -1,6 +1,6 @@
 // doorView (modules.md §5): what the door phone shows, from the server's state plus this phone's outbox.
 // Pure. Phone screens read through it, never from the snapshot or localStorage directly.
-import { tagColour } from '../shared/night-maths.js'
+import { eventNow, minuteOfDay, tagColour } from '../shared/night-maths.js'
 
 const RECENT_ROWS = 10
 
@@ -76,4 +76,20 @@ function catchUpPreview(serverKids) {
         .map((k) => k.number)
         .sort((a, b) => a - b),
   }
+}
+
+// "Quiet out there? 🌙 End the night" (v2 spec §7): a live, non-Rehearsal night, from 8:30 pm event time in the
+// Household's zone (and on through the small hours), with no kid for 30 minutes. Dismissing it hides it for 30.
+const QUIET_MS = 30 * 60_000
+const NUDGE_FROM = 20 * 60 + 30
+const NIGHT_ENDS = 6 * 60 // after midnight still counts as late
+
+export function quietNudge(state, realNowMs, dismissedAt = -Infinity) {
+  const event = state?.event
+  if (!event?.live || event.rehearsal || event.ended) return false
+  if (realNowMs - dismissedAt < QUIET_MS) return false
+  const minute = minuteOfDay(eventNow(realNowMs, event.clockShiftMs ?? 0), state.timeZone)
+  if (minute < NUDGE_FROM && minute >= NIGHT_ENDS) return false
+  const lastTap = Math.max(-Infinity, ...state.kids.map((k) => k.tappedAt))
+  return realNowMs - lastTap >= QUIET_MS
 }

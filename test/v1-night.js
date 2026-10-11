@@ -6,12 +6,12 @@ import { openLedger } from '../server/ledger.js'
 export function setUpV1Night(ledger, { ghostSeed } = {}) {
   const id = ledger.createHousehold({ displayName: 'Test house', timeZone: 'America/Toronto' })
   const house = ledger.household(id)
-  const starter = house.snapshot().event.id
+  const starters = house.events() // sign-up's Rehearsal and "Halloween 2026"
   const raceAgainstId = ghostSeed ? house.addPastCounts(ghostSeed) : null
   const [{ event }] = house.apply({ type: 'createEvent', name: 'Rehearsal' })
   house.apply({ type: 'settings', eventId: event.id, raceAgainstId })
   house.apply({ type: 'goLive', eventId: event.id })
-  house.apply({ type: 'deleteEvent', eventId: starter, confirm: 'Rehearsal' })
+  for (const starter of starters) house.apply({ type: 'deleteEvent', eventId: starter.id, confirm: starter.name })
   return id
 }
 

@@ -127,11 +127,31 @@ export function slots(from, to, minutes) {
 // Real time (ms) of an event-time "HH:MM" on the event's current date in the zone: what a backfill row means.
 export function atEventTime(hhmmText, realNowMs, shiftMs = 0, timeZone) {
   const day = wallClock(eventNow(realNowMs, shiftMs), timeZone)
+  return wallTime(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hhmmText, timeZone) - shiftMs
+}
+
+// Real time (ms) of "HH:MM" on a date ("2026-10-31") in the zone: "Halloween 2026" goes live at 4:00 pm.
+export function zonedTime(dateText, hhmmText, timeZone) {
+  const [y, m, d] = dateText.split('-').map(Number)
+  return wallTime(y, m - 1, d, hhmmText, timeZone)
+}
+
+// The first moment after ms when the zone's clock reads "HH:MM": the 3:00 am that ends a night.
+export function nextWallTime(ms, hhmmText, timeZone) {
+  const day = wallClock(ms, timeZone)
+  for (let ahead = 0; ; ahead++) {
+    const t = wallTime(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + ahead, hhmmText, timeZone)
+    if (t > ms) return t
+  }
+}
+
+// A wall-clock time on a date (month 0-based; Date.UTC rolls days over) to real time. The offset is read at
+// the wall time itself, found from a first guess, so a time across a DST change lands right.
+function wallTime(year, month, day, hhmmText, timeZone) {
   const [h, m] = hhmmText.split(':').map(Number)
-  const wall = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), h, m)
-  // The offset at the wall time itself, found from a first guess, so a row across a DST change lands right.
+  const wall = Date.UTC(year, month, day, h, m)
   const guess = wall - offsetAt(wall, timeZone)
-  return wall - offsetAt(guess, timeZone) - shiftMs
+  return wall - offsetAt(guess, timeZone)
 }
 
 // The TV's costume leaderboard (spec §7): the top 5 costumes by count, ties by their order, in the

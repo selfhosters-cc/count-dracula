@@ -27,8 +27,8 @@ const SESSION_COOKIE = 'cd_session'
 const sessionCookie = (token, maxAge = 90 * 86_400) => `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`
 
 // env: PUBLIC_HOST, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPERATOR_EMAILS, HOUSEHOLD1_MANAGER_EMAIL (deploy/local.env).
-// google, now and canSignUp are seams for the tests.
-export function startServer({ configPath, port, heartbeatMs, env = process.env, google, now = Date.now, canSignUp }) {
+// google, now, canSignUp and tickMs are seams for the tests.
+export function startServer({ configPath, port, heartbeatMs, env = process.env, google, now = Date.now, canSignUp, tickMs = 60_000 }) {
   const config = loadConfig(configPath)
   const db = new Database(config.dbPath, { create: true })
   const ledger = openLedger(db, { ...config, now })
@@ -42,6 +42,18 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   })
   const hub = createHub({ heartbeatMs })
   const pairing = createPairing({ now })
+
+  // The minute tick (spec §7): nights go live and end by themselves. The first runs at start, catching up on
+  // anything missed while the server was down.
+  function tick() {
+    try {
+      for (const { householdId, deltas } of ledger.tick()) hub.publish(householdId, deltas)
+    } catch (err) {
+      console.error('tick failed:', err)
+    }
+  }
+  tick()
+  const ticker = setInterval(tick, tickMs)
 
   const routes = {
     // The live event, for a phone or a Manager; ?event=<id> reads one of the Household's events (a past
@@ -279,6 +291,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     ledger,
     hub,
     stop() {
+      clearInterval(ticker)
       hub.shutdown()
       server.stop(true)
     },

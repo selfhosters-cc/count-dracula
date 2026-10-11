@@ -52,6 +52,11 @@
   <div id="status" role="status"></div>
 
   <div id="admin" hidden>
+    <section id="auto-ended" hidden>
+      <h2>🌙 Your night ended automatically at 3:00 am</h2>
+      <p class="muted">Nobody pressed End the night, so it ended itself. Your summary is ready. Stragglers still count, and any phone can resume it.</p>
+    </section>
+
     <section>
       <h2>Live now: <span id="live-name"></span></h2>
       <p class="muted"><span id="live-kids"></span> kids · join key <code id="join-key"></code> · time zone <span id="time-zone"></span></p>
@@ -104,6 +109,10 @@
         </div>
         <label for="s-golden">Golden tickets (drawn at Go live)</label>
         <input id="s-golden" type="number" min="0">
+        <div id="goes-row">
+          <label for="s-goes">Goes live by itself at (<span id="goes-zone"></span>; empty: only when you press Go live)</label>
+          <input id="s-goes" type="datetime-local">
+        </div>
         <p><button class="primary" type="submit">Save settings</button></p>
       </form>
 
@@ -167,7 +176,7 @@
   <div id="qr-full" hidden><div id="qr-full-code"></div><p>Tap anywhere to close</p></div>
 
   <script type="module">
-    import { atEventTime, clockTime as zoneClock, eventNow, minuteOfDay, slots } from '/shared/night-maths.js'
+    import { atEventTime, clockTime as zoneClock, eventNow, minuteOfDay, slots, stamp, zonedTime } from '/shared/night-maths.js'
     import qrcode from '/vendor/qrcode/qrcode.js'
     import { createLocationPicker } from '/location-picker.js'
 
@@ -352,6 +361,10 @@
       $('s-expected').value = editing.expectedKids ?? ''
       $('s-visit').value = editing.visitWindowMs / 1000
       $('s-golden').value = editing.goldenCount
+      $('goes-row').hidden = editing.live
+      $('goes-zone').textContent = timeZone
+      $('s-goes').value = editing.goesLiveAt == null ? '' : stamp(editing.goesLiveAt, timeZone).slice(0, 16).replace(' ', 'T')
+      $('auto-ended').hidden = !(live.ended && live.endedAutomatically)
 
       $('tags').replaceChildren(...editing.tags.map(tagRow))
       $('c-copy').replaceChildren(option('', 'Nothing (start empty)', true), ...events.filter((e) => !e.countsOnly).map((e) => option(e.id, e.name)))
@@ -361,7 +374,7 @@
       $('upcoming').replaceChildren(
         ...upcoming.map((e) =>
           h('div', { className: 'item' },
-            h('span', { className: 'grow', textContent: `${e.name} · ${e.tags.length} costumes` }),
+            h('span', { className: 'grow', textContent: `${e.name} · ${e.tags.length} costumes${e.goesLiveAt == null ? '' : ` · goes live ${zoneDay(e.goesLiveAt)}`}` }),
             h('button', { className: 'primary', textContent: 'Go live', onclick: () => goLive(e, live) })),
         ),
       )
@@ -382,6 +395,8 @@
 
     // ---- Add missed kids: rows in event time, none later than the event's "now" (spec §6).
     const clockTime = (ms, shift) => zoneClock(ms + shift, timeZone)
+    // "Sat Oct 31, 4:00 PM" in the Household's zone.
+    const zoneDay = (ms) => `${new Date(ms).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', timeZone })}, ${zoneClock(ms, timeZone)}`
     function renderBackfill(live) {
       const shift = live.clockShiftMs
       const nowMinute = Math.floor(minuteOfDay(eventNow(Date.now(), shift), timeZone))
@@ -461,6 +476,10 @@
         expectedKids: $('s-expected').value === '' ? null : Number($('s-expected').value),
         visitWindowMs: Math.round(Number($('s-visit').value || 15) * 1000),
         goldenCount: Number($('s-golden').value || 0),
+        // The wall time typed is the Household's, whatever zone this phone is in.
+        ...(editingId === events.find((ev) => ev.live).id
+          ? {}
+          : { goesLiveAt: $('s-goes').value ? zonedTime($('s-goes').value.slice(0, 10), $('s-goes').value.slice(11, 16), timeZone) : null }),
       }, 'Settings saved')
     })
 
