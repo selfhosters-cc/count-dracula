@@ -1,7 +1,7 @@
 # Google OAuth client and local.env
 
 Type: task (HITL)
-Status: ready-for-agent
+Status: done
 Blocked by:
 
 ## What to build
@@ -23,6 +23,6 @@ Tests never need this: [ticket 21](21-google-sign-in.md) runs against a fake Goo
 
 ## Acceptance criteria
 
-- [ ] The consent screen asks only for `openid email profile` and is in Testing with both test users
-- [ ] The client has the production and dev redirect URIs
-- [ ] `deploy/local.env` has all six keys, and `git status` shows it isn't tracked
+- [x] The consent screen asks only for `openid email profile` and is in Testing with both test users
+- [x] The client has the production and dev redirect URIs
+- [x] `deploy/local.env` has all six keys, and `git status` shows it isn't tracked
