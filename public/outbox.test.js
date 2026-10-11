@@ -174,6 +174,58 @@ describe('acknowledged but not yet seen', () => {
     expect(outbox.unconfirmed).toEqual([])
   })
 
+  test('a tap whose kid the stream showed before its ack arrived is settled at the ack, not left waiting', async () => {
+    // The server applies the tap, publishes kid.added, then answers the POST: the delta can win the race.
+    let answer
+    const server = { send: () => new Promise((resolve) => (answer = resolve)) }
+    const { outbox } = setup({ server })
+    const entry = outbox.tap(null)
+    await settle()
+
+    outbox.sync({ cause: 'delta', state: { kids: [{ id: entry.id }] } }) // still in flight
+    answer()
+    await settle()
+
+    expect(outbox.pending).toEqual([])
+    expect(outbox.unconfirmed).toEqual([]) // or "next kid is golden" never shows on a one-phone door
+  })
+
+  test('so is a removal whose kid the stream dropped before its ack arrived', async () => {
+    let answer = () => {}
+    const server = { send: () => new Promise((resolve) => (answer = resolve)) }
+    const { outbox } = setup({ server })
+    const a = outbox.tap(null)
+    await settle()
+    outbox.sync({ cause: 'delta', state: { kids: [{ id: a.id }] } })
+    answer()
+    await settle()
+    outbox.remove(a.id)
+    await settle()
+
+    outbox.sync({ cause: 'delta', state: { kids: [] } }) // still in flight
+    answer()
+    await settle()
+
+    expect(outbox.unconfirmed).toEqual([])
+  })
+
+  test('a removal acked before its kid ever showed stays unconfirmed until the stream catches up', async () => {
+    let answer = () => {}
+    const server = { send: () => new Promise((resolve) => (answer = resolve)) }
+    const { outbox } = setup({ server })
+    const a = outbox.tap(null)
+    await settle()
+    answer()
+    await settle()
+    outbox.remove(a.id)
+    await settle()
+    outbox.sync({ cause: 'delta', state: { kids: [] } }) // the kid's own kid.added hasn't come yet
+    answer()
+    await settle()
+
+    expect(outbox.unconfirmed.filter((e) => e.type === 'remove')).toMatchObject([{ kidId: a.id }])
+  })
+
   test('a snapshot taken after the ack settles it even if the kid has since been removed', async () => {
     const { outbox, clock } = setup()
     outbox.tap(null)

@@ -14,6 +14,10 @@ export function createOutbox({ send, storage, clock, phoneName }) {
   let mine = load(MINE_KEY)
   // Acked by the server but not yet seen in the live state (e.g. while the stream reconnects).
   let unconfirmed = []
+  // What the live state showed last, and every kid it has shown: the server publishes a tap's kid.added before it
+  // answers the POST, so the stream can show a tap (or drop a removed kid) while its POST is still in flight.
+  let shown = new Set()
+  const everShown = new Set()
   let sending = false
   let inFlightId = null // the entry being POSTed right now: it may already have reached the server
   let retryTimer = null
@@ -53,7 +57,7 @@ export function createOutbox({ send, storage, clock, phoneName }) {
         await send(entry)
         const wasShowingPill = waitingFor() >= WAITING_AFTER_MS
         pending = pending.filter((e) => e.id !== entry.id)
-        unconfirmed = [...unconfirmed, { entry, ackedAt: clock.now() }]
+        if (!settledBy(entry, shown)) unconfirmed = [...unconfirmed, { entry, ackedAt: clock.now() }]
         save()
         if (!pending.length && wasShowingPill) sentUntil = clock.now() + SENT_FLASH_MS
       }
@@ -63,6 +67,11 @@ export function createOutbox({ send, storage, clock, phoneName }) {
       sending = false
       inFlightId = null
     }
+  }
+
+  // A tap is settled once the state shows its kid; a removal once the state, having shown the kid, stops showing it.
+  function settledBy(entry, seen) {
+    return entry.type === 'remove' ? everShown.has(entry.kidId) && !seen.has(entry.kidId) : seen.has(entry.id)
   }
 
   // How long the oldest unacknowledged tap has been waiting.
@@ -94,9 +103,10 @@ export function createOutbox({ send, storage, clock, phoneName }) {
     // once the state stops showing it, and anything acked before a snapshot arrived is reflected in it.
     sync({ cause, state }) {
       if (!state) return
-      const seen = new Set(state.kids.map((k) => k.id))
+      shown = new Set(state.kids.map((k) => k.id))
+      for (const id of shown) everShown.add(id)
       const now = clock.now()
-      const settled = ({ entry }) => (entry.type === 'remove' ? !seen.has(entry.kidId) : seen.has(entry.id))
+      const settled = ({ entry }) => (entry.type === 'remove' ? !shown.has(entry.kidId) : shown.has(entry.id))
       unconfirmed = unconfirmed.filter((u) => !settled(u) && !(cause === 'snapshot' && u.ackedAt < now))
     },
 
