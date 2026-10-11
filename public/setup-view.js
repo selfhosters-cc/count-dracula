@@ -67,6 +67,12 @@ export function noteActions(note) {
 // The night screen's help topic (spec v2.1 §9's help keys).
 export const nightHelpKey = (e) => (e.countsOnly ? 'night-imported' : `night-${STATE_LABEL[e.state]}`)
 
+// The help column's open topic (spec v2.1 §9): the first section in the band, in page order. With none in it,
+// the one already open stays, unless it's gone from the screen, when the first topic opens.
+export function currentTopic(order, inBand, previous) {
+  return order.find((k) => inBand.has(k)) ?? (order.includes(previous) ? previous : order[0] ?? null)
+}
+
 // Upcoming Events waiting at the cap: their note shows on Tonight too.
 export const waitingNights = (events) => events.filter((e) => e.state === 'upcoming' && e.note?.kind === 'waiting')
 

@@ -10,6 +10,10 @@
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       padding: 16px; max-width: 720px; margin-inline: auto; }
+    @media (min-width: 900px) {
+      body { max-width: 1096px; }
+      .shell { display: grid; grid-template-columns: minmax(0, 720px) 320px; gap: 24px; }
+    }
     h1 { margin: 0 0 12px; font-size: 24px; overflow-wrap: anywhere; }
     h2 { margin: 0 0 10px; font-size: 18px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     h3 { margin: 14px 0 6px; font-size: 15px; }
@@ -99,11 +103,39 @@
     code.link { display: block; word-break: break-all; font-size: 13px; }
     #qr-full { position: fixed; inset: 0; z-index: 30; background: #fff; display: grid; place-content: center; justify-items: center; color: #333; }
     #qr-full svg { width: min(90vw, 90vh); height: auto; display: block; }
+
+    /* the help (ticket 64): a column at 900 px and up, a "?" on each heading below that */
+    [data-help] { scroll-margin-top: 72px; }
+    .help-q { flex: 0 0 auto; width: 26px; height: 26px; padding: 0; border-radius: 99px; font-size: 14px; font-weight: 700;
+      background: var(--panel2); color: var(--dim); margin-left: auto; }
+    .help-q[aria-expanded="true"] { background: var(--orange); color: #1a0d00; }
+    .help-inline { background: var(--bg); border-radius: 10px; padding: 10px; font-size: 14px; font-weight: 400; color: var(--dim); margin: 0 0 10px; }
+    .help-body p { margin: 0 0 8px; line-height: 1.45; }
+    .help-body dl { margin: 0 0 8px; }
+    .help-body dt { color: var(--text); font-weight: 700; margin-top: 8px; }
+    .help-body dd { margin: 2px 0 0; line-height: 1.45; }
+    .help-inline .help-body > :last-child { margin-bottom: 0; }
+    aside.help { display: none; }
+    @media (min-width: 900px) {
+      .help-q, .help-inline { display: none; }
+      aside.help { display: block; position: sticky; top: 16px; align-self: start; max-height: calc(100vh - 32px); overflow: auto;
+        background: var(--panel); border-radius: 14px; padding: 14px; color: var(--dim); font-size: 14px; }
+    }
+    aside.help h2 { color: var(--text); }
+    aside.help .topic { border-top: 1px solid #ffffff14; padding: 8px 0; }
+    aside.help .topic:first-of-type { border-top: 0; }
+    aside.help .topic > button { background: none; padding: 0; color: var(--dim); font-weight: 700; text-align: left; width: 100%; }
+    aside.help .topic.cur > button { color: var(--orange); }
+    aside.help .topic .help-body { margin-top: 6px; }
+    aside.help .foot { border-top: 1px solid #ffffff14; padding-top: 8px; margin: 4px 0 0; }
+    .flash { outline: 2px solid var(--orange); outline-offset: 2px; }
   </style>
 </head>
 <body>
   <!-- Spec v2.1 §9: three tabs under the Household's name, and a screen per night. Every help-bearing section
-       carries data-help="<topic>" and a heading (h1 or h2) for ticket 64's "?". -->
+       carries data-help="<topic>" and a heading (h1 or h2) for its "?" (setup-help-ui.js). -->
+  <div class="shell">
+  <main>
   <h1>🧛 <span id="house-name">Setup</span></h1>
   <div id="status" role="status"></div>
 
@@ -135,8 +167,7 @@
 
     <!-- Nights: Open (n of 3), Coming up, Past; Make a night. -->
     <div id="screen-nights" role="tabpanel" aria-labelledby="tab-nights" hidden>
-      <div data-help="nights"><h2>🌙 Your nights</h2></div>
-      <div id="nights"></div>
+      <div data-help="nights"><h2>🌙 Your nights</h2><div id="nights"></div></div>
       <section data-help="make">
         <h2>Make a night</h2>
         <form id="create-form">
@@ -221,6 +252,10 @@
   </div>
 
   <footer class="muted" style="text-align: center; padding: 6px 0 20px">Help: <a href="mailto:__CONTACT__" class="link">email us</a> · <a href="/help/tv" class="link">TV help</a></footer>
+  </main>
+  <!-- The help column (ticket 64): drawn by setup-help-ui.js from setup-help.js at 900 px and up. -->
+  <aside class="help" id="help-col" aria-label="Help" hidden></aside>
+  </div>
 
   <div id="first-run" hidden></div>
   <div id="qr-full" hidden><div id="qr-full-code"></div><p>Tap anywhere to close</p></div>

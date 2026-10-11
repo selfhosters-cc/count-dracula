@@ -11,6 +11,7 @@ import {
 } from './setup-view.js'
 import { alsoOpen, doorCard, nightRow, nightScreen, nothingOpen, typedMissed, waiting } from './setup-night.js'
 import { wireHousehold } from './setup-household.js'
+import { createHelp } from './setup-help-ui.js'
 
 let house = null // /api/household: { id, displayName, timeZone, joinKey, tvToken, checklist, lastYear, … }
 let events = []
@@ -93,6 +94,8 @@ const zoneDay = (ms) => `${new Date(ms).toLocaleDateString([], { weekday: 'short
 
 // ---- the screens: a tab, or a night's screen (kept in the URL, so a reload or the phone's Back keeps it)
 const shownNight = () => (screen.event == null ? null : events.find((e) => e.id === screen.event) ?? null)
+// Which screen is showing, for the help: a new one closes every "?".
+const screenKey = () => (screen.event == null ? screen.tab : `night:${screen.event}`)
 
 function go(next, { push = false } = {}) {
   if (next.event !== screen.event) {
@@ -299,6 +302,7 @@ function render() {
   renderNights(ctx)
   household.render()
   renderChecklist()
+  help.update(screenKey())
 }
 
 function renderTonight(ctx) {
@@ -390,12 +394,16 @@ $('check-night-skip').addEventListener('click', () => {
   renderChecklist()
 })
 
+// ---- the help (spec v2.1 §9): the column at 900 px and up, a "?" on each heading on phones
+const help = createHelp({ column: $('help-col'), root: $('admin'), contact: document.querySelector('footer a[href^="mailto:"]').href })
+
 // ---- Household: everything not about one night
 const household = wireHousehold({ house: () => house, events: () => events, admin, say, share, load, helperBox, zoneDay, setHouse: (next) => (house = next) })
 
 if (new URLSearchParams(location.search).has('pair')) screen = { tab: 'household', event: null }
 await load()
 $('admin').hidden = false
+help.update(screenKey())
 household.start()
 
 // First-run until screen 3 has been passed once; not when a TV's QR brought us here to pair.
@@ -409,6 +417,7 @@ setInterval(async () => {
   if (!res?.ok) return
   house = await res.json()
   renderChecklist()
+  help.update(screenKey()) // the checklist may have come or gone
   firstRun?.update(house)
 }, 3_000)
 
