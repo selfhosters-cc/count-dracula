@@ -89,6 +89,11 @@ export function openAccounts(db, { ledger, google, now = Date.now, household1Ema
       }
     },
 
+    // The Managers' Google emails, for the Operator's detail view (spec §13) and nowhere else.
+    managerEmails(householdId) {
+      return db.query('SELECT email FROM managers WHERE household_id = ? ORDER BY id').all(householdId).map((r) => r.email)
+    },
+
     signOut(token) {
       db.query('DELETE FROM sessions WHERE token = ?').run(token)
     },

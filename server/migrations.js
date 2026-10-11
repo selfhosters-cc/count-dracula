@@ -85,6 +85,11 @@ const MIGRATIONS = [
     db.exec('ALTER TABLE households ADD COLUMN first_run_passed INTEGER NOT NULL DEFAULT 0')
     db.exec('UPDATE households SET first_run_passed = 1')
   },
+
+  // 6 → 7: site switches the Operator flips without a redeploy (v2 spec §13): Pause sign-ups.
+  (db) => {
+    db.exec('CREATE TABLE site_switches (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

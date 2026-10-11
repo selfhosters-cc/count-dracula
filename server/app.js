@@ -15,13 +15,16 @@ import { toCsv } from './export.js'
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
-const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html', '/help/tv': '/help-tv.html' }
+const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html' }
 const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink', 'setLocation', 'passFirstRun', 'resetRehearsal'])
 
 // What a TV-link holder gets (spec §9): what the TV draws, without each kid's phone name.
 const withoutPhone = ({ phoneName, ...kid }) => kid
 const tvSnapshot = (snap) => ({ ...snap, kids: snap.kids.map(withoutPhone) })
 const tvDelta = (delta) => (delta.kid ? { ...delta, kid: withoutPhone(delta.kid) } : delta)
+
+const PAUSE_SIGN_UPS = 'pauseSignUps'
+const OPERATOR_ACTIONS = new Set(['rename', 'timeZone', 'suspend', 'unsuspend'])
 
 // The sign-in cookie (spec §3): 90 days, renewed with use; the session itself lives server-side.
 const SESSION_COOKIE = 'cd_session'
@@ -32,6 +35,7 @@ const sessionCookie = (token, maxAge = 90 * 86_400) => `${SESSION_COOKIE}=${toke
 export function startServer({ configPath, port, heartbeatMs, env = process.env, google, now = Date.now, canSignUp, tickMs = 60_000, limits = LIMITS, log = console.log }) {
   const config = loadConfig(configPath)
   const guard = createGuard({ now, limits, log })
+  const contact = env.OPERATOR_CONTACT || 'privacy@count-dracula.example.com' // the one contact address (spec §5)
   const db = new Database(config.dbPath, { create: true })
   const ledger = openLedger(db, { ...config, now })
   const accounts = openAccounts(db, {
@@ -40,8 +44,11 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     now,
     household1Email: env.HOUSEHOLD1_MANAGER_EMAIL ?? '',
     operatorEmails: (env.OPERATOR_EMAILS ?? '').split(/[\s,]+/).filter(Boolean),
-    // A new Household: 3 per IP per day and 60 site-wide per hour (spec §15).
-    canSignUp: canSignUp ?? (({ ip }) => guard.take('householdsPerIp', ip) && guard.take('householdsSite', 'site')),
+    // A new Household: not while sign-ups are paused (checked first, so it spends no token), then 3 per IP
+    // per day and 60 site-wide per hour (spec §15).
+    canSignUp: (ctx) =>
+      !ledger.siteSwitch(PAUSE_SIGN_UPS) &&
+      (canSignUp ?? (({ ip }) => guard.take('householdsPerIp', ip) && guard.take('householdsSite', 'site')))(ctx),
   })
   const hub = createHub({ heartbeatMs })
   const pairing = createPairing({ now })
@@ -109,6 +116,41 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const { kidId } = await req.json()
       hub.publish(house.id, house.apply({ type: 'remove', kidId }))
     }),
+    // ---- The Operator (spec §13): a Manager on OPERATOR_EMAILS.
+    'GET /operator': async (req) => {
+      const session = accounts.session(tokenOf(req))
+      if (!session) return redirect('/signup')
+      if (!session.operator) return page('Not here', '<p>This page is for the Operator.</p>', 403)
+      return renew(await serveStatic('/operator', req), session, req)
+    },
+    'GET /api/operator/households': operator((req) => {
+      const q = (new URL(req.url).searchParams.get('q') ?? '').trim().toLowerCase()
+      const households = ledger
+        .households()
+        .filter((h) => h.displayName.toLowerCase().includes(q))
+        .map(({ id, displayName, timeZone, suspendedSince, signedUpAt }) => ({ id, displayName, timeZone, suspendedSince, signedUpAt, managers: accounts.managerEmails(id) }))
+      return Response.json({ pauseSignUps: ledger.siteSwitch(PAUSE_SIGN_UPS), households })
+    }),
+    'POST /api/operator/action': operator(async (req, session) => {
+      const { householdId, action, value } = await req.json()
+      const house = ledger.household(householdId)
+      if (!house || !OPERATOR_ACTIONS.has(action)) return new Response('No such household or action', { status: 400 })
+      if (action === 'rename') house.apply({ type: 'rename', displayName: value })
+      if (action === 'timeZone') hub.publish(house.id, house.apply({ type: 'setTimeZone', timeZone: value }))
+      if (action === 'suspend' || action === 'unsuspend') {
+        ledger.setSuspended(house.id, action === 'suspend')
+        if (action === 'suspend') hub.close({ householdId: house.id }) // its phones and TVs, at once
+      }
+      log(`operator action=${action} household=${house.id} by=${session.manager.email}`)
+      return new Response('OK')
+    }),
+    'POST /api/operator/pause': operator(async (req, session) => {
+      const { on } = await req.json()
+      ledger.setSiteSwitch(PAUSE_SIGN_UPS, on === true)
+      log(`operator action=${on === true ? 'pause-sign-ups' : 'resume-sign-ups'} by=${session.manager.email}`)
+      return new Response('OK')
+    }),
+
     // ---- Signing in (spec §3). The sign-up page posts here; Google sends the person back to the callback.
     'POST /auth/google/start': async (req, server) => {
       if (!guard.take('signIn', clientIp(req, server))) return page('Slow down', '<p>Too many sign-ins from here. Try again in a while.</p>', 429)
@@ -213,10 +255,11 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     const header = req.headers.get('X-Join-Key')
     const key = header ?? new URL(req.url).searchParams.get('key')
     if (key) {
+      // A Suspended Household's phones and TVs are refused, like a wrong key (spec §13).
       const householdId = ledger.householdByJoinKey(key)
-      if (householdId != null) return { householdId, kind: 'key', token: key }
+      if (householdId != null) return ledger.isSuspended(householdId) ? null : { householdId, kind: 'key', token: key }
       const tvHousehold = header ? null : ledger.householdByTvToken(key)
-      if (tvHousehold == null) return null
+      if (tvHousehold == null || ledger.isSuspended(tvHousehold)) return null
       // A TV paired by code also carries its device token (?device=): the Household's own TV, not a viewer.
       const paired = ledger.isPairedDevice(tvHousehold, new URL(req.url).searchParams.get('device'))
       return { householdId: tvHousehold, kind: 'tv', token: key, paired }
@@ -236,11 +279,13 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     }
   }
 
-  // A page only a signed-in Manager opens; anyone else goes to sign-in.
+  // A page only a signed-in Manager opens; anyone else goes to sign-in. A Suspended Household's Managers see
+  // the notice and the contact instead.
   function managerPage(pathname) {
     return async (req) => {
       const session = accounts.session(tokenOf(req))
       if (!session) return redirect('/signup')
+      if (ledger.isSuspended(session.householdId)) return page('Suspended', `<p>This Household is suspended by the Operator.</p><p>Questions: <a href="mailto:${esc(contact)}">${esc(contact)}</a></p>`, 403)
       return renew(await serveStatic(pathname, req), session, req)
     }
   }
@@ -249,7 +294,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   function write(handler) {
     return async (req) => {
       const id = ledger.householdByJoinKey(req.headers.get('X-Join-Key'))
-      if (id == null) return new Response('Wrong join key', { status: 403 })
+      if (id == null || ledger.isSuspended(id)) return new Response('Wrong join key', { status: 403 })
       try {
         const res = await handler(req, ledger.household(id))
         if (res) return res
@@ -263,11 +308,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     }
   }
 
-  // Setup's reads and commands: the session leads to the Manager's one Household.
+  // Setup's reads and commands: the session leads to the Manager's one Household (not while it's Suspended).
   function manager(handler) {
     return async (req, server) => {
       const session = accounts.session(tokenOf(req))
       if (!session) return new Response('Sign in first', { status: 401 })
+      if (ledger.isSuspended(session.householdId)) return new Response(`This Household is suspended by the Operator. Contact: ${contact}`, { status: 403 })
       let res
       try {
         res = (await handler(req, ledger.household(session.householdId), session, server)) ?? new Response('OK')
@@ -276,6 +322,21 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
         throw err
       }
       return renew(res, session, req)
+    }
+  }
+
+  // The Operator's pages and API: a signed-in Manager on OPERATOR_EMAILS.
+  function operator(handler) {
+    return async (req, server) => {
+      const session = accounts.session(tokenOf(req))
+      if (!session) return new Response('Sign in first', { status: 401 })
+      if (!session.operator) return new Response('Not for you', { status: 403 })
+      try {
+        return renew((await handler(req, session, server)) ?? new Response('OK'), session, req)
+      } catch (err) {
+        if (err instanceof BadCommand || err instanceof SyntaxError) return new Response(err.message, { status: 400 })
+        throw err
+      }
     }
   }
 

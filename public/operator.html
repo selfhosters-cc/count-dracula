@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Count Dracula — Operator</title>
+  <style>
+    :root { --bg: #14101c; --panel: #221a2e; --panel2: #2d2340; --text: #f5efe6; --dim: #a99cbc; --orange: #ff7a1a; --danger: #ff5a6e; --ok: #6c6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      padding: 16px; max-width: 720px; margin-inline: auto; }
+    h1 { margin: 0 0 12px; font-size: 24px; }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+    section { background: var(--panel); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+    label { display: block; color: var(--dim); font-size: 13px; margin: 10px 0 4px; }
+    input, select, button { font: inherit; color: inherit; }
+    input, select { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ffffff30; background: var(--bg); }
+    button { border: 0; border-radius: 10px; padding: 10px 14px; background: var(--panel2); font-weight: 700; cursor: pointer; }
+    button.primary { background: var(--orange); color: #1a0d00; }
+    button.danger { color: var(--danger); }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row > input, .row > select { flex: 1; min-width: 0; }
+    .muted { color: var(--dim); font-size: 13px; }
+    .house { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; background: none; border-bottom: 1px solid #ffffff10; border-radius: 0; padding: 12px 4px; }
+    .tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #ff5a6e30; color: var(--danger); white-space: nowrap; }
+    #status { position: sticky; top: 0; min-height: 1.4em; color: var(--ok); font-weight: 700; }
+    #status.err { color: var(--danger); }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>🧛 Operator</h1>
+  <div id="status" role="status"></div>
+
+  <section>
+    <div class="row"><b style="flex: 1">Sign-ups: <span id="pause-state"></span></b><button id="pause"></button></div>
+  </section>
+
+  <section id="list-view">
+    <input id="search" type="search" placeholder="Find a household by name" autocomplete="off">
+    <div id="households"></div>
+  </section>
+
+  <section id="detail" hidden>
+    <button id="back">‹ All households</button>
+    <h2 id="d-name" style="margin-top: 12px"></h2>
+    <p class="muted" id="d-state"></p>
+    <p class="muted">Managers: <span id="d-managers"></span></p>
+    <form id="rename-form">
+      <label for="d-rename">Rename</label>
+      <div class="row"><input id="d-rename" maxlength="40" autocomplete="off"><button type="submit">Rename</button></div>
+    </form>
+    <form id="zone-form">
+      <label for="d-zone">Fix time zone</label>
+      <div class="row"><select id="d-zone"></select><button type="submit">Save</button></div>
+    </form>
+    <p style="margin-top: 16px"><button id="d-suspend" class="danger"></button></p>
+  </section>
+
+  <script type="module" src="/operator.js"></script>
+</body>
+</html>

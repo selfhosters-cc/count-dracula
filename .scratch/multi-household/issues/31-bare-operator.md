@@ -1,7 +1,7 @@
 # Bare /operator: Rename, Suspend and Pause sign-ups
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 19, 21, 23
 
 ## What to build
@@ -23,10 +23,20 @@ The smallest `/operator` that's safe to open sign-up with. See [spec §13](../sp
 
 ## Acceptance criteria
 
-- [ ] A non-Operator Manager gets 403 on `/operator` and its API
-- [ ] Rename and Fix time zone change what the Household's TV and phones show, live
-- [ ] Suspend closes the Household's streams, refuses its key, TV link and setup, and shows the contact; Unsuspend restores everything with nothing lost
-- [ ] Pause sign-ups stops new Households (a test through the sign-up check) and survives a restart; existing Managers still sign in
-- [ ] Each action writes one log line in the stated shape
-- [ ] A display name of `<img src=x onerror=alert(1)>` renders as text on `/operator`
-- [ ] `bun test` passes
+- [x] A non-Operator Manager gets 403 on `/operator` and its API
+- [x] Rename and Fix time zone change what the Household's TV and phones show, live
+- [x] Suspend closes the Household's streams, refuses its key, TV link and setup, and shows the contact; Unsuspend restores everything with nothing lost
+- [x] Pause sign-ups stops new Households (a test through the sign-up check) and survives a restart; existing Managers still sign in
+- [x] Each action writes one log line in the stated shape
+- [x] A display name of `<img src=x onerror=alert(1)>` renders as text on `/operator`
+- [x] `bun test` passes
+
+## Notes from the build
+
+- **Routes:** `GET /operator` (page), `GET /api/operator/households` (`{ pauseSignUps, households: [{ id, displayName, timeZone, suspendedSince, signedUpAt, managers }] }`; `?q=` filters, though the page filters itself so a renamed Household stays open), `POST /api/operator/action` (`{ householdId, action: rename | timeZone | suspend | unsuspend, value }`), `POST /api/operator/pause` (`{ on }`). A non-Operator session gets 403; no session, 401 (or `/signup` for the page).
+- **Suspend** sets `households.suspended_since`. Its join key and TV link are refused like wrong ones (so TVs show "Not available" and phones stop), its streams close at once, and its Managers get a 403 page with `OPERATOR_CONTACT` instead of `/setup` and the tally, and 403 from Setup's API. Nothing is deleted. Nearby (ticket 41) and share links (ticket 44) must check `ledger.isSuspended`.
+- **Fix time zone** is the Household command `setTimeZone`, which sends `event.updated` so every screen resyncs in the new zone. Rename goes through the blocklist like any rename.
+- **Pause sign-ups** is the site switch `pauseSignUps` in the new `site_switches` table (migration step 7). It's checked before the Guard's sign-up limits, so a paused sign-up spends no token.
+- **Audit:** `operator action=<rename|timeZone|suspend|unsuspend> household=<id> by=<email>`, and `operator action=pause-sign-ups|resume-sign-ups by=<email>`.
+- `OPERATOR_CONTACT` falls back to `privacy@count-dracula.example.com`.
+- Checked in the browser: the list and search, Rename to `<b>Bold</b> <img src=x onerror=…>` showing as text, Fix time zone, Suspend showing "Suspended since …" and Unsuspend; one log line each.

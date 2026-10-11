@@ -214,6 +214,24 @@ export function openLedger(db, config) {
       opened.delete(id)
     },
 
+    // Suspend / Unsuspend (spec §13): switched off by the Operator, with nothing deleted.
+    setSuspended(id, on) {
+      db.query('UPDATE households SET suspended_since = ? WHERE id = ?').run(on ? now() : null, id)
+    },
+
+    isSuspended(id) {
+      return db.query('SELECT suspended_since FROM households WHERE id = ?').get(id)?.suspended_since != null
+    },
+
+    // Site switches (spec §4): the Operator's, kept in the database so they need no redeploy.
+    siteSwitch(key) {
+      return db.query('SELECT value FROM site_switches WHERE key = ?').get(key)?.value === 'on'
+    },
+
+    setSiteSwitch(key, on) {
+      db.query('INSERT OR REPLACE INTO site_switches (key, value) VALUES (?, ?)').run(key, on ? 'on' : 'off')
+    },
+
     // Whether a device token is a TV this Household paired by code (and hasn't rotated away since).
     isPairedDevice(householdId, token) {
       if (typeof token !== 'string' || token === '') return false
@@ -228,7 +246,11 @@ export function openLedger(db, config) {
 
     households() {
       return db
-        .query('SELECT id, display_name AS displayName, time_zone AS timeZone, location_cell AS location, first_run_passed AS firstRunPassed FROM households ORDER BY id')
+        .query(`
+          SELECT id, display_name AS displayName, time_zone AS timeZone, location_cell AS location, first_run_passed AS firstRunPassed,
+            suspended_since AS suspendedSince, signed_up_at AS signedUpAt
+          FROM households ORDER BY id
+        `)
         .all()
         .map((h) => ({ ...h, firstRunPassed: h.firstRunPassed === 1 }))
     },
@@ -678,6 +700,13 @@ export function openLedger(db, config) {
         if (cell !== null && !isCell(cell)) throw new BadCommand('A Location is a 5-character geohash cell')
         db.query('UPDATE households SET location_cell = ? WHERE id = ?').run(cell, householdId)
         return []
+      },
+
+      // The Operator's Fix time zone (spec §13): every screen redraws the night in the new zone.
+      setTimeZone({ timeZone }) {
+        if (!isTimeZone(timeZone)) throw new BadCommand('Pick a time zone from the list')
+        db.query('UPDATE households SET time_zone = ? WHERE id = ?').run(timeZone, householdId)
+        return [{ type: 'event.updated', eventId: eventById().id }]
       },
 
       // First-run's screen 3 was passed (paired, sent, used here or skipped): it stops showing.
