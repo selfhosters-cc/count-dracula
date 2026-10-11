@@ -787,11 +787,23 @@ async function serveStatic(pathname, req, contact = DEFAULT_CONTACT) {
   if (!(await file.exists())) return notFound()
   // The launchers say __ORIGIN__ wherever they need the server's address: filled in with the address
   // they were downloaded from (https via Caddy on the tailnet, or the LAN address).
-  if (dir === KIOSK_DIR) return new Response((await file.text()).replaceAll('__ORIGIN__', originOf(req)), { headers: { 'Content-Type': file.type } })
+  const cache = { 'Cache-Control': cacheControlOf(path) }
+  if (dir === KIOSK_DIR) return new Response((await file.text()).replaceAll('__ORIGIN__', originOf(req)), { headers: { 'Content-Type': file.type, ...cache } })
   // Pages that offer help or the privacy contact say __CONTACT__: filled in with OPERATOR_CONTACT, never committed.
   // __ORIGIN__ is this site's address, for the share page's link-preview tags, which want absolute URLs.
-  if (path.endsWith('.html')) return new Response((await file.text()).replaceAll('__CONTACT__', esc(contact)).replaceAll('__ORIGIN__', esc(originOf(req))), { headers: { 'Content-Type': file.type } })
-  return new Response(file)
+  if (path.endsWith('.html')) return new Response((await file.text()).replaceAll('__CONTACT__', esc(contact)).replaceAll('__ORIGIN__', esc(originOf(req))), { headers: { 'Content-Type': file.type, ...cache } })
+  // Plain files revalidate cheaply: Last-Modified, and a 304 when the browser's copy is current.
+  const modified = new Date(Math.floor(file.lastModified / 1000) * 1000)
+  const since = Date.parse(req.headers.get('If-Modified-Since') ?? '')
+  if (!Number.isNaN(since) && since >= modified.getTime()) return new Response(null, { status: 304, headers: cache })
+  return new Response(file, { headers: { ...cache, 'Last-Modified': modified.toUTCString() } })
+}
+
+// Told nothing, Cloudflare keeps .js and .css at its edge and in browsers for 4 hours, so a deploy's new page would
+// run last deploy's scripts. Pages, scripts, styles and data revalidate on every load; pictures, fonts and sounds,
+// which never change under the same name in practice, keep a day.
+function cacheControlOf(path) {
+  return /\.(png|jpe?g|gif|webp|ico|woff2?|ttf|otf|mp3|ogg|wav|m4a)$/i.test(path) ? 'public, max-age=86400' : 'no-cache'
 }
 
 function originOf(req) {

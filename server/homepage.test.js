@@ -122,6 +122,20 @@ describe('/ is the homepage', () => {
   })
 })
 
+describe('caching, so a deploy is seen at once (Cloudflare keeps .js 4 hours when told nothing)', () => {
+  test('pages, scripts, styles and data are revalidated every time; images, fonts and sounds kept a day', async () => {
+    const { app } = boot()
+    const cacheOf = async (path) => (await get(app, path)).headers.get('Cache-Control')
+
+    for (const path of ['/', '/door', '/tv', '/home.js', '/door-view.js', '/shared/codes.js', '/privacy']) {
+      expect({ path, cache: await cacheOf(path) }).toEqual({ path, cache: 'no-cache' })
+    }
+    for (const path of ['/tv.png', '/og-home.png']) {
+      expect({ path, cache: await cacheOf(path) }).toEqual({ path, cache: 'public, max-age=86400' })
+    }
+  })
+})
+
 describe('every "go sign in" points at /', () => {
   test('/setup, /tally, /summary and /operator without a session go to the Sign in form', async () => {
     const { app } = boot()
