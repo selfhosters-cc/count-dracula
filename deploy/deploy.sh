@@ -2,7 +2,7 @@
 # Deploys the current checkout to the Count Dracula LXC: deploy/deploy.sh
 #   deploy/deploy.sh --rollback   puts the previous build back
 # Refuses to ship if the tests fail. Keeps the database and /etc/count-dracula/config.json untouched;
-# on the very first deploy it writes that config from deploy/config.production.json with a random PIN.
+# on the very first deploy it writes that config from deploy/config.production.json.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -53,18 +53,17 @@ scp -q -o BatchMode=yes "$stage"/* "$PVE:/tmp/count-dracula-deploy/"
 pve "cd /tmp/count-dracula-deploy && for f in *; do pct push $VMID \$f /tmp/\$f; done && rm -rf /tmp/count-dracula-deploy"
 
 echo "==> Installing"
-pin=$(printf '%04d' $((RANDOM % 10000)))
 install_out=$(in_lxc "
   # Bun: only replaced when the version differs.
   if ! cmp -s /tmp/bun /usr/local/bin/bun; then install -m 0755 /tmp/bun /usr/local/bin/bun; fi
   # The app: unpacked beside the old one, then swapped, keeping the old one for --rollback.
   rm -rf $APP.new && mkdir -p $APP.new && tar -xzf /tmp/app.tgz -C $APP.new && cp /tmp/REVISION $APP.new/
   rm -rf $APP.prev && if [ -d $APP ]; then mv $APP $APP.prev; fi && mv $APP.new $APP
-  # The config: written once, never overwritten (it holds the admin PIN).
+  # The config: written once, never overwritten (it may have been edited on the server).
   if [ ! -f /etc/count-dracula/config.json ]; then
-    sed -e 's/__PIN__/$pin/' -e 's/__IP__/$IP/' -e 's/\"__HOST__\"/${TAILNET_HOST:+\"$TAILNET_HOST\"}/' /tmp/config.production.json > /etc/count-dracula/config.json
+    sed -e 's/__IP__/$IP/' -e 's/\"__HOST__\"/${TAILNET_HOST:+\"$TAILNET_HOST\"}/' /tmp/config.production.json > /etc/count-dracula/config.json
     chmod 640 /etc/count-dracula/config.json && chgrp countdracula /etc/count-dracula/config.json
-    echo NEW_PIN
+    echo NEW_CONFIG
   fi
   install -m 0644 /tmp/count-dracula.service /etc/systemd/system/count-dracula.service
   systemctl daemon-reload
@@ -72,8 +71,8 @@ install_out=$(in_lxc "
   systemctl restart count-dracula
   rm -f /tmp/app.tgz /tmp/bun /tmp/REVISION /tmp/config.production.json /tmp/count-dracula.service
 ")
-if [[ $install_out == *NEW_PIN* ]]; then
-  echo "    First deploy: the admin PIN for /setup is $pin (in /etc/count-dracula/config.json)."
+if [[ $install_out == *NEW_CONFIG* ]]; then
+  echo "    First deploy: wrote /etc/count-dracula/config.json."
 fi
 
 echo "==> Checking it answers"

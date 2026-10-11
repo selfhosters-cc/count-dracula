@@ -1,24 +1,41 @@
-// The HTTP layer stays thin: check the join key, parse the body, call apply on that Household, publish the deltas.
-// Until every read carries a credential (v2 ticket 22), reads and Setup act on the join key's Household,
-// or Household #1.
+// The HTTP layer stays thin: find the credential's Household (a join key, or a Manager's session for Setup),
+// parse the body, call apply on that Household, publish the deltas. Until every read carries a credential
+// (v2 ticket 22), phone reads act on the join key's Household, or Household #1.
 import { Database } from 'bun:sqlite'
 import { networkInterfaces } from 'node:os'
 import { resolve, sep } from 'node:path'
 import { loadConfig } from './config.js'
 import { BadCommand, openLedger } from './ledger.js'
+import { openAccounts } from './accounts.js'
+import { googleClient } from './google.js'
 import { createHub } from './hub.js'
 import { toCsv } from './export.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
-const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html' }
-const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch'])
+const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html' }
+const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename'])
 
-export function startServer({ configPath, port, heartbeatMs }) {
+// The sign-in cookie (spec §3): 90 days, renewed with use; the session itself lives server-side.
+const SESSION_COOKIE = 'cd_session'
+const sessionCookie = (token, maxAge = 90 * 86_400) => `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`
+
+// env: PUBLIC_HOST, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPERATOR_EMAILS, HOUSEHOLD1_MANAGER_EMAIL (deploy/local.env).
+// google, now and canSignUp are seams for the tests.
+export function startServer({ configPath, port, heartbeatMs, env = process.env, google, now = Date.now, canSignUp }) {
   const config = loadConfig(configPath)
   let lanUrl = config.lanUrl // resolved once the server is listening, if the config doesn't say
-  const ledger = openLedger(new Database(config.dbPath, { create: true }), { ...config, lanUrl: () => lanUrl })
+  const db = new Database(config.dbPath, { create: true })
+  const ledger = openLedger(db, { ...config, now, lanUrl: () => lanUrl })
+  const accounts = openAccounts(db, {
+    ledger,
+    google: google ?? googleClient({ clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }),
+    now,
+    household1Email: env.HOUSEHOLD1_MANAGER_EMAIL ?? '',
+    operatorEmails: (env.OPERATOR_EMAILS ?? '').split(/[\s,]+/).filter(Boolean),
+    canSignUp,
+  })
   const hub = createHub({ heartbeatMs })
 
   const routes = {
@@ -45,12 +62,54 @@ export function startServer({ configPath, port, heartbeatMs }) {
       const house = firstHousehold()
       return house ? Response.json({ joinKey: house.joinKey() }) : notFound()
     },
-    // Setup (spec §6): the join key and the admin PIN.
-    'GET /api/events': read((req, house) =>
-      isAdmin(req) ? Response.json(house.events()) : new Response('Wrong PIN', { status: 403 })),
-    // ⬇ Export event (spec §6): a CSV download, PIN only.
-    'GET /api/export': read((req, house) => {
-      if (!isAdmin(req)) return new Response('Wrong PIN', { status: 403 })
+    // ---- Signing in (spec §3). The sign-up page posts here; Google sends the person back to the callback.
+    'POST /auth/google/start': async (req) => {
+      const form = await req.formData()
+      try {
+        return redirect(accounts.beginSignIn({ displayName: form.get('displayName'), timeZone: form.get('timeZone'), redirectUri: callbackUrl(req) }))
+      } catch (err) {
+        if (err instanceof BadCommand) return page('Pick another name', `<p>${esc(err.message)}.</p><p><a href="/signup">Back</a></p>`, 400)
+        throw err
+      }
+    },
+    'GET /auth/google/callback': async (req, server) => {
+      const params = new URL(req.url).searchParams
+      if (params.has('error')) return redirect('/signup') // they backed out at Google
+      let result
+      try {
+        result = await accounts.finishSignIn({ code: params.get('code'), state: params.get('state'), redirectUri: callbackUrl(req), ip: clientIp(req, server) })
+      } catch (err) {
+        console.error('google sign-in failed:', err.message)
+        return page('Sign-in didn\'t work', '<p>Google sign-in didn\'t work. <a href="/signup">Try again</a>.</p>', 502)
+      }
+      if (result.refused) return REFUSALS[result.refused]()
+      return redirect('/setup', { 'Set-Cookie': sessionCookie(result.token) })
+    },
+    'POST /auth/signout': (req) => {
+      accounts.signOut(tokenOf(req))
+      return redirect('/signup', { 'Set-Cookie': sessionCookie('', 0) })
+    },
+
+    // ---- Setup (spec §6): a signed-in Manager of the Household.
+    'GET /setup': async (req) => {
+      const session = accounts.session(tokenOf(req))
+      if (!session) return redirect('/signup')
+      return renew(await serveStatic('/setup', req), session, req)
+    },
+    'GET /api/household': manager((req, house, session) => {
+      const { displayName, timeZone } = ledger.households().find((h) => h.id === house.id)
+      return Response.json({ id: house.id, displayName, timeZone, joinKey: house.joinKey(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
+    }),
+    // Delete my Household: typed name to confirm; everything goes at once, and its streams close.
+    'POST /api/household/delete': manager(async (req, house) => {
+      const { confirm } = await req.json()
+      accounts.deleteHousehold(house.id, confirm)
+      hub.close({ householdId: house.id })
+      return new Response('Deleted', { headers: { 'Set-Cookie': sessionCookie('', 0) } })
+    }),
+    'GET /api/events': manager((req, house) => Response.json(house.events())),
+    // ⬇ Export event (spec §6): a CSV download.
+    'GET /api/export': manager((req, house) => {
       const night = house.exportEvent(Number(new URL(req.url).searchParams.get('event')))
       if (!night) return notFound()
       const filename = night.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'event'
@@ -58,10 +117,8 @@ export function startServer({ configPath, port, heartbeatMs }) {
         headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${filename}.csv"` },
       })
     }),
-    'GET /api/batches': read((req, house) =>
-      isAdmin(req) ? Response.json(house.batches()) : new Response('Wrong PIN', { status: 403 })),
-    'POST /api/admin': write(async (req, house) => {
-      if (!isAdmin(req)) return new Response('Wrong PIN', { status: 403 })
+    'GET /api/batches': manager((req, house) => Response.json(house.batches())),
+    'POST /api/admin': manager(async (req, house) => {
       const command = await req.json()
       if (!ADMIN_COMMANDS.has(command?.type)) throw new BadCommand(`Not a Setup command: ${command?.type}`)
       const deltas = house.apply(command)
@@ -130,8 +187,31 @@ export function startServer({ configPath, port, heartbeatMs }) {
     }
   }
 
-  function isAdmin(req) {
-    return config.adminPin !== '' && req.headers.get('X-Admin-Pin') === config.adminPin
+  // Setup's reads and commands: the session leads to the Manager's one Household.
+  function manager(handler) {
+    return async (req, server) => {
+      const session = accounts.session(tokenOf(req))
+      if (!session) return new Response('Sign in first', { status: 401 })
+      let res
+      try {
+        res = (await handler(req, ledger.household(session.householdId), session, server)) ?? new Response('OK')
+      } catch (err) {
+        if (err instanceof BadCommand || err instanceof SyntaxError) return new Response(err.message, { status: 400 })
+        throw err
+      }
+      return renew(res, session, req)
+    }
+  }
+
+  // A session that was just renewed sends its cookie again, with a fresh 90 days.
+  function renew(res, session, req) {
+    if (session.renewed && !res.headers.has('Set-Cookie')) res.headers.append('Set-Cookie', sessionCookie(tokenOf(req)))
+    return res
+  }
+
+  // Google's callback on this host: the public one in production, the request's own in development.
+  function callbackUrl(req) {
+    return `${env.PUBLIC_HOST ? `https://${env.PUBLIC_HOST}` : originOf(req)}/auth/google/callback`
   }
 
   const server = Bun.serve({
@@ -190,6 +270,40 @@ function lanAddress(port) {
     if (lan) return `http://${lan.address}:${port}`
   }
   return null
+}
+
+function tokenOf(req) {
+  const cookies = req.headers.get('Cookie') ?? ''
+  return cookies.split(/;\s*/).find((c) => c.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1) ?? null
+}
+
+// Behind Cloudflare, the visitor's address is in CF-Connecting-IP (spec §15).
+function clientIp(req, server) {
+  return req.headers.get('CF-Connecting-IP') ?? server?.requestIP(req)?.address ?? null
+}
+
+function redirect(location, headers = {}) {
+  return new Response(null, { status: 303, headers: { Location: location, ...headers } })
+}
+
+const esc = (text) => String(text ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+
+// A small plain page for the sign-in outcomes that aren't /setup.
+function page(title, bodyHtml, status) {
+  return new Response(
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
+<style>body{margin:0;padding:24px 16px;background:#14101c;color:#f5efe6;font:17px/1.5 system-ui,sans-serif;max-width:560px;margin-inline:auto}a{color:#ff7a1a}</style></head>
+<body><h1>🧛 ${esc(title)}</h1>${bodyHtml}</body></html>`,
+    { status, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+  )
+}
+
+// Why a sign-in didn't end in /setup (Accounts' finishSignIn refusals).
+const REFUSALS = {
+  state: () => page('Start again', '<p>That sign-in link has expired or was already used. <a href="/signup">Start again</a>.</p>', 400),
+  unverified: () => page('Email not verified', '<p>Google hasn\'t verified this account\'s email yet, so it can\'t sign in.</p>', 403),
+  noHousehold: () => page('No household yet', '<p>This Google account doesn\'t run a household here yet. <a href="/signup">Sign up</a> to start one.</p>', 404),
+  paused: () => page('Sign-ups are paused', '<p>Sign-ups are paused, try again later.</p>', 503),
 }
 
 function notFound() {

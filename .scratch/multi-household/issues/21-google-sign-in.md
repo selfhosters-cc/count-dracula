@@ -1,7 +1,7 @@
 # Google sign-in, Managers and deleting a Household
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 17
 
 ## What to build
@@ -44,14 +44,26 @@ People sign in with Google and become Managers. Signing up creates a Household. 
 
 ## Acceptance criteria
 
-- [ ] With the fake Google: a new account signs up and lands in `/setup` of a new Household with a live Rehearsal
-- [ ] The same account signing in again reaches the same Household; it can't make a second one
-- [ ] `HOUSEHOLD1_MANAGER_EMAIL` becomes Household #1's Manager; later sign-ins match on `sub`, even if the email changes
-- [ ] A forged or replayed `state` is refused
-- [ ] The session cookie is HttpOnly, Secure and SameSite=Lax; it's renewed with use, expires after 90 days unused, and Sign out ends it
-- [ ] `/setup` and Setup commands refuse without a session, and refuse a Manager of another Household
-- [ ] No admin PIN anywhere in the code or config
-- [ ] A display name over 40 characters is refused
-- [ ] Delete needs the typed name, leaves no row of that Household in any table, writes one `deletions` row, and closes its streams
-- [ ] A display name of `<img src=x onerror=alert(1)>` renders as text in `/setup`
-- [ ] `bun test` passes
+- [x] With the fake Google: a new account signs up and lands in `/setup` of a new Household with a live Rehearsal
+- [x] The same account signing in again reaches the same Household; it can't make a second one
+- [x] `HOUSEHOLD1_MANAGER_EMAIL` becomes Household #1's Manager; later sign-ins match on `sub`, even if the email changes
+- [x] A forged or replayed `state` is refused
+- [x] The session cookie is HttpOnly, Secure and SameSite=Lax; it's renewed with use, expires after 90 days unused, and Sign out ends it
+- [x] `/setup` and Setup commands refuse without a session, and refuse a Manager of another Household
+- [x] No admin PIN anywhere in the code or config
+- [x] A display name over 40 characters is refused
+- [x] Delete needs the typed name, leaves no row of that Household in any table, writes one `deletions` row, and closes its streams
+- [x] A display name of `<img src=x onerror=alert(1)>` renders as text in `/setup`
+- [x] `bun test` passes
+
+## Notes from the build
+
+- **Accounts** (`server/accounts.js`): `beginSignIn({ displayName, timeZone, redirectUri })` → Google's URL; `finishSignIn({ code, state, redirectUri, ip })` → `{ token, householdId, created }` or `{ refused: 'state' | 'unverified' | 'noHousehold' | 'paused' }`; `session(token)`; `signOut(token)`; `deleteHousehold(id, confirm)`. States are in memory, single-use, 10 minutes.
+- **The sign-up check** for tickets 28 and 31: `startServer({ canSignUp })` → Accounts calls `canSignUp({ ip })` just before creating a Household. Signing in to an existing Household never asks it.
+- **Google seam:** `server/google.js` (`authUrl`, `exchange`); tests use `test/fake-google.js`. The ID token's `aud`, `iss` and `exp` are checked; no signature check, since it comes straight from Google's token endpoint over TLS.
+- **Routes:** `/signup` (page), `POST /auth/google/start`, `GET /auth/google/callback`, `POST /auth/signout`, `GET /api/household`, `POST /api/household/delete`. Setup's reads and `/api/admin` take the session cookie (`cd_session`) and no join key; `rename` is a Setup command. `GET /setup` without a session goes to `/signup`.
+- **Delete:** later tickets add their tables to `accounts.deleteHousehold` (or the Ledger's `deleteHousehold`). `server/sign-in.test.js`'s `rowsOf` checks every table for leftover rows, so a new table pointing at a Household, event or Manager is covered automatically.
+- **Secrets:** `startServer` reads `PUBLIC_HOST`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OPERATOR_EMAILS` and `HOUSEHOLD1_MANAGER_EMAIL` from the environment. How the service gets `deploy/local.env` into its environment is ticket 34.
+- The `Secure` cookie only sticks over HTTPS or on `localhost`, so a dev sign-in has to use `http://localhost:3131` (which is also the dev redirect URI in ticket 20).
+- Checked in the browser with a stand-in Google: sign-up lands in `/setup` with the starter costumes; a `<img src=x onerror=…>` display name shows as text; Sign out goes back to `/signup`.
+- The admin PIN is gone from the code, config, `deploy.sh` and READMEs.

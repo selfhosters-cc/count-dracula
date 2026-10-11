@@ -1,5 +1,4 @@
 {
-  "adminPin": "1031",
   "port": 3131,
   "lanUrl": null,
   "dbPath": "../count-dracula.sqlite",

@@ -4,7 +4,7 @@ import { startServer } from './app.js'
 
 const configPath = process.argv[2] ?? process.env.COUNT_DRACULA_CONFIG ?? 'config/config.json'
 if (!existsSync(configPath)) {
-  console.error(`No config file at ${configPath}. Copy config/config.example.json there and set the admin PIN.`)
+  console.error(`No config file at ${configPath}. Copy config/config.example.json there.`)
   process.exit(1)
 }
 

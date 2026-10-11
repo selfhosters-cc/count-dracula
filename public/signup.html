@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Count Dracula — Sign up</title>
+  <style>
+    :root { --bg: #14101c; --panel: #221a2e; --panel2: #2d2340; --text: #f5efe6; --dim: #a99cbc; --orange: #ff7a1a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      padding: 24px 16px; max-width: 520px; margin-inline: auto; }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+    p { line-height: 1.5; }
+    section { background: var(--panel); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+    label { display: block; color: var(--dim); font-size: 13px; margin: 0 0 4px; }
+    input, button { font: inherit; color: inherit; }
+    input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #ffffff30; background: var(--bg); }
+    button { width: 100%; margin-top: 12px; border: 0; border-radius: 10px; padding: 12px 14px; font-weight: 700; cursor: pointer; background: var(--panel2); }
+    button.primary { background: var(--orange); color: #1a0d00; }
+    .muted { color: var(--dim); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>🧛 Count Dracula</h1>
+  <p class="muted">Count your trick-or-treaters on your phones, while a TV on the porch cheers every kid.</p>
+
+  <section>
+    <h2>Start your household</h2>
+    <form method="post" action="/auth/google/start">
+      <label for="name">Name your household</label>
+      <input id="name" name="displayName" maxlength="40" required autocomplete="off" placeholder="The Smiths on Elm St">
+      <input type="hidden" name="timeZone">
+      <button class="primary" type="submit">Continue with Google</button>
+      <p class="muted">By continuing you agree to the Privacy notice and House rules.</p>
+    </form>
+  </section>
+
+  <section>
+    <h2>Already counting?</h2>
+    <form method="post" action="/auth/google/start">
+      <input type="hidden" name="timeZone">
+      <button type="submit">Sign in with Google</button>
+    </form>
+  </section>
+
+  <script type="module" src="/signup.js"></script>
+</body>
+</html>

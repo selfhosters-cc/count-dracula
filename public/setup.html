@@ -43,17 +43,6 @@
   <h1>🧛 Setup</h1>
   <div id="status" role="status"></div>
 
-  <section id="gate">
-    <h2>Admin PIN</h2>
-    <form id="gate-form">
-      <label for="pin">PIN (from the server config file)</label>
-      <input id="pin" inputmode="numeric" autocomplete="off">
-      <label for="key">Join key (only if this phone hasn't joined yet)</label>
-      <input id="key" autocomplete="off">
-      <p><button class="primary" type="submit">Unlock</button></p>
-    </form>
-  </section>
-
   <div id="admin" hidden>
     <section>
       <h2>Live now: <span id="live-name"></span></h2>
@@ -119,6 +108,19 @@
       <h2>Past events</h2>
       <div id="past"></div>
     </section>
+
+    <section>
+      <h2>Your household</h2>
+      <form id="name-form">
+        <label for="h-name">Household name</label>
+        <div class="row"><input id="h-name" maxlength="40" autocomplete="off"><button type="submit">Save</button></div>
+      </form>
+      <p class="muted">Signed in as <span id="signed-in"></span> · time zone <span id="h-zone"></span></p>
+      <form method="post" action="/auth/signout"><button type="submit">Sign out</button></form>
+      <h2 style="margin-top: 18px">Delete my household</h2>
+      <p class="muted">Deletes this household and every night, kid and costume in it, straight away. It can't be undone.</p>
+      <button id="delete-household" class="danger">Delete my household…</button>
+    </section>
   </div>
 
   <script type="module">
@@ -128,8 +130,8 @@
     const HOUR = 3_600_000
     let batches = []
 
-    let pin = localStorage.getItem('cd.adminPin') ?? ''
-    let joinKey = localStorage.getItem('cd.joinKey') ?? ''
+    let house = null // { id, displayName, timeZone, joinKey, manager, operator }
+    let joinKey = ''
     let events = []
     let editingId = null
     let timeZone // the Household's: every time of night in Setup reads in it (v2 spec §8)
@@ -140,13 +142,20 @@
       if (!isError) setTimeout(() => $('status').textContent === text && ($('status').textContent = ''), 2500)
     }
 
+    // Setup is a signed-in Manager's: the session cookie rides along, and a lapsed one goes back to sign-in.
+    async function get(path) {
+      const res = await fetch(path)
+      if (res.status === 401) location.href = '/signup'
+      if (!res.ok) throw new Error(await res.text())
+      return res.json()
+    }
+
     async function load() {
-      const headers = { 'X-Admin-Pin': pin }
-      const res = await fetch('/api/events', { headers })
-      if (res.status === 403) return false
-      events = await res.json()
-      batches = await (await fetch('/api/batches', { headers })).json()
-      timeZone = (await (await fetch('/api/snapshot', { headers: { 'X-Join-Key': joinKey } })).json()).timeZone
+      house = await get('/api/household')
+      joinKey = house.joinKey
+      timeZone = house.timeZone
+      events = await get('/api/events')
+      batches = await get('/api/batches')
       render()
       return true
     }
@@ -154,11 +163,12 @@
     async function admin(command, done) {
       const res = await fetch('/api/admin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Join-Key': joinKey, 'X-Admin-Pin': pin },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(command),
       })
+      if (res.status === 401) location.href = '/signup'
       if (!res.ok) {
-        say(res.status === 403 ? `${await res.text()}: check the join key and PIN` : await res.text(), true)
+        say(await res.text(), true)
         return null
       }
       const body = await res.json()
@@ -167,24 +177,20 @@
       return body
     }
 
-    // ---- the PIN gate: a wrong PIN is rejected; a right one is remembered on this phone
-    $('gate-form').addEventListener('submit', async (e) => {
+    // ---- your household: its name, signing out, and deleting it
+    $('name-form').addEventListener('submit', async (e) => {
       e.preventDefault()
-      pin = $('pin').value.trim()
-      if ($('key').value.trim()) {
-        joinKey = $('key').value.trim()
-        localStorage.setItem('cd.joinKey', joinKey)
-      }
-      if (await load()) {
-        localStorage.setItem('cd.adminPin', pin)
-        unlock()
-      } else say('Wrong PIN', true)
+      await admin({ type: 'rename', displayName: $('h-name').value }, 'Household name saved')
     })
 
-    function unlock() {
-      $('gate').hidden = true
-      $('admin').hidden = false
-    }
+    $('delete-household').addEventListener('click', async () => {
+      const typed = prompt(`Delete "${house.displayName}" and everything in it, for good? Type its name to confirm.`)
+      if (typed == null) return
+      if (typed !== house.displayName) return say("That didn't match, so nothing was deleted", true)
+      const res = await fetch('/api/household/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: typed }) })
+      if (!res.ok) return say(await res.text(), true)
+      location.href = '/signup'
+    })
 
     // ---- rendering
     function appendAll(node, children) {
@@ -203,6 +209,9 @@
 
       $('live-name').textContent = live.name
       $('time-zone').textContent = timeZone ?? ''
+      if (document.activeElement !== $('h-name')) $('h-name').value = house.displayName
+      $('signed-in').textContent = house.manager.email
+      $('h-zone').textContent = timeZone
       $('live-kids').textContent = live.kids
       $('join-key').textContent = joinKey || '(not set on this phone)'
 
@@ -348,9 +357,9 @@
       }
     })
 
-    // ⬇ Export event: the server makes the CSV; the PIN rides in a header, so fetch it and save it here.
+    // ⬇ Export event: the server makes the CSV; fetch it and save it here.
     async function exportEvent(event) {
-      const res = await fetch(`/api/export?event=${event.id}`, { headers: { 'X-Admin-Pin': pin } })
+      const res = await fetch(`/api/export?event=${event.id}`)
       if (!res.ok) return say(`Export failed: ${await res.text()}`, true)
       const name = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'event.csv'
       const link = h('a', { href: URL.createObjectURL(await res.blob()), download: name })
@@ -384,12 +393,12 @@
       const done = await admin({ type: 'changeKey' }, 'Join key changed')
       if (done) {
         joinKey = done.joinKey
-        localStorage.setItem('cd.joinKey', joinKey)
         render()
       }
     })
 
-    if (pin && (await load())) unlock()
+    await load()
+    $('admin').hidden = false
   </script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 // The Ledger: every write goes through apply(), every read through snapshot(), each on one Household.
 // See .scratch/count-dracula/modules.md §1 and .scratch/multi-household/spec.md §4.
 import { toBuckets } from '../shared/night-maths.js'
+import { migrate } from './migrations.js'
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -75,34 +76,6 @@ const SCHEMA = `
   );
 `
 
-// Versioned steps, run in order from PRAGMA user_version, each in one transaction. Once sign-up has
-// opened, a step only ever adds (spec §4).
-const MIGRATIONS = [
-  // 0 → 1: Households. A v1 database's nights, taps and TV mix become Household #1; a fresh one gets none.
-  (db, { now }) => {
-    db.exec(`
-      CREATE TABLE households (
-        id INTEGER PRIMARY KEY,
-        display_name TEXT NOT NULL DEFAULT '',
-        time_zone TEXT NOT NULL,
-        join_key TEXT NOT NULL UNIQUE,
-        mix TEXT,
-        location_cell TEXT,
-        suspended_since INTEGER,
-        signed_up_at INTEGER NOT NULL
-      );
-      ALTER TABLE events ADD COLUMN household_id INTEGER REFERENCES households(id);
-      ALTER TABLE events ADD COLUMN rehearsal INTEGER NOT NULL DEFAULT 0;
-      CREATE INDEX events_by_household ON events (household_id, live);
-    `)
-    const live = db.query('SELECT join_key FROM events WHERE live = 1').get()
-    if (!live) return
-    const mix = db.query("SELECT value FROM kv WHERE key = 'mix'").get()?.value ?? null
-    db.query("INSERT INTO households (id, time_zone, join_key, mix, signed_up_at) VALUES (1, 'America/Toronto', ?, ?, ?)").run(live.join_key, mix, now())
-    db.exec("UPDATE events SET household_id = 1; UPDATE events SET rehearsal = 1 WHERE name = 'Rehearsal'; DELETE FROM kv WHERE key = 'mix'")
-  },
-]
-
 // What a new Household's Rehearsal and nights start with (spec §6): site-wide, in code.
 const STARTER_COSTUMES = [
   ['Witch', '🧙'],
@@ -154,12 +127,7 @@ export function openLedger(db, config) {
   if (!db.query('PRAGMA table_info(kids)').all().some((c) => c.name === 'teen')) {
     db.exec('ALTER TABLE kids ADD COLUMN teen INTEGER NOT NULL DEFAULT 0')
   }
-  for (let version = db.query('PRAGMA user_version').get().user_version; version < MIGRATIONS.length; version++) {
-    db.transaction(() => {
-      MIGRATIONS[version](db, { now })
-      db.exec(`PRAGMA user_version = ${version + 1}`)
-    })()
-  }
+  migrate(db, { now })
 
   const opened = new Map() // household id → its Ledger, so seq and the soundboard cooldown live on
 
@@ -167,8 +135,7 @@ export function openLedger(db, config) {
     // Sign-up (spec §6): the Household with its join key, and its live Rehearsal with the starter
     // costumes and no golden tickets. Returns the new Household's id.
     createHousehold({ displayName, timeZone }) {
-      const name = requireName(displayName, 'A household')
-      if (name.length > 40) throw new BadCommand('A household name is at most 40 characters')
+      const name = displayNameOf(displayName)
       if (!isTimeZone(timeZone)) throw new BadCommand('A household needs its time zone')
       return db.transaction(() => {
         const { id } = db
@@ -196,6 +163,20 @@ export function openLedger(db, config) {
     householdByJoinKey(key) {
       if (typeof key !== 'string' || key === '') return null
       return db.query('SELECT id FROM households WHERE join_key = ?').get(key)?.id ?? null
+    },
+
+    // Delete my Household (spec §3): every event and everything they hold, then the Household itself.
+    // The Accounts module deletes its own rows in the same transaction.
+    deleteHousehold(id) {
+      db.transaction(() => {
+        const events = 'SELECT id FROM events WHERE household_id = ?'
+        for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches']) {
+          db.query(`DELETE FROM ${table} WHERE event_id IN (${events})`).run(id)
+        }
+        db.query('DELETE FROM events WHERE household_id = ?').run(id)
+        db.query('DELETE FROM households WHERE id = ?').run(id)
+      })()
+      opened.delete(id)
     },
 
     households() {
@@ -623,6 +604,12 @@ export function openLedger(db, config) {
         ]
       },
 
+      // The Household's display name (Setup, and sign-up's one field): at most 40 characters.
+      rename({ displayName }) {
+        db.query('UPDATE households SET display_name = ? WHERE id = ?').run(displayNameOf(displayName), householdId)
+        return []
+      },
+
       // Cuts off phones that joined with the old key; the HTTP layer hands the new one back.
       changeKey() {
         db.query('UPDATE households SET join_key = ? WHERE id = ?').run(randomKey(), householdId)
@@ -820,7 +807,13 @@ function toKid(row) {
   }
 }
 
-function isTimeZone(zone) {
+export function displayNameOf(displayName) {
+  const name = requireName(displayName, 'A household')
+  if (name.length > 40) throw new BadCommand('A household name is at most 40 characters')
+  return name
+}
+
+export function isTimeZone(zone) {
   if (typeof zone !== 'string' || zone === '') return false
   try {
     new Intl.DateTimeFormat('en', { timeZone: zone })

@@ -63,7 +63,7 @@ phones. A TV facing the porch celebrates every kid live and races tonight's coun
 | ![A golden ticket takeover: KID #278 WINS!](docs/screenshots/tv-golden.png) | ![The giant headstone for kid #300](docs/screenshots/tv-milestone.png) |
 | ![The Ghost soundboard button: ghosts rise across the TV](docs/screenshots/tv-soundboard.png) | ![The end-of-night recap](docs/screenshots/tv-recap.png) |
 
-### Setup (`/setup`, behind the admin PIN)
+### Setup (`/setup`, for a household's signed-in Managers)
 
 - **Events**: create a night (copying last year's costumes), **Go live**, change the join key, view, export
   or delete past nights.
@@ -89,7 +89,7 @@ canvas-confetti, qrcode-generator, the fonts) are vendored in `public/vendor/`, 
 CDN on the night.
 
 ```bash
-cp config/config.example.json config/config.json   # then set adminPin
+cp config/config.example.json config/config.json
 bun start                                          # prints the TV and phone URLs
 bun test
 ```
@@ -100,8 +100,7 @@ bun test
   checks for overscan.
 - **Setup**: `http://<host>:3131/setup`.
 
-`config/config.json` holds the admin PIN, the port, the database path, last year's counts
-(`config/2025-counts.json`), the six soundboard slots and a switch for each fun feature (milestones,
+`config/config.json` holds the port, the database path, the six soundboard slots and a switch for each fun feature (milestones,
 golden tickets, leaderboard, new-costume alert, soundboard, pumpkin patch, recap, rush meter).
 
 ### Deploying

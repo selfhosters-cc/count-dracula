@@ -7,6 +7,8 @@ import { startServer } from './app.js'
 import { openLedger } from './ledger.js'
 import { setUpV1Night } from '../test/v1-night.js'
 import { readFrames } from '../test/sse.js'
+import { fakeGoogle } from '../test/fake-google.js'
+import { cookieOf, signIn } from '../test/sign-in.js'
 
 const running = []
 afterEach(() => running.splice(0).forEach((app) => app.stop()))
@@ -21,14 +23,20 @@ function start(configOverrides = {}, options = {}) {
   db.close()
   const configPath = join(dir, 'config.json')
   writeFileSync(configPath, JSON.stringify({
-    adminPin: '4321',
     dbPath: 'db.sqlite',
     ...configOverrides,
   }))
-  const app = startServer({ configPath, port: 0, ...options })
+  const google = fakeGoogle()
+  const app = startServer({ configPath, port: 0, google, env: { HOUSEHOLD1_MANAGER_EMAIL: 'us@example.com' }, ...options })
   running.push(app)
   app.house = app.ledger.household(1)
+  app.google = google
   return app
+}
+
+// A Manager of Household #1, signed in.
+async function managerCookie(app) {
+  return cookieOf(await signIn({ app, google: app.google }, { sub: 'g-us', email: 'us@example.com' }))
 }
 
 describe('startup', () => {
@@ -167,7 +175,8 @@ describe('per-Household streams', () => {
   test("a stream opened with one Household's key never hears another Household's taps", async () => {
     const app = start()
     const other = app.ledger.household(app.ledger.createHousehold({ displayName: 'Next door', timeZone: 'America/Toronto' }))
-    const res = await fetch(`${app.url}/api/stream?key=${other.joinKey()}`)
+    const controller = new AbortController()
+    const res = await fetch(`${app.url}/api/stream?key=${other.joinKey()}`, { signal: controller.signal })
     const stream = readFrames(res)
     expect((await stream.next()).data.event.rehearsal).toBe(true)
 
@@ -176,7 +185,7 @@ describe('per-Household streams', () => {
 
     const delta = await stream.next()
     expect(delta.data).toMatchObject({ seq: 1, kid: { id: 'theirs', number: 1 } })
-    await stream.cancel()
+    controller.abort()
   })
 })
 
@@ -235,30 +244,28 @@ describe('pages', () => {
 })
 
 describe('admin (Setup)', () => {
-  function admin(app, command, { pin = '4321', key = app.house.joinKey() } = {}) {
+  async function admin(app, command, cookie) {
     return fetch(`${app.url}/api/admin`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Join-Key': key, 'X-Admin-Pin': pin },
+      headers: { 'Content-Type': 'application/json', Cookie: cookie ?? (await managerCookie(app)) },
       body: JSON.stringify(command),
     })
   }
 
-  test('needs the admin PIN from the config file as well as the join key', async () => {
+  test("takes a Manager's session, and only Setup commands", async () => {
     const app = start()
     const create = { type: 'createEvent', name: 'Halloween 2026' }
 
-    expect((await admin(app, create, { pin: '0000' })).status).toBe(403)
-    expect((await admin(app, create, { key: 'old-key' })).status).toBe(403)
+    expect((await admin(app, create, 'cd_session=nope')).status).toBe(401)
     expect((await admin(app, { type: 'tap', id: 'x', tappedAt: 1 })).status).toBe(400) // not an admin command
     expect((await admin(app, create)).status).toBe(200)
     expect(app.house.events().map((e) => e.name)).toContain('Halloween 2026')
   })
 
-  test('lists events for Setup only with the PIN', async () => {
+  test("lists the Household's events for Setup, never with the join key", async () => {
     const app = start()
 
-    expect((await fetch(`${app.url}/api/events`, { headers: { 'X-Admin-Pin': 'nope' } })).status).toBe(403)
-    const res = await fetch(`${app.url}/api/events`, { headers: { 'X-Admin-Pin': '4321' } })
+    const res = await fetch(`${app.url}/api/events`, { headers: { Cookie: await managerCookie(app) } })
     expect(res.status).toBe(200)
     const events = await res.json()
     expect(events.map((e) => e.name)).toEqual(['Rehearsal', 'Halloween 2025 (counts)'])
@@ -330,15 +337,15 @@ describe('☰ menu', () => {
 })
 
 describe('export', () => {
-  const exportCsv = (app, eventId, pin = '4321') => fetch(`${app.url}/api/export?event=${eventId}`, { headers: { 'X-Admin-Pin': pin } })
+  const exportCsv = async (app, eventId, cookie) => fetch(`${app.url}/api/export?event=${eventId}`, { headers: { Cookie: cookie ?? (await managerCookie(app)) } })
 
-  test('downloads the event as a CSV with the PIN; its non-deleted rows equal the TV count', async () => {
+  test("downloads the event as a CSV for a Manager; its non-deleted rows equal the TV count", async () => {
     const app = start()
     for (const id of ['a', 'b', 'c']) await postTap(app, aTap(id))
     app.house.apply({ type: 'remove', kidId: 'b' })
     const live = app.house.snapshot()
 
-    expect((await exportCsv(app, live.event.id, 'nope')).status).toBe(403)
+    expect((await exportCsv(app, live.event.id, 'cd_session=nope')).status).toBe(401)
     const res = await exportCsv(app, live.event.id)
 
     expect(res.status).toBe(200)

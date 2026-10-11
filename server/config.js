@@ -8,7 +8,6 @@ export function loadConfig(configPath) {
   const fromConfigDir = (p) => (p === ':memory:' ? p : resolve(dir, p))
 
   return {
-    adminPin: String(raw.adminPin ?? ''),
     port: raw.port ?? 3131,
     lanUrl: raw.lanUrl ?? null,
     // Host names whose visitors get the join key without scanning: the private tailnet name behind Caddy,

@@ -1,5 +1,4 @@
 {
-  "adminPin": "__PIN__",
   "port": 3131,
   "dbPath": "/var/lib/count-dracula/count-dracula.sqlite",
   "lanUrl": "http://__IP__:3131",

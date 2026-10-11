@@ -10,7 +10,7 @@ SSH keys of its own.
 | LAN | **http://192.168.5.31:3131** (static; the helper QR code bakes it in) |
 | Tailnet | **https://`$TAILNET_HOST`** via Caddy (LXC 117); set in `deploy/local.env` |
 | App | `/opt/count-dracula` (previous build kept in `/opt/count-dracula.prev`) |
-| Config | `/etc/count-dracula/config.json` (admin PIN, switches, soundboard; never overwritten by a deploy) |
+| Config | `/etc/count-dracula/config.json` (switches, soundboard; never overwritten by a deploy) |
 | Data | `/var/lib/count-dracula/count-dracula.sqlite` (WAL) |
 | Logs | `ssh proxmox pct exec 118 -- journalctl -u count-dracula -f` |
 | Time zone | America/Toronto (LXC and service): ghosts and the CSV summary bucket by local time |
@@ -50,8 +50,7 @@ deploy/deploy.sh              # tests, pack, push, swap, restart, health check
 deploy/deploy.sh --rollback   # put the previous build back
 ```
 
-The first deploy writes `/etc/count-dracula/config.json` from `deploy/config.production.json` with a
-random 4-digit admin PIN and prints it. Later deploys leave the config and the database alone. Bun is
+The first deploy writes `/etc/count-dracula/config.json` from `deploy/config.production.json`. Later deploys leave the config and the database alone. Bun is
 copied from the dev machine, so the LXC runs the version the tests ran with.
 
 Tailnet phones that open the HTTPS address get the join key automatically (`/api/join`, only on the
