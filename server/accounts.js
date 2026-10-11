@@ -9,7 +9,7 @@ const STATE_MS = 10 * 60_000 // a sign-in has 10 minutes to come back from Googl
 const DELETIONS_KEPT_MS = 61 * 86_400_000 // "gone within 2 months" (spec §16)
 const INVITE_MS = 7 * 86_400_000
 
-export function openAccounts(db, { ledger, google, now = Date.now, household1Email = '', operatorEmails = [], canSignUp = () => true }) {
+export function openAccounts(db, { ledger, google, now = Date.now, operatorEmails = [], canSignUp = () => true }) {
   const pending = new Map() // state → { nonce, displayName, timeZone, expiresAt }
   const operators = new Set(operatorEmails.map(normalEmail))
 
@@ -21,13 +21,6 @@ export function openAccounts(db, { ledger, google, now = Date.now, household1Ema
     const token = randomToken()
     db.query('INSERT INTO sessions (token, manager_id, expires_at) VALUES (?, ?, ?)').run(token, managerId, now() + SESSION_MS)
     return token
-  }
-
-  // Household #1 gets its first Manager from the configured email, once (spec §4).
-  function claimsHousehold1(identity) {
-    if (!household1Email || normalEmail(identity.email) !== normalEmail(household1Email)) return false
-    if (!ledger.household(1)) return false
-    return !db.query('SELECT 1 FROM managers WHERE household_id = 1').get()
   }
 
   return {
@@ -68,7 +61,6 @@ export function openAccounts(db, { ledger, google, now = Date.now, household1Ema
           return { ...join(invited.householdId, identity), created: false }
         })()
       }
-      if (claimsHousehold1(identity)) return { ...join(1, identity), created: false }
       if (!started.displayName) return { refused: 'noHousehold' }
       if (!canSignUp({ ip })) return { refused: 'paused' }
       return db.transaction(() => {

@@ -73,6 +73,50 @@ describe('deploy/access-request.js', () => {
   })
 })
 
+describe('deploy/import-past-counts.js (Household #1, after its sign-up)', () => {
+  test('makes the Past counts-only "Halloween 2025 (counts)" of 346 kids in the five 2025 buckets, and prints its id', async () => {
+    const { path, ids } = database()
+
+    const { out, code } = await run('import-past-counts.js', path, String(ids[0]))
+
+    expect(code).toBe(0)
+    const house = openLedger(new Database(path), {}).household(ids[0])
+    const event = house.events().find((e) => e.name === 'Halloween 2025 (counts)')
+    expect(event).toMatchObject({ state: 'past', countsOnly: true })
+    expect(out).toContain(`event ${event.id}`)
+    const db = new Database(path)
+    expect(db.query('SELECT slot_start AS start, slot_end AS end, count FROM ghost_buckets WHERE event_id = ? ORDER BY slot_start').all(event.id)).toEqual([
+      { start: '17:42', end: '18:00', count: 14 },
+      { start: '18:00', end: '18:30', count: 72 },
+      { start: '18:30', end: '19:00', count: 107 },
+      { start: '19:00', end: '19:30', count: 119 },
+      { start: '19:30', end: '20:00', count: 34 },
+    ])
+    expect(db.query('SELECT SUM(count) AS n FROM ghost_buckets WHERE event_id = ?').get(event.id).n).toBe(346)
+    expect(db.query('SELECT COUNT(*) AS n FROM events WHERE household_id = ?').get(ids[1]).n).toBe(2)
+  })
+
+  test('a second run refuses, and adds nothing', async () => {
+    const { path, ids } = database()
+    await run('import-past-counts.js', path, String(ids[0]))
+
+    const again = await run('import-past-counts.js', path, String(ids[0]))
+
+    expect(again.code).not.toBe(0)
+    expect(again.err).toContain('already has')
+    expect(new Database(path).query("SELECT COUNT(*) AS n FROM events WHERE name = 'Halloween 2025 (counts)'").get().n).toBe(1)
+  })
+
+  test('refuses a Household that is not in the database', async () => {
+    const { path } = database()
+
+    const { err, code } = await run('import-past-counts.js', path, '999')
+
+    expect(code).not.toBe(0)
+    expect(err).toContain('999')
+  })
+})
+
 describe('deploy/seed-nearby.js', () => {
   test("seeds 2 houses in one Area, each counted once through its door's Event, and each sees the other", async () => {
     const path = join(mkdtempSync(join(tmpdir(), 'count-dracula-seed-')), 'db.sqlite')

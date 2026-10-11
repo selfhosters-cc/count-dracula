@@ -11,8 +11,7 @@ ExecStart=/usr/local/bin/bun server/main.js /etc/count-dracula/config.json
 # Back in a second if it ever dies (spec §11: "Bun process crash → back in seconds").
 Restart=always
 RestartSec=1
-# The private settings (PUBLIC_HOST, the Google client, OPERATOR_EMAILS, HOUSEHOLD1_MANAGER_EMAIL,
-# OPERATOR_CONTACT), written by deploy.sh from deploy/local.env. Each Household's time zone is its own,
+# The private settings (PUBLIC_HOST, the Google client, OPERATOR_EMAILS, OPERATOR_CONTACT), written by deploy.sh from deploy/local.env. Each Household's time zone is its own,
 # so the server's TZ doesn't matter.
 EnvironmentFile=/etc/count-dracula/env
 # /var/lib/count-dracula, owned by the service user: the SQLite file (WAL) and backups/ live here.

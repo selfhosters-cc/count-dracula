@@ -13,13 +13,14 @@ import { cookieOf, signIn } from '../test/sign-in.js'
 const running = []
 afterEach(() => running.splice(0).forEach((app) => app.stop()))
 
-// Household #1, set up as a v1 first install was: racing a counts-only 2025 night.
+// Household #1, set up as a v1 first install was: racing a counts-only 2025 night, with one Manager (g-us).
 function start(configOverrides = {}, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
   const db = new Database(join(dir, 'db.sqlite'), { create: true })
   setUpV1Night(openLedger(db, {}), {
     ghostSeed: { name: 'Halloween 2025 (counts)', buckets: [{ start: '18:00', end: '18:30', count: 40 }] },
   })
+  db.query("INSERT INTO managers (google_sub, email, name, household_id, last_sign_in_at) VALUES ('g-us', 'us@example.com', 'Us', 1, 0)").run()
   db.close()
   const configPath = join(dir, 'config.json')
   writeFileSync(configPath, JSON.stringify({
@@ -27,7 +28,7 @@ function start(configOverrides = {}, options = {}) {
     ...configOverrides,
   }))
   const google = fakeGoogle()
-  const app = startServer({ configPath, port: 0, google, env: { HOUSEHOLD1_MANAGER_EMAIL: 'us@example.com' }, ...options })
+  const app = startServer({ configPath, port: 0, google, env: {}, ...options })
   running.push(app)
   app.house = namingTheDoor(app.ledger.household(1))
   app.google = google

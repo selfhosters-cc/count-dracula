@@ -38,7 +38,7 @@ const OPERATOR_ACTIONS = new Set(['rename', 'timeZone', 'suspend', 'unsuspend', 
 const SESSION_COOKIE = 'cd_session'
 const sessionCookie = (token, maxAge = 90 * 86_400) => `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`
 
-// env: PUBLIC_HOST, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPERATOR_EMAILS, HOUSEHOLD1_MANAGER_EMAIL (deploy/local.env).
+// env: PUBLIC_HOST, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPERATOR_EMAILS, OPERATOR_CONTACT (deploy/local.env).
 // google, now, canSignUp, tickMs, limits and log are seams for the tests.
 export function startServer({ configPath, port, heartbeatMs, env = process.env, google, now = Date.now, canSignUp, tickMs = 60_000, limits = LIMITS, log = console.log }) {
   const config = loadConfig(configPath)
@@ -66,7 +66,6 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     ledger,
     google: google ?? googleClient({ clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }),
     now,
-    household1Email: env.HOUSEHOLD1_MANAGER_EMAIL ?? '',
     operatorEmails: (env.OPERATOR_EMAILS ?? '').split(/[\s,]+/).filter(Boolean),
     // A new Household: not while sign-ups are paused (checked first, so it spends no token), then 3 per IP
     // per day and 60 site-wide per hour (spec §15).

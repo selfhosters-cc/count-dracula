@@ -25,8 +25,9 @@ Never commit a real host name or secret. Copy the example and fill it in (git-ig
 cp deploy/local.env.example deploy/local.env
 ```
 
-It needs `PUBLIC_HOST`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (v2 ticket 20), `OPERATOR_EMAILS`,
-`HOUSEHOLD1_MANAGER_EMAIL` and `OPERATOR_CONTACT`. `deploy.sh` refuses without all six.
+It needs `PUBLIC_HOST`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (v2 ticket 20), `OPERATOR_EMAILS` and
+`OPERATOR_CONTACT`. `deploy.sh` refuses without all five, and sends only those five to the server: any other line
+in `local.env` stays on the dev machine.
 
 ## Once: create the LXC
 
@@ -60,7 +61,7 @@ Each deploy:
 - refuses if a key is missing from `deploy/local.env`, or if the tests fail
 - takes a timestamped `VACUUM INTO` copy of the database into `/var/lib/count-dracula/deploy-copies/` first, and
   stops if it can't
-- writes `/etc/count-dracula/env` (the six private keys, mode 640, group `countdracula`)
+- writes `/etc/count-dracula/env` (the five private keys, mode 640, group `countdracula`)
 - writes `/etc/count-dracula/config.json` from `deploy/config.production.json` on the first deploy only; on a
   v1 server it removes the dead keys once (`adminPin`, `ghostSeed`, `lanUrl`, `autoJoinHosts`), adds
   `backupDir`, and says what it changed

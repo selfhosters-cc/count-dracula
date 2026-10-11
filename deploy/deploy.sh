@@ -10,7 +10,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # Private settings stay out of the repo: deploy/local.env (git-ignored); deploy/local.env.example lists them.
 if [[ -f deploy/local.env ]]; then source deploy/local.env; fi
-ENV_KEYS=(PUBLIC_HOST GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET OPERATOR_EMAILS HOUSEHOLD1_MANAGER_EMAIL OPERATOR_CONTACT)
+ENV_KEYS=(PUBLIC_HOST GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET OPERATOR_EMAILS OPERATOR_CONTACT)
 
 PVE=${PVE:-proxmox}
 VMID=${VMID:-118}
@@ -81,7 +81,7 @@ bun test >/dev/null 2>&1 || { echo "!! Tests fail: not deploying. Run bun test."
 echo "==> Packing $(git rev-parse --short HEAD)$(git diff --quiet || echo ' (+ uncommitted changes)')"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
-tar -czf "$stage/app.tgz" --exclude='*.test.js' server shared public kiosk package.json deploy/loadtest.js deploy/redelete.js deploy/access-request.js
+tar -czf "$stage/app.tgz" --exclude='*.test.js' server shared public kiosk package.json deploy/loadtest.js deploy/redelete.js deploy/access-request.js deploy/import-past-counts.js
 cp deploy/count-dracula.service deploy/config.production.json deploy/journald-count-dracula.conf deploy/copy-db.js deploy/upgrade-config.js "$stage/"
 cp "$(readlink -f "$(command -v bun)")" "$stage/bun"
 git rev-parse HEAD >"$stage/REVISION"

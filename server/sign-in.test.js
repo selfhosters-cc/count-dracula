@@ -15,13 +15,16 @@ const DAY = 86_400_000
 const running = []
 afterEach(() => running.splice(0).forEach((app) => app.stop()))
 
-// A server whose database already holds Household #1 (a migrated v1 night), with a fake Google and a clock.
-function start({ env = {}, canSignUp } = {}) {
+// A server whose database already holds Household #1 (a migrated v1 night, no Manager), or a fresh one, with a fake
+// Google and a clock.
+function start({ env = {}, canSignUp, fresh = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
   const dbPath = join(dir, 'db.sqlite')
-  const db = new Database(dbPath, { create: true })
-  setUpV1Night(openLedger(db, {}))
-  db.close()
+  if (!fresh) {
+    const db = new Database(dbPath, { create: true })
+    setUpV1Night(openLedger(db, {}))
+    db.close()
+  }
   const configPath = join(dir, 'config.json')
   writeFileSync(configPath, JSON.stringify({ dbPath }))
   const clock = { now: Date.parse('2026-10-12T12:00:00Z') }
@@ -32,7 +35,7 @@ function start({ env = {}, canSignUp } = {}) {
     google,
     now: () => clock.now,
     canSignUp,
-    env: { HOUSEHOLD1_MANAGER_EMAIL: 'Us@Example.com', OPERATOR_EMAILS: 'op@example.com', ...env },
+    env: { OPERATOR_EMAILS: 'op@example.com', ...env },
   })
   running.push(app)
   return { app, google, clock, db: () => new Database(dbPath) }
@@ -123,25 +126,31 @@ describe('signing up', () => {
 })
 
 describe('Household #1 and Operators', () => {
-  test('HOUSEHOLD1_MANAGER_EMAIL becomes Household #1\'s Manager; later sign-ins match on sub, even with a new email', async () => {
+  test('nobody claims Household #1 by email any more (v2.1 §12): a Manager-less Household #1 stays so, and our account signs up', async () => {
     const server = start()
     const us = { sub: 'g-us', email: 'us@example.com', name: 'Us' }
 
-    const first = await household(server.app, cookieOf(await signIn(server, us)))
-    const renamed = await household(server.app, cookieOf(await signIn(server, { ...us, email: 'new-address@example.com' })))
+    const plain = await signIn(server, us)
+    const signedUp = await household(server.app, cookieOf(await signIn(server, us, { displayName: 'The Froeses' })))
 
-    expect(first).toMatchObject({ id: 1, manager: { email: 'us@example.com' } })
-    expect(renamed).toMatchObject({ id: 1, manager: { email: 'new-address@example.com' } })
-    expect(server.app.ledger.households()).toHaveLength(1)
+    expect(plain.status).not.toBe(303)
+    expect(signedUp.id).not.toBe(1)
+    expect(signedUp).toMatchObject({ displayName: 'The Froeses', manager: { email: 'us@example.com' } })
+    expect(server.db().query('SELECT COUNT(*) AS n FROM managers WHERE household_id = 1').get().n).toBe(0)
   })
 
-  test("another account with Household #1's email, once it has a Manager, doesn't take it over", async () => {
-    const server = start()
-    await signIn(server, { sub: 'g-us', email: 'us@example.com' })
+  test('on a fresh database our account signs up like anyone: Household #1, with a live Test night and Halloween 2026', async () => {
+    const server = start({ fresh: true })
+    const us = { sub: 'g-us', email: 'us@example.com', name: 'Us' }
 
-    const res = await signIn(server, { sub: 'g-impostor', email: 'us@example.com' }, { displayName: 'Mine' })
+    const res = await signIn(server, us, { displayName: 'The Froeses', timeZone: 'America/Toronto' })
 
-    expect((await household(server.app, cookieOf(res))).id).not.toBe(1)
+    expect(res.headers.get('Location')).toBe('/setup')
+    const house = await household(server.app, cookieOf(res))
+    expect(house).toMatchObject({ id: 1, displayName: 'The Froeses', timeZone: 'America/Toronto', manager: { email: 'us@example.com' } })
+    const events = await (await fetch(`${server.app.url}/api/events`, as(cookieOf(res)))).json()
+    expect(events.filter((e) => e.live)).toMatchObject([{ name: 'Test night' }])
+    expect(events.map((e) => e.name)).toContain('Halloween 2026')
   })
 
   test('a Manager whose email is on OPERATOR_EMAILS is an Operator', async () => {
