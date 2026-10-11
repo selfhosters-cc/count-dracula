@@ -4,15 +4,15 @@ Label: wayfinder:map
 
 ## Destination
 
-A build-ready **v2 spec plus build tickets** for Count Dracula as one public, multi-household deployment: households sign up and run their own nights; TVs shareable by link, code and QR; a fuzzy location; an operator dashboard with stale events; a nearby-activity indicator; a shareable night summary. Ranked in build order against the **Oct 24, 2026 feature freeze**, with today's data migrated into household #1, in the same shape as v1, so the existing ticket loop can build it.
+A build-ready **v2 spec plus build tickets** for Count Dracula as one public, multi-household deployment: households sign up and run their own nights; TVs shareable by link, code and QR; a fuzzy location; an operator dashboard with stale events; a nearby-activity indicator; a shareable night summary. Ranked in build order with **opening sign-up** drawn after the core path and public-safety set (the rest deployed fix-forward until **3 pm Oct 31**), with today's data migrated into household #1, in the same shape as v1, so the existing ticket loop can build it.
 
 ## Notes
 
 - **Scope, decided at charting (2026-10-10):**
   - **Open public sign-up**, live for **Halloween, Oct 31, 2026**.
   - **Dogfood:** our own household is household #1 on the same public deployment. The v1 LXC/LAN instance is not kept as a separate fallback.
-  - **Calendar:** decisions by ~Oct 12, build Oct 13–23, **feature freeze at the Oct 24 rehearsal** (which runs on the multi-household build), sign-up opens ~Oct 25, Oct 25–30 fixes only.
-  - **All four headline features are must-haves for the freeze:** shareable TV, shareable summary, fuzzy location + nearby, operator dashboard. Extra ideas only make it in if they're cheap.
+  - **Calendar:** decisions by ~Oct 12, then build and deploy as soon as it's ready. **No rehearsal and no fixed opening date:** sign-up opens the moment the core path and public-safety set are deployed; the rest deploys fix-forward; the only freeze is **Oct 31, 3 pm–midnight** ([v2 rehearsal and launch-day plan](issues/16-v2-rehearsal-and-launch-day.md), which replaced the Oct 24 rehearsal and ~Oct 25 opening).
+  - **All four headline features are must-haves for Halloween:** shareable TV, shareable summary, fuzzy location + nearby, operator dashboard. Extra ideas only make it in if they're cheap.
 - **Time is the main risk.** 13 build days for a lot of surface. Prefer the simplest version of each feature that's safe in public. Push polish to after Halloween and say so in Out of scope.
 - **Public internet is now the threat model.** Everything that was "trusted LAN device" in v1 needs a second look: user-entered text on shared screens, a live "kids at my door right now" signal tied to a location, bot sign-ups.
 - **Repo is public:** never commit our real hostnames. Use `count-dracula.example.com` and put the real host in the git-ignored `deploy/local.env`.
@@ -40,10 +40,11 @@ A build-ready **v2 spec plus build tickets** for Count Dracula as one public, mu
 - [From sign-up to a TV on the porch](issues/12-sign-up-to-porch-tv.md) — 3-screen first-run (name, Location, pair the TV) then a self-ticking 3-item checklist; computer + Chrome/Edge supported, the rest best effort; `/tv` remembers its link, `/help/tv` with optional launchers; board always shows with a sound pill; the Rehearsal is the test; "Halloween 2026" goes live by itself at 4 pm Oct 31 local, end-of-night nudge at 8:30, auto-end at 3 am; one join key per Household.
 - [Multi-household extras shortlist](issues/13-multi-household-extras.md) — three cheap extras above the cut line, in order: last year's total typed in and shaped into an "estimated" ghost (½ day), the site-wide total on the public sign-up page, a site-wide top costume clause (≥ 3 Households); everything else after Halloween.
 - [Privacy notice and retention](issues/15-privacy-notice-and-retention.md) — a good-faith plain `/privacy` page with House rules, agreed by signing in; contact is `OPERATOR_CONTACT` (own-domain forwarder, reply within a week); nights kept until deleted, Idle Households purged after 2 years and Abandoned sign-ups after 60 days (jobs after Halloween); "backups gone within 2 months", dev-box pulls 14 days; logs 30 days with tokens masked in an own Caddy log; OSM tiles only after a tap; email requests answered by hand.
+- [v2 rehearsal and launch-day plan](issues/16-v2-rehearsal-and-launch-day.md) — no rehearsal, no fixed dates: sign-up opens as soon as the core path + public-safety set are deployed (opening-day checklist in `deploy/RUNBOOK.md`: `v1-final` + DB copy, load check on a scratch instance on LXC 118, privacy checks, publish the Google consent screen, a throwaway test Household proving auto go-live and 3 am auto-end); the rest deploys fix-forward; nearby's ≥ 5 view and the restore drill on the dev box; core bugs fixed forward (Pause sign-ups meanwhile), switch-off-able features still broken at 3 pm Oct 31 switched off; `v1-final` retired at the first stranger; help by `OPERATOR_CONTACT` only; only freeze Oct 31 3 pm–midnight with night-of moves decided in advance.
 
 ## Not yet specified
 
-<!-- nothing left in the fog: the last patch graduated to [v2 rehearsal and launch-day plan](issues/16-v2-rehearsal-and-launch-day.md) -->
+<!-- nothing left in the fog: every decision is made; only [Assemble the v2 spec and build tickets](issues/14-assemble-the-v2-spec.md) remains -->
 
 ## Out of scope
 
