@@ -143,6 +143,10 @@
       background: var(--night-2); color: var(--ink-dim); font-size: clamp(12px, 1.4vw, 24px); font-weight: 600;
       opacity: 0; transition: opacity 1s; }
     #catching-up.on { opacity: .85; }
+    .nearby { margin-top: 1.6vh; max-width: 30em; padding: .8vh 1vw; border-radius: 14px; background: var(--night-2);
+      font-size: clamp(11px, 1.25vw, 24px); color: var(--ink-dim); font-weight: 600; line-height: 1.3; }
+    .nearby[hidden] { display: none; }
+    .nearby .k { letter-spacing: .12em; text-transform: uppercase; color: var(--pumpkin); font-size: .8em; }
     #sound-pill { position: fixed; left: 2.5vw; bottom: 3vh; z-index: 40; padding: .45em 1em; border-radius: 999px;
       background: var(--night-2); color: var(--ink-dim); font-size: clamp(12px, 1.5vw, 26px); font-weight: 600; }
     #sound-pill[hidden], #unavailable[hidden], #tv-full[hidden] { display: none; }
@@ -182,6 +186,7 @@
       <div class="big num"><span id="count">–</span></div>
       <div class="pace" id="pace"></div>
       <div class="rush" id="rush" hidden><span class="label" id="rush-label"></span><div class="gauge"><div class="fill" id="rush-fill"></div></div><span class="rate" id="rush-rate"></span></div>
+      <div class="nearby" id="nearby" hidden><div class="k">🏘️ Near you tonight</div><div id="nearby-text"></div></div>
     </div>
     <div class="chartbox">
       <div class="legend" id="legend"></div>

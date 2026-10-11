@@ -100,6 +100,7 @@ describe('feature switches', () => {
       pumpkinPatch: true,
       recap: true,
       rushMeter: true,
+      nearby: true,
     })
   })
 })

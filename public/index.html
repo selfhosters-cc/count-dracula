@@ -28,6 +28,9 @@
     .golden { background: #ffd23f; color: #2a1a00; font-weight: 900; text-align: center; padding: 10px; font-size: 18px;
       animation: pulse 0.8s infinite alternate; }
     .golden[hidden] { display: none; }
+    .nearby-line { margin: 0 12px 6px; padding: 8px 12px; border-radius: 12px; background: var(--panel); color: var(--dim); font-size: 14px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nearby-line[hidden] { display: none; }
     .nudge { display: flex; align-items: stretch; background: #2b2050; border-bottom: 1px solid #ffffff18; }
     .nudge[hidden] { display: none; }
     .nudge button { padding: 12px; font-size: 17px; font-weight: 800; background: none; color: var(--text); }
@@ -150,6 +153,7 @@
     <div id="problem"></div>
     <div class="head"><span><b id="total">–</b> kids tonight <span class="chip" id="rehearsal-chip" hidden>🎭 Rehearsal</span></span>
       <span><span class="dim" id="untagged"></span><button class="menu" id="menu-open" aria-label="Menu">☰</button></span></div>
+    <div class="nearby-line" id="nearby" hidden></div>
     <div class="golden" id="golden" hidden>⭐ NEXT KID IS GOLDEN — get the prize ready</div>
     <div class="nudge" id="nudge" hidden><button id="nudge-end">Quiet out there? 🌙 End the night</button><button id="nudge-dismiss" aria-label="Not yet">✕</button></div>
     <div class="grid" id="grid">

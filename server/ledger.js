@@ -118,6 +118,7 @@ export const DEFAULT_SWITCHES = {
   pumpkinPatch: true,
   recap: true,
   rushMeter: true, // a nice-to-have (ticket 39), switchable like the Musts
+  nearby: true, // v2: nearby figures and the Site-wide total, everywhere (spec §17)
 }
 
 export function openLedger(db, config) {
@@ -244,6 +245,25 @@ export function openLedger(db, config) {
         `)
         .all()
         .map((n) => ({ ...n, rehearsal: n.rehearsal === 1, ended: n.ended === 1 }))
+    },
+
+    // Every live night with what Nearby needs (spec §11): its Household's cell, whether it's a Rehearsal or
+    // Suspended, its kids, its kids in the 30 minutes before `at`, and its costumes' counts.
+    nearbyNights(at) {
+      const costumes = db.query(`
+        SELECT t.name, t.emoji, COUNT(*) AS count FROM kids k JOIN tags t ON t.id = k.tag_id
+        WHERE k.event_id = ? AND k.deleted_at IS NULL GROUP BY t.id
+      `)
+      return db
+        .query(`
+          SELECT e.id AS eventId, e.household_id AS householdId, h.location_cell AS cell, e.rehearsal,
+            h.suspended_since IS NOT NULL AS suspended,
+            (SELECT COUNT(*) FROM kids k WHERE k.event_id = e.id AND k.deleted_at IS NULL) AS kids,
+            (SELECT COUNT(*) FROM kids k WHERE k.event_id = e.id AND k.deleted_at IS NULL AND k.tapped_at > ?) AS kids30
+          FROM events e JOIN households h ON h.id = e.household_id WHERE e.live = 1
+        `)
+        .all(at - 30 * 60_000)
+        .map((n) => ({ ...n, rehearsal: n.rehearsal === 1, suspended: n.suspended === 1, costumes: costumes.all(n.eventId) }))
     },
 
     // When the last kid was counted anywhere, for /operator's Last tap tile.

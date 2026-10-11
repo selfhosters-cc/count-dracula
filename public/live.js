@@ -56,6 +56,14 @@ export function connectLive(url = '/api/stream') {
       emit('snapshot')
     })
 
+    // The 10-minute nearby figures (v2 spec §11): no seq, they just replace the last ones.
+    source.addEventListener('nearby', (e) => {
+      lastHeard = Date.now()
+      if (!live.state) return
+      live.state = { ...live.state, nearby: JSON.parse(e.data) }
+      emit('nearby')
+    })
+
     source.addEventListener('delta', (e) => {
       lastHeard = Date.now()
       const delta = JSON.parse(e.data)

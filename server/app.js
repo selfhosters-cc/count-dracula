@@ -12,6 +12,8 @@ import { createPairing } from './pairing.js'
 import { LIMITS, createGuard } from './guard.js'
 import { createBackups } from './backups.js'
 import { healthTiles, householdStatus } from './operator.js'
+import { createNearby } from './nearby.js'
+import { isBlocked } from './blocklist.js'
 import { toCsv } from './export.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
@@ -84,6 +86,22 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   tick()
   const ticker = setInterval(tick, tickMs)
 
+  // Nearby (spec §11): figures every 10 minutes, pushed to every open screen as a `nearby` event.
+  const nearby = createNearby({ nights: () => ledger.nearbyNights(now()), isBlocked, enabled: { ...DEFAULT_SWITCHES, ...config.switches }.nearby })
+  const cellOf = (householdId) => ledger.households().find((h) => h.id === householdId)?.location ?? null
+  function refreshNearby() {
+    try {
+      nearby.refresh()
+      hub.sendEach('nearby', (householdId) => nearby.forHousehold(householdId, cellOf(householdId)))
+    } catch (err) {
+      console.error('nearby failed:', err)
+    }
+  }
+  refreshNearby()
+  const nearbyTimer = setInterval(refreshNearby, nearby.REFRESH_MS)
+  // A snapshot carries the figures as they stood at the last refresh.
+  const withNearby = (snap, house) => ({ ...snap, nearby: nearby.forHousehold(house.id, cellOf(house.id)) })
+
   // A VACUUM INTO copy every 15 minutes, with the deletions prune on the same timer (spec §15).
   const backups = config.backupDir ? createBackups({ db, dir: config.backupDir, now, log }) : null
   const stopBackups = backups?.start({ also: () => accounts.pruneDeletions() }) ?? (() => {})
@@ -93,7 +111,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // night's recap on /tv?event=<id>), for a Manager only.
     'GET /api/snapshot': async (req, server) => {
       const id = new URL(req.url).searchParams.get('event')
-      if (id == null) return read((req, house, credential) => Response.json(credential.kind === 'tv' ? tvSnapshot(house.snapshot()) : house.snapshot()))(req, server)
+      if (id == null) return read((req, house, credential) => Response.json(withNearby(credential.kind === 'tv' ? tvSnapshot(house.snapshot()) : house.snapshot(), house)))(req, server)
       return manager((req, house) => {
         const snap = house.snapshot(Number(id))
         return snap ? Response.json(snap) : notFound()
@@ -109,8 +127,8 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       // A full TV gets 503, which the TV page shows as "This TV is full, try again soon" and retries.
       if (refusal) return new Response(refusal === 'tvFull' ? 'This TV is full, try again soon' : 'Too many connections', { status: refusal === 'tvFull' ? 503 : 429 })
       return kind === 'phone'
-        ? hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => house.snapshot() })
-        : hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => tvSnapshot(house.snapshot()), shape: tvDelta })
+        ? hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(house.snapshot(), house) })
+        : hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(tvSnapshot(house.snapshot()), house), shape: tvDelta })
     }),
 
     // ---- Pairing a TV (spec §9): the bare /tv asks for a code and waits; a Manager redeems it in /setup.
@@ -524,7 +542,9 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     failNextRequest(message) {
       failNext = message
     },
+    refreshNearby,
     stop() {
+      clearInterval(nearbyTimer)
       process.off('uncaughtException', onUncaught)
       process.off('unhandledRejection', onUncaught)
       clearInterval(ticker)

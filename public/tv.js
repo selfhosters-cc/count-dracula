@@ -2,6 +2,7 @@
 // It never celebrates a snapshot, only deltas (spec §3), and never shows an error screen.
 import { connectLive } from '/live.js'
 import { formatCode, startPairing } from '/tv-pairing.js'
+import { tvNearby } from '/nearby-text.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
 import { createDirector } from '/director.js'
 import { animate } from '/vendor/motion/motion.js'
@@ -517,8 +518,16 @@ if (pairingMode) {
 }
 let wasDisconnected = false
 
+// The nearby box (spec §11): only with an Area's figures; nothing below the minimum or without a Location.
+function renderNearby(state) {
+  const text = tvNearby(state.nearby)
+  $('nearby').hidden = !text
+  $('nearby-text').textContent = text ?? ''
+}
+
 function renderSnapshot(state, cause) {
   $('rehearsal-chip').hidden = !state.event.rehearsal
+  renderNearby(state)
   // First load shows the count as is; a reconnect rolls up quietly to the new total.
   showCount(state.kids.length, wasDisconnected && shown != null ? 'roll' : 'set')
   wasDisconnected = false
@@ -544,6 +553,7 @@ live?.on(({ state, cause, delta }) => {
     teaser.pause(true)
     return // stay frozen: no error screen, spinner or red
   }
+  if (cause === 'nearby') return renderNearby(state)
   teaser.pause(quietOrAway(state))
   kidsCounted = state.kids.length
   showStart()

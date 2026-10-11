@@ -89,6 +89,15 @@ export function createHub({ heartbeatMs = 15_000, random = Math.random } = {}) {
       }
     },
 
+    // A named event to every open channel, each with its own data (dataFor(householdId)): the 10-minute nearby
+    // figures. It carries no seq, so live state's gap check ignores it.
+    sendEach(event, dataFor) {
+      for (const [householdId, channel] of channels) {
+        const bytes = encoder.encode(frame(event, dataFor(householdId)))
+        for (const client of [...channel]) send(client, bytes)
+      }
+    },
+
     // Closes a Household's streams: all of them (Suspend), or only those holding one credential.
     close({ householdId, credential }) {
       for (const client of [...(channels.get(householdId) ?? [])]) {

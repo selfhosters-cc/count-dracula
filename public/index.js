@@ -2,6 +2,7 @@
 import { connectLive } from '/live.js'
 import { createOutbox, uuid } from '/outbox.js'
 import { doorView, quietNudge } from '/door-view.js'
+import { phoneNearby } from '/nearby-text.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
 import { clockTime, eventNow, releaseOpen } from '/shared/night-maths.js'
 
@@ -104,6 +105,9 @@ function start(phoneName) {
     renderGolden()
     $('nudge').hidden = !quietNudge(live.state, Date.now(), nudgeDismissedAt())
     $('rehearsal-chip').hidden = !live.state?.event.rehearsal
+    const nearbyText = phoneNearby(live.state?.nearby) // the Area, or else the Site-wide total
+    $('nearby').hidden = !nearbyText
+    $('nearby').textContent = nearbyText ?? ''
     $('total').textContent = view.total ?? '–'
     $('untagged').textContent = view.untagged == null ? '' : `${view.untagged} untagged`
     $('pill').innerHTML = pillHtml(outbox.status)
