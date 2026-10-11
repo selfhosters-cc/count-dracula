@@ -140,6 +140,7 @@ export const DEFAULT_SWITCHES = {
   shareLinks: true, // v2: Night summary share links (spec §17)
   estimatedGhost: true, // v2: "About how many kids came last year?" (spec §14)
   siteTopCostume: true, // v2: the site line's "top costume" clause (spec §14), the first extra to drop
+  nearbyEdges: true, // v2.1: "near you" across Area edges (spec v2.1 §10); off: the Household's own Area
 }
 
 // The estimated ghost's shape (spec §14): our own 2025 night's five half-hours, as fractions of its total, so

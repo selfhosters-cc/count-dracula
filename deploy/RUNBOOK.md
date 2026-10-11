@@ -278,10 +278,11 @@ The counts match what `/operator` showed at the copy's time.
 
 ### Nearby's view (tickets 42, 56, 63)
 
-On the dev box, `deploy/seed-nearby.js` makes fake Households in one Area (dpz8), live on "Halloween 2026" (over
-their Test night) with recent taps: Witch everywhere, Bluey (the most kids, but only 2 Households) and a blocklisted
-name (3 Households). 6 by default; pass `2` for the smallest "near you" (no minimum crowd since v2.1). It refuses the
-production database, and refuses to run with `PUBLIC_HOST` set.
+On the dev box, `deploy/seed-nearby.js` makes fake Households live on "Halloween 2026" (over their Test night)
+with recent taps: Witch everywhere, Bluey (the most kids, but only 2 Households) and a blocklisted name (3
+Households). By default it puts 6 in one Area (dpz8); pass `2` for the smallest "near you" (no minimum crowd since
+v2.1), `edge` for 2 houses either side of an Area edge (dpz8r and dpzb2), or `corner` for 2 diagonally across an
+Area corner (dpz8z and dpzc0). It refuses the production database, and refuses to run with `PUBLIC_HOST` set.
 
 ```bash
 mkdir -p /tmp/nearby-check
@@ -293,13 +294,23 @@ bun server/main.js /tmp/nearby-check/config.json                           # nea
 **The check: 2 houses in one Area show "near you".** Open each house's TV link (`http://<dev box>:3193/tv/k/…`) and
 phone (`/door?key=…`): both TVs show **🏘️ Near you tonight** under the rush meter with "2 houses counting" and no
 top costume, and both phones **🏘️ Near you: … · 2 houses**. Then, with a fresh `/tmp/nearby-check` and the default 6:
-6 houses and **Witch on top**; neither Bluey nor the blocklisted name is ever the top costume. Then
-`rm -rf /tmp/nearby-check`.
+6 houses and **Witch on top**; neither Bluey nor the blocklisted name is ever the top costume.
 
-**After ticket 63 deploys** (Nearby across Area edges), the same check also with the seed's 2 houses either side of
-an Area edge, and 2 at a corner (the seed's options are ticket 63's): each shows "near you" with 2 houses. If it
-fails by Oct 31 at 3 pm, `nearbyEdges` goes off in `/etc/count-dracula/config.json` (then a restart, outside the
-freeze), which is the one-Area check above.
+**Then across an edge and a corner (ticket 63).** Stop the server, and with a fresh `/tmp/nearby-check` each time,
+seed `edge`, start the server, and open both phones; then the same with `corner`:
+
+```bash
+rm -rf /tmp/nearby-check && mkdir -p /tmp/nearby-check
+bun deploy/seed-nearby.js /tmp/nearby-check/db.sqlite edge                 # or: corner
+echo '{ "port": 3193, "dbPath": "/tmp/nearby-check/db.sqlite" }' > /tmp/nearby-check/config.json
+bun server/main.js /tmp/nearby-check/config.json
+```
+
+Each time, the two houses are in different Areas and **both phones show the same 🏘️ Near you: … · 2 houses** (and
+both TVs "2 houses counting"). If it fails by Oct 31 at 3 pm, `"nearbyEdges": false` goes into `switches` in
+`/etc/count-dracula/config.json` (then a restart, outside the freeze): "near you" is then the Household's own Area,
+which is the one-Area check above (with `edge` or `corner`, neither phone shows "near you"). Then
+`rm -rf /tmp/nearby-check`.
 
 **There are no fake Households on production.**
 

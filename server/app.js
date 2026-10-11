@@ -88,7 +88,13 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
 
   // Nearby (spec §11): figures every 10 minutes, pushed to every open screen as a `nearby` event.
   const switches = { ...DEFAULT_SWITCHES, ...config.switches }
-  const nearby = createNearby({ nights: () => ledger.nearbyNights(now()), isBlocked, enabled: switches.nearby, siteTopCostume: switches.siteTopCostume })
+  const nearby = createNearby({
+    nights: () => ledger.nearbyNights(now()),
+    isBlocked,
+    enabled: switches.nearby,
+    siteTopCostume: switches.siteTopCostume,
+    edges: switches.nearbyEdges,
+  })
   const cellOf = (householdId) => ledger.households().find((h) => h.id === householdId)?.location ?? null
   function refreshNearby() {
     try {
@@ -100,7 +106,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   }
   refreshNearby()
   const nearbyTimer = setInterval(refreshNearby, nearby.REFRESH_MS)
-  // The Area figures a night keeps when it ends, for its summary's nearby slide (null with no other house counting).
+  // The window's figures a night keeps when it ends, for its summary's nearby slide (null with no other house counting).
   function nearbyArea(householdId) {
     return nearby.forHousehold(householdId, cellOf(householdId))?.area ?? null
   }

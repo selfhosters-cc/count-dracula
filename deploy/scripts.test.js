@@ -132,6 +132,30 @@ describe('deploy/seed-nearby.js', () => {
     const figures = computeNearby(nights, { isBlocked: () => false })
     for (const n of nights) expect(nearYou(figures, n.householdId, n.cell)).toMatchObject({ houses: 2 })
   })
+
+  for (const [where, cells] of [['edge', ['dpz8r', 'dpzb2']], ['corner', ['dpz8z', 'dpzc0']]]) {
+    test(`seeds 2 houses either side of an Area ${where}: each sees the other, and neither does with nearbyEdges off`, async () => {
+      const path = join(mkdtempSync(join(tmpdir(), 'count-dracula-seed-')), 'db.sqlite')
+
+      const { out, code } = await run('seed-nearby.js', path, where)
+
+      expect(code).toBe(0)
+      expect(out).toContain('/door?key=')
+      const nights = openLedger(new Database(path), {}).nearbyNights(Date.now())
+      expect(nights.map((n) => n.cell).sort()).toEqual(cells)
+      const figures = computeNearby(nights, { isBlocked: () => false })
+      for (const n of nights) {
+        expect(nearYou(figures, n.householdId, n.cell)).toMatchObject({ houses: 2 })
+        expect(nearYou(figures, n.householdId, n.cell, { edges: false })).toBeNull()
+      }
+    })
+  }
+
+  test('refuses anything but 1 to 6 houses, edge or corner', async () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'count-dracula-seed-')), 'db.sqlite')
+
+    for (const arg of ['0', '7', 'middle']) expect((await run('seed-nearby.js', path, arg)).code).toBe(2)
+  })
 })
 
 describe('deploy/caddy-site.caddy log masking', () => {

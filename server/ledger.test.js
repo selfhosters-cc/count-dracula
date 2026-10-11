@@ -104,6 +104,7 @@ describe('feature switches', () => {
       shareLinks: true,
       estimatedGhost: true,
       siteTopCostume: true,
+      nearbyEdges: true,
     })
   })
 })

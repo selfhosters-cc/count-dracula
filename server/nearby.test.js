@@ -2,11 +2,11 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { computeNearby, nearYou } from './nearby.js'
+import { computeNearby, geohashNeighbours, nearYou, windowAreas } from './nearby.js'
 import { isBlocked } from './blocklist.js'
 import { startServer } from './app.js'
 import { readFrames } from '../test/sse.js'
-import { namingTheDoor } from '../test/v1-night.js'
+import { doorNamed, namingTheDoor } from '../test/v1-night.js'
 
 // A Household's door's Event as the Ledger reports it. Defaults: an active night in Area "dpz8".
 let nextId = 1
@@ -65,6 +65,93 @@ describe('Area figures', () => {
 
     expect(area(result, 'dpz8')).toMatchObject({ houses: 5 })
     expect(area(result, 'dpzb')).toMatchObject({ houses: 5 })
+  })
+})
+
+describe('geohash neighbours', () => {
+  test('the 8 cells around a 5-character cell', () => {
+    expect(geohashNeighbours('ezs42').sort()).toEqual(['ezefp', 'ezefr', 'ezefx', 'ezs40', 'ezs41', 'ezs43', 'ezs48', 'ezs49'])
+  })
+
+  test('they wrap across 180° and stop at the poles', () => {
+    expect(geohashNeighbours('xbpbp')).toContain('80000') // just west of 180° on the equator → just east of -180°
+    expect(geohashNeighbours('80000')).toContain('xbpbp')
+    expect(geohashNeighbours('00000').sort()).toEqual(['00001', '00002', '00003', 'pbpbp', 'pbpbr']) // the South Pole, at -180°
+    expect(geohashNeighbours('upbpb')).toHaveLength(5) // the North Pole: nothing north of it
+  })
+})
+
+describe("a Household's window (spec v2.1 §10)", () => {
+  // The 32 cells of Area dpz8: 8 columns by 4 rows.
+  const cells = [...'0123456789bcdefghjkmnpqrstuvwxyz'].map((c) => `dpz8${c}`)
+
+  test('an inside cell sees 1 Area; an edge cell 2; a corner cell 4', () => {
+    expect(windowAreas('dpz8e')).toEqual(['dpz8'])
+    expect(windowAreas('dpz8r')).toEqual(['dpz8', 'dpzb']) // the east edge
+    expect(windowAreas('dpz8g')).toEqual(['dpz8', 'dpz9']) // the north edge
+    expect(windowAreas('dpz8z')).toEqual(['dpz8', 'dpz9', 'dpzb', 'dpzc']) // the north-east corner
+    const sizes = cells.map((c) => windowAreas(c).length)
+    expect([1, 2, 4].map((n) => sizes.filter((s) => s === n).length)).toEqual([12, 16, 4])
+  })
+
+  test('across 180° and at the poles', () => {
+    expect(windowAreas('xbpbp')).toEqual(['2pbp', '8000', 'rzzz', 'xbpb'])
+    expect(windowAreas('upbpb')).toEqual(['gzzz', 'upbp']) // a corner, with nothing beyond the pole
+  })
+})
+
+describe('near you across Area edges', () => {
+  const seen = (nights, house, options) => nearYou(compute(nights), house.householdId, house.cell, options)
+  const witch = { name: 'Witch', emoji: '🧙', count: 2 }
+
+  test('two houses in edge cells either side of an Area edge see the same figures, each counting the other', () => {
+    const [west, east] = [night({ cell: 'dpz8r', kids30: 4 }), night({ cell: 'dpzb2', kids30: 3 })]
+
+    expect(seen([west, east], west)).toEqual({ houses: 2, kids30: 5, topCostume: null })
+    expect(seen([west, east], east)).toEqual(seen([west, east], west))
+  })
+
+  test('at a corner, houses diagonally across see all 4 Areas; one along an edge sees 2, and each counts the other', () => {
+    const [sw, ne, north] = [night({ cell: 'dpz8z' }), night({ cell: 'dpzc0' }), night({ cell: 'dpz8y' })]
+
+    expect(seen([sw, ne], sw)).toMatchObject({ houses: 2 })
+    expect(seen([sw, ne], ne)).toMatchObject({ houses: 2 })
+    expect(seen([sw, north, ne], north)).toMatchObject({ houses: 2 }) // dpz8 and dpz9: not dpzc's house
+    expect(seen([sw, north, ne], sw)).toMatchObject({ houses: 3 })
+  })
+
+  test('across 180°', () => {
+    const [west, east] = [night({ cell: 'xbpbp' }), night({ cell: '80000' })]
+
+    expect(seen([west, east], west)).toMatchObject({ houses: 2 })
+    expect(seen([west, east], east)).toMatchObject({ houses: 2 })
+  })
+
+  test('an inside cell still sees only its own Area', () => {
+    expect(seen([night({ cell: 'dpzb2' })], { householdId: 99, cell: 'dpz8e' })).toBeNull()
+    expect(seen([night({ cell: 'dpz8e' })], { householdId: 99, cell: 'dpz8r' })).toMatchObject({ houses: 1 })
+  })
+
+  test('the top costume is counted in 3 Households across the window, never a blocklisted one', () => {
+    const rude = { name: 'Sh1t', emoji: '💩', count: 50 }
+    const nights = [night({ cell: 'dpz8r', costumes: [witch, rude] }), night({ cell: 'dpz8e', costumes: [witch, rude] }), night({ cell: 'dpzb2', costumes: [witch, rude] })]
+
+    expect(seen(nights, nights[0])).toEqual({ houses: 3, kids30: 20, topCostume: { name: 'Witch', emoji: '🧙' } }) // 18 → 20
+    expect(seen(nights, nights[1])).toMatchObject({ houses: 2, topCostume: null }) // inside dpz8: Witch in 2 Households
+  })
+
+  test('figures are cached per set of Areas', () => {
+    const figures = compute([night({ cell: 'dpz8r' }), night({ cell: 'dpzb2' })])
+
+    expect(nearYou(figures, 98, 'dpz8r')).toBe(nearYou(figures, 99, 'dpzb8'))
+  })
+
+  test("with edges off, it's the Household's own Area, still with no minimum", () => {
+    const [west, east, beside] = [night({ cell: 'dpz8r' }), night({ cell: 'dpzb2' }), night({ cell: 'dpz8e' })]
+
+    expect(seen([west, east], west, { edges: false })).toBeNull()
+    expect(seen([west, east, beside], west, { edges: false })).toEqual(nearYou(compute([west, beside]), west.householdId, 'dpz8e'))
+    expect(seen([west, east, beside], west, { edges: false })).toMatchObject({ houses: 2 })
   })
 })
 
@@ -312,5 +399,52 @@ describe("one house per Household, through the door's Event (spec v2.1 §10)", (
     app.refreshNearby()
 
     expect(await read('/api/site')).toEqual({ site: { houses: 5, kids: 5, topCostume: null }, live: false })
+  })
+})
+
+describe('near you across Area edges, on the screens (spec v2.1 §10)', () => {
+  const running63 = []
+  afterEach(() => running63.splice(0).forEach((app) => app.stop()))
+
+  // Two Households either side of the dpz8 / dpzb edge, each with a kid at 7 pm on Halloween.
+  function edge(switches = {}) {
+    const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
+    const configPath = join(dir, 'config.json')
+    writeFileSync(configPath, JSON.stringify({ dbPath: join(dir, 'db.sqlite'), switches }))
+    const app = startServer({ configPath, port: 0, env: {}, now: () => Date.parse('2026-10-31T23:00:00Z'), tickMs: 3_600_000 })
+    running63.push(app)
+    const houses = ['dpz8r', 'dpzb2'].map((cell, i) => {
+      const house = namingTheDoor(app.ledger.household(app.ledger.createHousehold({ displayName: `House ${i}`, timeZone: 'America/Toronto' })))
+      house.apply({ type: 'setLocation', cell })
+      house.apply({ type: 'tap', id: `k${i}`, tagId: null, tappedAt: Date.parse('2026-10-31T22:59:00Z'), phoneName: 'Dad' })
+      return house
+    })
+    app.refreshNearby()
+    const nearbyOf = async (house) => (await (await fetch(`${app.url}/api/snapshot?key=${house.joinKey()}`)).json()).nearby
+    return { app, houses, nearbyOf }
+  }
+
+  test('both phones show the same "near you"', async () => {
+    const { houses, nearbyOf } = edge()
+
+    expect((await nearbyOf(houses[0])).area).toEqual({ houses: 2, kids30: 0, topCostume: null })
+    expect((await nearbyOf(houses[1])).area).toEqual({ houses: 2, kids30: 0, topCostume: null })
+  })
+
+  test("nearbyEdges off: each sees only its own Area, where nobody else is counting", async () => {
+    const { houses, nearbyOf } = edge({ nearbyEdges: false })
+
+    expect((await nearbyOf(houses[0])).area).toBeNull()
+    expect((await nearbyOf(houses[1])).area).toBeNull()
+  })
+
+  test("the Night summary keeps the window's figures at End", async () => {
+    const { app, houses } = edge()
+    const night = houses[0].doorEvent().id
+
+    const res = await fetch(`${app.url}/api/end`, { method: 'POST', headers: { 'X-Join-Key': houses[0].joinKey() }, body: JSON.stringify(doorNamed(app.ledger, houses[0].id)) })
+
+    expect(res.status).toBe(200)
+    expect(houses[0].summary(night).nearby).toEqual({ houses: 2, kids30: 0, topCostume: null })
   })
 })

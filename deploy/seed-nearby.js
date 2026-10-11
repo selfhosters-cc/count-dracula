@@ -1,8 +1,9 @@
 // The nearby check (v2 spec §18, v2.1 §10), on the dev box only: fills one Area with fake Households counting
-// right now (6 by default, 2 to see the smallest "near you"), so the TV box and the phone strip can be seen
-// before Halloween. Never on production.
+// right now (6 by default, 2 to see the smallest "near you"), or puts 2 either side of an Area edge or
+// diagonally across an Area corner, so the TV box and the phone strip can be seen before Halloween. Never on
+// production.
 //
-//   bun deploy/seed-nearby.js <scratch database> [houses]
+//   bun deploy/seed-nearby.js <scratch database> [houses | edge | corner]
 //
 // Each Household goes live on "Halloween 2026" with recent taps, over its sign-up Test night when that's Live
 // (so it has two open Events and counts once, through Halloween: its door's Event). Witch is counted
@@ -14,20 +15,27 @@ import { resolve } from 'node:path'
 import { openLedger } from '../server/ledger.js'
 
 const PRODUCTION_DB = '/var/lib/count-dracula/count-dracula.sqlite'
-const [path, count = '6'] = process.argv.slice(2)
-if (!path) fail('Usage: bun deploy/seed-nearby.js <scratch database> [houses]')
-const houses = Number(count)
-if (!Number.isInteger(houses) || houses < 1 || houses > 6) fail('Seed 1 to 6 houses.')
+const [path, option = '6'] = process.argv.slice(2)
+if (!path) fail('Usage: bun deploy/seed-nearby.js <scratch database> [houses | edge | corner]')
+const ONE_AREA = ['dpz83', 'dpz86', 'dpz8d', 'dpz89', 'dpz8f', 'dpz8g'] // all in Area dpz8
+const ACROSS = {
+  edge: ['dpz8r', 'dpzb2'], // side by side, either side of the dpz8 / dpzb edge: both see those 2 Areas
+  corner: ['dpz8z', 'dpzc0'], // diagonally across the corner of dpz8, dpz9, dpzb and dpzc: both see all 4
+}
+const across = Object.hasOwn(ACROSS, option) ? ACROSS[option] : null
+const count = Number(option)
+if (!across && !(Number.isInteger(count) && count >= 1 && count <= 6)) fail('Seed 1 to 6 houses, or edge or corner.')
+const CELLS = across ?? ONE_AREA.slice(0, count)
+const houses = CELLS.length
 if (resolve(path) === PRODUCTION_DB) fail('That is the production database: fake Households never go there.')
 if (process.env.PUBLIC_HOST) fail('PUBLIC_HOST is set: this looks like production. The seed is for the dev box only.')
 
 const db = new Database(path, { create: true })
 const ledger = openLedger(db, {})
 const now = Date.now()
-const CELLS = ['dpz83', 'dpz86', 'dpz8d', 'dpz89', 'dpz8f', 'dpz8g'] // all in Area dpz8
 const RUDE = 'Sh1t head' // blocklisted: saved here by hand, as a name that got past the filter would be
 
-for (const [i, cell] of CELLS.slice(0, houses).entries()) {
+for (const [i, cell] of CELLS.entries()) {
   const id = ledger.createHousehold({ displayName: `Seed house ${i + 1}`, timeZone: 'America/Toronto' })
   const house = ledger.household(id)
   house.apply({ type: 'setLocation', cell })
@@ -50,7 +58,9 @@ for (const [i, cell] of CELLS.slice(0, houses).entries()) {
 }
 console.log('\nStart (or restart) a server on this database; nearby refreshes at start and every 10 minutes.')
 console.log(
-  houses >= 3
+  across
+    ? `Expected: "Near you" with 2 houses on both (in different Areas, across the ${option}), and no top costume. With nearbyEdges off, neither shows it.`
+    : houses >= 3
     ? `Expected: "Near you" with ${houses} houses and Witch on top; never Bluey (2 Households) nor the blocklisted name.`
     : houses === 2
       ? 'Expected: "Near you" with 2 houses on both, and no top costume (none is counted in 3 Households).'
