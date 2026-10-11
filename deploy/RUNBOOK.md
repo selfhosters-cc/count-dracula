@@ -34,11 +34,11 @@ without stopping v1.
 2. Give LXC 118 its v2 size (once): `ssh proxmox pct set 118 --cores 2 --memory 1024`
 3. `deploy/deploy.sh`. It copies the database, removes the v1 config's dead keys (and says so), writes
    `/etc/count-dracula/env`, and checks `/healthz`. The migration runs as the server starts.
-4. Switch the public host on (ticket 35's site block, on the shared Caddy, with the user's OK). Not with
-   `host-public.sh add`: that puts it inside the wildcard site, whose shared log would keep the tokens. In
-   `/opt/docker-compose/caddy-int/` on the dev machine, paste `deploy/caddy-site.caddy` into `Caddyfile` as its own
-   site, just before the wildcard site `$PUBLIC_HOST` falls under, with `$PUBLIC_HOST` for the example host. Then
-   `./deploy.sh` there (diff, validate, apply; a bad config is refused and the live one stays).
+4. Switch the public host on (ticket 35's site block, on the shared Caddy, with the user's OK):
+   `deploy/caddy-add-site.sh`. It puts `deploy/caddy-site.caddy` into caddy-int's Caddyfile as its own site, just
+   before the wildcard site `$PUBLIC_HOST` falls under, then runs caddy-int's `deploy.sh` (diff, asks, validates,
+   applies; cancelled or refused, the local Caddyfile goes back) and fetches `/healthz` and `/api/snapshot` through
+   Caddy. Not `host-public.sh add`: that puts the host inside the wildcard site, whose shared log would keep the tokens.
 5. Check it's v2 and ours:
    - `https://$PUBLIC_HOST/healthz` says `ok`; `https://$PUBLIC_HOST/api/snapshot` says 403 (reads aren't open).
    - Sign in at `https://$PUBLIC_HOST/signup` → **Sign in with Google** with `HOUSEHOLD1_MANAGER_EMAIL`. `/setup` shows
