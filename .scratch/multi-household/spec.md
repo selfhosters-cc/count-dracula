@@ -250,7 +250,7 @@ Location isn't an item: it's optional and first-run already asked.
 
 ### Helper phones
 
-- **Count on this phone:** a button in `/setup` and the checklist, for a signed-in Manager. It stores the join key on this device and opens `/`.
+- **Count on this device:** a button in `/setup` and the checklist, for a signed-in Manager. It stores the join key on this device and opens `/`.
 - **Add a helper** in `/setup`: the join QR plus **Share join link** (`navigator.share` / Copy). The door menu's Add a helper is unchanged, except that **every join QR points at the public HTTPS URL**.
 
 ### Which TVs
@@ -630,7 +630,7 @@ X-Content-Type-Options: nosniff
   - Managers are adults running their own door
 
   The Operator can Rename or Suspend a Household that breaks them. There's no separate Terms page.
-- **Contact:** the server fills in `OPERATOR_CONTACT` when serving the page; the committed fallback is `privacy@count-dracula.example.com`. The promise is *"One person runs this as a hobby. Email us and we'll reply within a week (slower around Halloween)."* No contact form.
+- **Contact:** the server fills in `OPERATOR_CONTACT` when serving the page; the committed fallback is `privacy@count-dracula.example.com`. The promise is *"One person runs this as a hobby. Email us and we'll reply as soon as we can."* No contact form.
 - **Linked from:**
   - the sign-up page footer
   - the line under the Google button

@@ -9,7 +9,7 @@ import { clockTime, eventNow, releaseOpen } from '/shared/night-maths.js'
 const $ = (id) => document.getElementById(id)
 const EMOJIS = ['🧙', '🧛', '🧟', '👻', '🎃', '🦸', '🕷️', '👑', '🦖', '🐶', '🐱', '🦄', '🤖', '🦇', '🧚', '🏴‍☠️', '🐉', '🤡', '❓']
 
-// The join key arrives as ?key=… once (a helper QR, Share join link, or Count on this phone) and is remembered.
+// The join key arrives as ?key=… once (a helper QR, Share join link, or Count on this device) and is remembered.
 const params = new URLSearchParams(location.search)
 if (params.get('key')) {
   localStorage.setItem('cd.joinKey', params.get('key'))

@@ -142,3 +142,25 @@ describe('/help/tv', () => {
     }
   })
 })
+
+describe('/setup', () => {
+  test('"Count on this device": a tablet or laptop can count too', async () => {
+    const { app } = await newManager()
+
+    const html = await (await fetch(`${app.url}/setup.html`)).text()
+
+    expect(html).toContain('📱 Count on this device')
+    expect(html).not.toContain('this phone')
+  })
+
+  test('the household name comes first, above the checklist and the live night', async () => {
+    const { app } = await newManager()
+
+    const html = await (await fetch(`${app.url}/setup.html`)).text()
+
+    const name = html.indexOf('id="name-form"')
+    expect(name).toBeGreaterThan(-1)
+    expect(name).toBeLessThan(html.indexOf('id="checklist"'))
+    expect(name).toBeLessThan(html.indexOf('Live now'))
+  })
+})

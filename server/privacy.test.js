@@ -32,6 +32,13 @@ describe('/privacy', () => {
     expect(configured).toContain('Updated Oct 2026')
   })
 
+  test('promises no reply time', async () => {
+    const page = await text(server({}), '/privacy')
+
+    expect(page).toContain("we'll reply as soon as we can")
+    expect(page).not.toMatch(/within a week|slower around Halloween/)
+  })
+
   test('is linked from sign-up, the Location picker and /setup, and help is offered there and on /help/tv; never on the TV', async () => {
     const app = server({ OPERATOR_CONTACT: 'help@count-dracula.example.com' })
 

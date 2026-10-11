@@ -67,11 +67,18 @@
   <div id="status" role="status"></div>
 
   <div id="admin" hidden>
+    <section>
+      <form id="name-form">
+        <label for="h-name">Household name (this appears on anything you share)</label>
+        <div class="row"><input id="h-name" maxlength="40" autocomplete="off"><button type="submit">Save</button></div>
+      </form>
+    </section>
+
     <section id="checklist" hidden>
       <div class="row"><h2 style="margin: 0">🎃 Ready for Halloween</h2><button id="checklist-hide" class="fit" aria-label="Hide the checklist">✕</button></div>
       <ol class="checks">
         <li id="check-tv"><b>A TV is watching</b><span class="muted" data-todo>Open /tv on the TV's computer, then Pair a TV below.</span></li>
-        <li id="check-kid"><b>A phone counted a test kid</b><span class="muted" data-todo>Tap 📱 Count on this phone, then +1 Kid.</span><span class="muted" data-done>Now try <button type="button" class="link-button" id="check-reset">Reset the Rehearsal</button> so your TV starts at 0.</span></li>
+        <li id="check-kid"><b>A phone counted a test kid</b><span class="muted" data-todo>Tap 📱 Count on this device, then +1 Kid.</span><span class="muted" data-done>Now try <button type="button" class="link-button" id="check-reset">Reset the Rehearsal</button> so your TV starts at 0.</span></li>
         <li id="check-night"><b>Your Halloween night</b><span class="muted" id="check-night-when"></span>
           <form id="check-night-form" data-todo>
             <div class="row"><input id="check-expected" type="number" min="0" placeholder="Expected kids" aria-label="Expected kids"><button type="submit">Save</button><button type="button" id="check-night-skip">Skip</button></div>
@@ -91,7 +98,7 @@
       <p class="row"><a href="" id="summary-link" class="link fit" hidden>✨ Tonight's Night summary</a><span id="live-sharing" class="fit"></span></p>
       <p id="rehearsal-tools" hidden><button id="reset-rehearsal">🎭 Reset the Rehearsal to 0</button></p>
       <div class="row">
-        <button id="count-here" class="primary">📱 Count on this phone</button>
+        <button id="count-here" class="primary">📱 Count on this device</button>
         <button id="add-helper">➕ Add a helper</button>
       </div>
       <div id="helper" class="helper" hidden>
@@ -207,11 +214,7 @@
     </section>
 
     <section>
-      <h2>Your household</h2>
-      <form id="name-form">
-        <label for="h-name">Household name (this appears on anything you share)</label>
-        <div class="row"><input id="h-name" maxlength="40" autocomplete="off"><button type="submit">Save</button></div>
-      </form>
+      <h2>Your account</h2>
       <p class="muted">Signed in as <span id="signed-in"></span> · time zone <span id="h-zone"></span> · <a href="/privacy" class="link">Privacy and House rules</a></p>
       <form method="post" action="/auth/signout"><button type="submit">Sign out</button></form>
       <h2 style="margin-top: 18px">Delete my household</h2>
