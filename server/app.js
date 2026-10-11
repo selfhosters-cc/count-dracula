@@ -208,6 +208,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const { confirm } = await req.json()
       accounts.deleteHousehold(house.id, confirm)
       hub.close({ householdId: house.id })
+      log(`household deleted household=${house.id}`) // with the deletions table, what a restore re-deletes
       return new Response('Deleted', { headers: { 'Set-Cookie': sessionCookie('', 0) } })
     }),
     'GET /api/events': manager((req, house) => Response.json(house.events())),
