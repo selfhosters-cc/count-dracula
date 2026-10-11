@@ -1,7 +1,7 @@
 # Load test script
 
 Type: build (AFK)
-Status: ready-for-agent
+Status: done
 Blocked by: 19, 28
 
 ## What to build
@@ -19,6 +19,13 @@ Blocked by: 19, 28
 
 ## Acceptance criteria
 
-- [ ] On the dev box, it starts a scratch instance (or takes its port), runs 200-on-one and 3,000-site-wide, and prints the timings, RSS and pass/fail
-- [ ] It refuses the production DB path and the public host
-- [ ] It leaves the scratch DB and instance cleaned up
+- [x] On the dev box, it starts a scratch instance (or takes its port), runs 200-on-one and 3,000-site-wide, and prints the timings, RSS and pass/fail
+- [x] It refuses the production DB path and the public host
+- [x] It leaves the scratch DB and instance cleaned up
+
+## Notes from the build
+
+- `bun deploy/loadtest.js [--port 3191] [--viewers 200] [--site 3000] [--taps 20]`. It makes its Households straight in a temp database, starts `server/main.js` on it as a separate process (RSS from `/proc/<pid>/status`), opens TV-link viewers each with its own `CF-Connecting-IP`, and times each tap from the POST to the last viewer's delta. It re-runs itself with `BUN_CONFIG_MAX_HTTP_REQUESTS` raised, since Bun's fetch otherwise holds at most 256 requests open.
+- It refuses `--port 3131`, `--db /var/lib/count-dracula/count-dracula.sqlite`, and any `--url`/`--host`; it only ever talks to the scratch server on 127.0.0.1. It deletes the temp directory and stops the server on the way out, pass or fail.
+- `deploy.sh` now ships it in the app tarball (`/opt/count-dracula/deploy/loadtest.js`), for the runbook (ticket 37).
+- **Dev box, 2026-10-11** (a much faster machine than LXC 118's 2 cores): 200 viewers on one Household, median fan-out 5.2 ms (p90 7.4, worst 8.5); 3,000 streams site-wide at 79 MB RSS, a tap still reaching 200 viewers in 5.8 ms. PASS. The number that matters is the run on LXC 118 on opening day.
