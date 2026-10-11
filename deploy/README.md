@@ -7,7 +7,7 @@ the dev machine through `ssh proxmox` + `pct`; the LXC needs no SSH keys of its 
 | | |
 |---|---|
 | LXC | **118** `count-dracula`, Debian 12, 2 cores / 1 GB / 4 GB on `zstorage2`, starts on boot |
-| Public | **https://`$PUBLIC_HOST`** (in `deploy/local.env`; the repo says `count-dracula.example.com`) → Cloudflare → shared Caddy (LXC 117) → `192.168.5.31:3131` |
+| Public | **https://`$PUBLIC_HOST`** (in `deploy/local.env`; the repo says `count-dracula.example.com`) → Cloudflare → shared Caddy (LXC 117, `$CADDY_IP`) → the LXC at `$LXC_IP:3131` |
 | App | `/opt/count-dracula` (previous build kept in `/opt/count-dracula.prev`) |
 | Config | `/etc/count-dracula/config.json` (switches, soundboard, backup directory; never overwritten by a deploy) |
 | Private settings | `/etc/count-dracula/env` (mode 640), written by every deploy from `deploy/local.env` |
@@ -33,12 +33,12 @@ are set. `deploy.sh` sends only these keys to the server: any other line in `loc
 ## Once: create the LXC
 
 ```bash
-deploy/create-lxc.sh          # VMID=118 IP=192.168.5.31 by default; override with env vars
+deploy/create-lxc.sh          # VMID=118, at LXC_IP / LXC_GATEWAY from deploy/local.env
 ```
 
 It refuses if the VMID exists or the IP answers ping, creates and starts the LXC (2 cores, 1 GB), adds the
 `countdracula` system user, and adds the LXC to every scheduled Proxmox backup job that lists guests.
-Reserve 192.168.5.31 on the router (or keep it outside the DHCP range).
+Reserve `LXC_IP` on the router (or keep it outside the DHCP range).
 
 An LXC made before v2 has 1 core / 512 MB. Raise it once:
 

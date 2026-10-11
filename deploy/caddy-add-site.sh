@@ -10,18 +10,19 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source deploy/local.env
 CADDY_INT=${CADDY_INT:-/opt/docker-compose/caddy-int}
-CADDY_LAN=${CADDY_LAN:-192.168.5.20}
+CADDY_LAN=${CADDY_LAN:-${CADDY_IP:?Set CADDY_IP in deploy/local.env}}
+[[ -n ${LXC_IP:-} ]] || { echo "!! No LXC_IP in deploy/local.env" >&2; exit 1; }
 [[ -n ${PUBLIC_HOST:-} ]] || { echo "!! No PUBLIC_HOST in deploy/local.env" >&2; exit 1; }
 
 caddyfile=$CADDY_INT/Caddyfile
 cp -p "$caddyfile" "$caddyfile.bak-count-dracula"
 # Adds the site just before the wildcard it falls under, or replaces the one already there (its "host {" line to the
 # next "}" at the start of a line).
-python3 - "$PUBLIC_HOST" "$caddyfile" <<'EOF'
+python3 - "$PUBLIC_HOST" "$caddyfile" "$LXC_IP" <<'EOF'
 import sys
-host, path = sys.argv[1], sys.argv[2]
+host, path, upstream = sys.argv[1], sys.argv[2], sys.argv[3]
 block = open('deploy/caddy-site.caddy').read()
-block = block[block.index('count-dracula.example.com {'):].replace('count-dracula.example.com', host).rstrip('\n') + '\n'
+block = block[block.index('count-dracula.example.com {'):].replace('count-dracula.example.com', host).replace('COUNT_DRACULA_LXC', upstream).rstrip('\n') + '\n'
 caddyfile = open(path).read()
 opening = '\n' + host + ' {\n'
 if opening in caddyfile:

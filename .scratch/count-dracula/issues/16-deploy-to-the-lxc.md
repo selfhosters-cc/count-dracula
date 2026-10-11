@@ -22,7 +22,7 @@ Needs the homelab owner for Proxmox, Caddy and the backup job.
 
 - [x] `systemctl` shows the service enabled, and killing the process brings it back within seconds *(back and answering in 1.5 s)*
 - [x] A tailnet phone opens the HTTPS URL, gets the join key without scanning anything, and its taps count *(checked with curl via https://count-dracula.example.com; worth one real phone too)*
-- [x] A phone that isn't on Tailscale opens `http://<LXC LAN IP>:<port>` and, once given the key, its taps count *(http://192.168.5.31:3131)*
+- [x] A phone that isn't on Tailscale opens `http://<LXC LAN IP>:<port>` and, once given the key, its taps count *(http://<LXC IP>:3131)*
 - [x] The SSE stream stays open through Caddy for more than 2 minutes *(140 s, 9 pings)*
 - [x] The LXC's IP is reserved and survives a reboot *(static in the LXC config, back on .31 after `pct reboot`; also reserve it on the router)*
 - [x] The Proxmox backup job lists the LXC *(both scheduled jobs, daily and Tuesday)*

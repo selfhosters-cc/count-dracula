@@ -4,10 +4,12 @@
 # needs no SSH keys of its own.
 set -euo pipefail
 
-PVE=${PVE:-proxmox}            # ssh host alias for the Proxmox node (root@192.168.5.1)
+cd "$(dirname "$0")/.."
+[[ -f deploy/local.env ]] && source deploy/local.env   # LXC_IP and LXC_GATEWAY: our LAN stays out of the repo
+PVE=${PVE:-proxmox}            # ssh host alias for the Proxmox node
 VMID=${VMID:-118}
-IP=${IP:-192.168.5.31}         # static, like the other LXCs; the shared Caddy proxies the public host to it
-GW=${GW:-192.168.1.1}
+IP=${IP:-${LXC_IP:?Set LXC_IP in deploy/local.env}}            # static; the shared Caddy proxies the public host to it
+GW=${GW:-${LXC_GATEWAY:?Set LXC_GATEWAY in deploy/local.env}}
 STORAGE=${STORAGE:-zstorage2}
 TEMPLATE=${TEMPLATE:-local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst}
 # Like the other LXCs: the Proxmox host's own resolv.conf points at Tailscale (100.100.100.100), which an

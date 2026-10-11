@@ -378,11 +378,11 @@ describe('kiosk launchers', () => {
     const app = start()
 
     const viaCaddy = await fetch(`${app.url}/kiosk/install-cachyos.sh`, { headers: { Host: 'tv.example.com', 'X-Forwarded-Proto': 'https' } })
-    const bat = await (await fetch(`${app.url}/kiosk/count-dracula-tv.bat`, { headers: { Host: '192.168.1.9:3131' } })).text()
+    const bat = await (await fetch(`${app.url}/kiosk/count-dracula-tv.bat`, { headers: { Host: '192.0.2.9:3131' } })).text()
 
     const script = await viaCaddy.text()
     expect(script).toContain('BASE=${BASE:-https://tv.example.com}')
     expect(script).not.toContain('__ORIGIN__')
-    expect(bat).toContain('set URL=http://192.168.1.9:3131/tv')
+    expect(bat).toContain('set URL=http://192.0.2.9:3131/tv')
   })
 })

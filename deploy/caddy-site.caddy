@@ -1,5 +1,5 @@
-# The Count Dracula site block for the shared Caddy (LXC 117), v2 ticket 35. Replace the host with $PUBLIC_HOST
-# from deploy/local.env when adding it; the repo only ever says count-dracula.example.com.
+# The Count Dracula site block for the shared Caddy (LXC 117), v2 ticket 35. deploy/caddy-add-site.sh fills in
+# $PUBLIC_HOST and the LXC's address (COUNT_DRACULA_LXC, LXC_IP) from deploy/local.env: the repo names neither.
 # Its own site, placed before the wildcard it would fall under: the wildcard's shared log would keep the tokens.
 # Expects the shared Caddyfile's dnstls and hsts snippets and its Cloudflare trusted_proxies with
 # client_ip_headers CF-Connecting-IP.
@@ -12,7 +12,7 @@ count-dracula.example.com {
 	request_body {
 		max_size 64KB
 	}
-	reverse_proxy 192.168.5.31:3131 {
+	reverse_proxy COUNT_DRACULA_LXC:3131 {
 		# Other sites' reloads don't cut the TVs' and phones' streams for 10 minutes.
 		stream_close_delay 10m
 		# The visitor's IP as Caddy worked it out: Cloudflare's header only when Cloudflare sent it.

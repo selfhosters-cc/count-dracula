@@ -127,16 +127,16 @@ its Event, a TV follows one Event). If it fails, lower the caps, redeploy, run i
 
   ```bash
   curl -s -o /dev/null "https://$PUBLIC_HOST/door?key=runbook-secret-1"
-  ssh root@192.168.5.20 "grep -o '\"uri\":\"[^\"]*' /var/log/caddy/count-dracula.log | grep /door | tail -3"   # /door?key=REDACTED
-  ssh root@192.168.5.20 "grep -c runbook-secret-1 /var/log/caddy/count-dracula.log"                          # 0
+  ssh root@$CADDY_IP "grep -o '\"uri\":\"[^\"]*' /var/log/caddy/count-dracula.log | grep /door | tail -3"   # /door?key=REDACTED
+  ssh root@$CADDY_IP "grep -c runbook-secret-1 /var/log/caddy/count-dracula.log"                          # 0
   ```
 
 - So is the key in the `/?key=` redirect's `Location` header (masked since Oct 11's step 4 found it in the clear):
 
   ```bash
   curl -s -o /dev/null "https://$PUBLIC_HOST/?key=runbook-secret-2"
-  ssh root@192.168.5.20 "grep -o '\"Location\":\[\"[^\"]*' /var/log/caddy/count-dracula.log | tail -1"   # /door?key=REDACTED
-  ssh root@192.168.5.20 "grep -c runbook-secret-2 /var/log/caddy/count-dracula.log"                         # 0
+  ssh root@$CADDY_IP "grep -o '\"Location\":\[\"[^\"]*' /var/log/caddy/count-dracula.log | tail -1"   # /door?key=REDACTED
+  ssh root@$CADDY_IP "grep -c runbook-secret-2 /var/log/caddy/count-dracula.log"                         # 0
   ```
 
 - OSM tiles load only after the tap: checked in step 2's first-run. To check again: `/setup` → **Household** →
