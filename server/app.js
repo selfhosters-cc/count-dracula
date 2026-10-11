@@ -14,7 +14,12 @@ const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
 const PAGES = { '/': '/index.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/signup': '/signup.html' }
-const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename'])
+const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink'])
+
+// What a TV-link holder gets (spec §9): what the TV draws, without each kid's phone name.
+const withoutPhone = ({ phoneName, ...kid }) => kid
+const tvSnapshot = (snap) => ({ ...snap, kids: snap.kids.map(withoutPhone) })
+const tvDelta = (delta) => (delta.kid ? { ...delta, kid: withoutPhone(delta.kid) } : delta)
 
 // The sign-in cookie (spec §3): 90 days, renewed with use; the session itself lives server-side.
 const SESSION_COOKIE = 'cd_session'
@@ -41,15 +46,18 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // night's recap on /tv?event=<id>), for a Manager only.
     'GET /api/snapshot': async (req, server) => {
       const id = new URL(req.url).searchParams.get('event')
-      if (id == null) return read((req, house) => Response.json(house.snapshot()))(req, server)
+      if (id == null) return read((req, house, credential) => Response.json(credential.kind === 'tv' ? tvSnapshot(house.snapshot()) : house.snapshot()))(req, server)
       return manager((req, house) => {
         const snap = house.snapshot(Number(id))
         return snap ? Response.json(snap) : notFound()
       })(req, server)
     },
-    // EventSource can't send headers, so a phone's key comes as ?key= (masked in the Caddy log).
+    // EventSource can't send headers, so a phone's key or the TV link's token comes as ?key= (masked in the
+    // Caddy log). A TV gets the live night TV-shaped.
     'GET /api/stream': read((req, house, credential, server) =>
-      hub.attach(req, server, { householdId: house.id, kind: 'phone', credential: credential.token, snapshot: () => house.snapshot() })),
+      credential.kind === 'tv'
+        ? hub.attach(req, server, { householdId: house.id, kind: 'tvLink', credential: credential.token, snapshot: () => tvSnapshot(house.snapshot()), shape: tvDelta })
+        : hub.attach(req, server, { householdId: house.id, kind: 'phone', credential: credential.token, snapshot: () => house.snapshot() })),
     'POST /api/taps': write(async (req, house) => {
       const { id, tagId, tappedAt, phoneName, teen } = await req.json()
       hub.publish(house.id, house.apply({ type: 'tap', id, tagId, tappedAt, phoneName, teen }))
@@ -92,7 +100,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     'GET /tally': managerPage('/tally'),
     'GET /api/household': manager((req, house, session) => {
       const { displayName, timeZone } = ledger.households().find((h) => h.id === house.id)
-      return Response.json({ id: house.id, displayName, timeZone, joinKey: house.joinKey(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
+      return Response.json({ id: house.id, displayName, timeZone, joinKey: house.joinKey(), tvToken: house.tvToken(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
     }),
     // Delete my Household: typed name to confirm; everything goes at once, and its streams close.
     'POST /api/household/delete': manager(async (req, house) => {
@@ -115,11 +123,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     'POST /api/admin': manager(async (req, house) => {
       const command = await req.json()
       if (!ADMIN_COMMANDS.has(command?.type)) throw new BadCommand(`Not a Setup command: ${command?.type}`)
-      const oldKey = house.joinKey()
+      const [oldKey, oldTv] = [house.joinKey(), house.tvToken()]
       const deltas = house.apply(command)
       hub.publish(house.id, deltas)
-      // Change join key cuts off the old key's streams as well as its writes.
+      // Change join key and Rotate TV link cut off the old credential's streams at once.
       if (house.joinKey() !== oldKey) hub.close({ householdId: house.id, credential: oldKey })
+      if (house.tvToken() !== oldTv) hub.close({ householdId: house.id, credential: oldTv })
       return Response.json({ deltas, joinKey: house.joinKey() })
     }),
     // ☰ "🌙 End the night" / "Resume the night": any phone with the join key.
@@ -150,13 +159,16 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     }),
   }
 
-  // A phone's join key (X-Join-Key, or ?key= on the stream) or a Manager's session cookie, and its
-  // Household: { householdId, kind: 'key' | 'session', token }, or null.
+  // A phone's join key (X-Join-Key, or ?key=), the TV link's token (?key=), or a Manager's session
+  // cookie, and its Household: { householdId, kind: 'key' | 'tv' | 'session', token }, or null.
   function credentialOf(req) {
-    const key = req.headers.get('X-Join-Key') ?? new URL(req.url).searchParams.get('key')
+    const header = req.headers.get('X-Join-Key')
+    const key = header ?? new URL(req.url).searchParams.get('key')
     if (key) {
       const householdId = ledger.householdByJoinKey(key)
-      return householdId == null ? null : { householdId, kind: 'key', token: key }
+      if (householdId != null) return { householdId, kind: 'key', token: key }
+      const tvHousehold = header ? null : ledger.householdByTvToken(key)
+      return tvHousehold == null ? null : { householdId: tvHousehold, kind: 'tv', token: key }
     }
     const token = tokenOf(req)
     const session = accounts.session(token)
@@ -233,6 +245,8 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const { pathname } = new URL(req.url)
       const route = routes[`${req.method} ${pathname}`]
       if (route) return route(req, server)
+      // The TV link's page: the same TV page; it reads its token from the address.
+      if (req.method === 'GET' && pathname.startsWith('/tv/k/')) return serveStatic('/tv', req)
       if (req.method === 'GET') return serveStatic(pathname, req)
       return notFound()
     },

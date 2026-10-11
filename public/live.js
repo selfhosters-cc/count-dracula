@@ -5,8 +5,14 @@ const MAX_RETRY_MS = 5_000 // a random 0–5 s, so a server restart isn't met by
 const STALE_MS = 35_000 // the server pings every 15 s: two missed means the link is dead, even if still "open"
 const RESYNC = new Set(['event.switched', 'event.updated'])
 
+// The server refusing the credential outright (a rotated TV link, a changed join key, a deleted or suspended
+// Household) is told apart from a dropped link by asking for the snapshot: onRefused hears it, and the
+// stream stops trying.
+const REFUSED = new Set([401, 403, 404])
+
 export function connectLive(url = '/api/stream') {
   const listeners = new Set()
+  const refusedListeners = new Set()
   let source
   let disconnectedAt = Date.now()
   let lastHeard = Date.now()
@@ -20,6 +26,9 @@ export function connectLive(url = '/api/stream') {
     on(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
+    },
+    onRefused(listener) {
+      refusedListeners.add(listener)
     },
   }
 
@@ -50,16 +59,31 @@ export function connectLive(url = '/api/stream') {
       emit('delta', delta)
     })
 
-    source.addEventListener('error', () => {
+    source.addEventListener('error', async () => {
       if (live.connected) disconnectedAt = Date.now()
       live.connected = false
       emit('disconnected')
       // EventSource retries by itself (after the server's random `retry:`) unless the server answered with an error status.
-      if (source.readyState === EventSource.CLOSED) setTimeout(reopen, Math.random() * MAX_RETRY_MS)
+      if (source.readyState !== EventSource.CLOSED) return
+      if (await refused()) {
+        live.refused = true
+        for (const listener of refusedListeners) listener()
+        return
+      }
+      setTimeout(reopen, Math.random() * MAX_RETRY_MS)
     })
   }
 
+  async function refused() {
+    try {
+      return REFUSED.has((await fetch(url.replace('/api/stream', '/api/snapshot'))).status)
+    } catch {
+      return false // the server's unreachable: that's a dropped link, keep trying
+    }
+  }
+
   function reopen() {
+    if (live.refused) return
     source.close()
     open()
   }

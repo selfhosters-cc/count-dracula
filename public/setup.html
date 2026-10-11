@@ -38,6 +38,9 @@
     .backfill input { width: 5em; padding: 6px; }
     .backfill input:disabled { opacity: .35; }
     .helper { margin-top: 10px; }
+    code.link { display: block; word-break: break-all; font-size: 13px; }
+    #qr-full { position: fixed; inset: 0; z-index: 10; background: #fff; display: grid; place-content: center; justify-items: center; color: #333; }
+    #qr-full svg { width: min(90vw, 90vh); height: auto; display: block; }
     #helper-qr { background: #fff; border-radius: 14px; padding: 12px; width: min(72vw, 260px); }
     #helper-qr svg { width: 100%; height: auto; display: block; }
   </style>
@@ -63,6 +66,21 @@
         <button id="export-live">⬇ Export event</button>
         <button id="add-ticket">🎫 Add a golden ticket</button>
         <button id="change-key" class="danger">Change join key</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>📺 Your TV</h2>
+      <p class="muted">Anyone with this link can watch tonight's board: the porch TV, or family far away. Rotate it to cut every one of them off.</p>
+      <p><code id="tv-link" class="link"></code></p>
+      <div class="row">
+        <button id="tv-share" class="primary">Share</button>
+        <button id="tv-copy">Copy</button>
+        <button id="tv-qr">Show QR</button>
+      </div>
+      <div class="row" style="margin-top: 8px">
+        <button id="tv-here">Use this screen as the TV</button>
+        <button id="tv-rotate" class="danger">Rotate TV link</button>
       </div>
     </section>
 
@@ -134,6 +152,8 @@
       <button id="delete-household" class="danger">Delete my household…</button>
     </section>
   </div>
+
+  <div id="qr-full" hidden><div id="qr-full-code"></div><p>Tap anywhere to close</p></div>
 
   <script type="module">
     import { atEventTime, clockTime as zoneClock, eventNow, minuteOfDay, slots } from '/shared/night-maths.js'
@@ -219,6 +239,42 @@
       say('Join link copied')
     })
 
+    // ---- the TV link (spec §9): shared from here only, never shown on the TV
+    const tvUrl = () => `${location.origin}/tv/k/${house.tvToken}`
+
+    $('tv-share').addEventListener('click', async () => {
+      if (navigator.share) {
+        try {
+          return await navigator.share({ title: 'Our trick-or-treat TV', url: tvUrl() })
+        } catch (err) {
+          if (err.name === 'AbortError') return
+        }
+      }
+      await navigator.clipboard.writeText(tvUrl())
+      say('TV link copied')
+    })
+
+    $('tv-copy').addEventListener('click', async () => {
+      await navigator.clipboard.writeText(tvUrl())
+      say('TV link copied')
+    })
+
+    $('tv-qr').addEventListener('click', () => {
+      const qr = qrcode(0, 'M')
+      qr.addData(tvUrl())
+      qr.make()
+      $('qr-full-code').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true })
+      $('qr-full').hidden = false
+    })
+    $('qr-full').addEventListener('click', () => ($('qr-full').hidden = true))
+
+    $('tv-here').addEventListener('click', () => (location.href = tvUrl()))
+
+    $('tv-rotate').addEventListener('click', async () => {
+      if (!confirm('Rotate the TV link? Every screen watching with the old link stops at once, your porch TV included, until it gets the new one.')) return
+      if (await admin({ type: 'rotateTvLink' }, 'TV link rotated')) render()
+    })
+
     // ---- your household: its name, signing out, and deleting it
     $('name-form').addEventListener('submit', async (e) => {
       e.preventDefault()
@@ -253,6 +309,7 @@
       $('time-zone').textContent = timeZone ?? ''
       if (document.activeElement !== $('h-name')) $('h-name').value = house.displayName
       $('signed-in').textContent = house.manager.email
+      $('tv-link').textContent = tvUrl()
       $('h-zone').textContent = timeZone
       $('live-kids').textContent = live.kids
       $('join-key').textContent = joinKey || '(not set on this phone)'

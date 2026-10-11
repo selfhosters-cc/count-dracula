@@ -49,7 +49,20 @@ const MIGRATIONS = [
       );
     `)
   },
+
+  // 2 → 3: the TV link (v2 spec §9), one secret token per Household.
+  (db) => {
+    db.exec('ALTER TABLE households ADD COLUMN tv_token TEXT')
+    const set = db.query('UPDATE households SET tv_token = ? WHERE id = ?')
+    for (const { id } of db.query('SELECT id FROM households').all()) set.run(randomToken(), id)
+    db.exec('CREATE UNIQUE INDEX households_by_tv_token ON households (tv_token)')
+  },
 ]
+
+// A long secret for a URL: 32 random bytes, base64url.
+export function randomToken() {
+  return Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
+}
 
 export function migrate(db, { now }) {
   for (let version = db.query('PRAGMA user_version').get().user_version; version < MIGRATIONS.length; version++) {

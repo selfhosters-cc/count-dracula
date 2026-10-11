@@ -1,6 +1,7 @@
 // Accounts (v2 spec §3, §20): Managers signing in with Google, their sessions, sign-up, and deleting a
 // Household. Google is the one outside call and sits behind a seam (server/google.js; a fake in tests).
 import { BadCommand, displayNameOf, isTimeZone } from './ledger.js'
+import { randomToken } from './migrations.js'
 
 const SESSION_MS = 90 * 86_400_000
 const RENEW_AFTER_MS = 86_400_000 // a used session is pushed out to 90 days again at most once a day
@@ -118,8 +119,4 @@ export function openAccounts(db, { ledger, google, now = Date.now, household1Ema
 
 function normalEmail(email) {
   return String(email ?? '').trim().toLowerCase()
-}
-
-function randomToken() {
-  return Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
 }

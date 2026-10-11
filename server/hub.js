@@ -46,11 +46,12 @@ export function createHub({ heartbeatMs = 15_000, random = Math.random } = {}) {
   }, heartbeatMs)
 
   return {
-    // { householdId, kind, credential, snapshot } → the stream's Response.
-    attach(req, server, { householdId, kind, credential, snapshot }) {
+    // { householdId, kind, credential, snapshot, shape } → the stream's Response. shape(delta), if given,
+    // is what this device gets of each delta (a TV's leaves out phone names); snapshot() is already shaped.
+    attach(req, server, { householdId, kind, credential, snapshot, shape = null }) {
       if (!KINDS.includes(kind)) throw new Error(`Unknown stream kind: ${kind}`)
       server.timeout(req, 0)
-      const client = { householdId, kind, credential, controller: null }
+      const client = { householdId, kind, credential, shape, controller: null }
       const body = new ReadableStream(
         {
           start(controller) {
@@ -80,8 +81,11 @@ export function createHub({ heartbeatMs = 15_000, random = Math.random } = {}) {
       const channel = channels.get(householdId)
       if (!channel) return
       for (const delta of deltas) {
-        const bytes = encoder.encode(frame('delta', delta, delta.seq))
-        for (const client of [...channel]) send(client, bytes)
+        const encoded = new Map() // shape → bytes: each shape is encoded once per delta
+        for (const client of [...channel]) {
+          if (!encoded.has(client.shape)) encoded.set(client.shape, encoder.encode(frame('delta', client.shape ? client.shape(delta) : delta, delta.seq)))
+          send(client, encoded.get(client.shape))
+        }
       }
     },
 

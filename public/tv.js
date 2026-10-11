@@ -17,18 +17,36 @@ const ROLL_UP_MS = 2_000
 const confetti = createConfetti($('confetti'), { resize: true, useWorker: false })
 const clock = { now: () => Date.now(), setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (id) => clearTimeout(id) }
 
-// ---- sound: "Start the night" whenever the AudioContext isn't running; one click unlocks it
+// What this page shows: the TV link's live night (/tv/k/<token>), one past night's recap (/tv?event=<id>,
+// for a Manager), or a bare /tv.
+const tvToken = location.pathname.match(/^\/tv\/k\/([^/]+)/)?.[1] ?? null
+const pastEventId = new URLSearchParams(location.search).get('event')
+
+// ---- sound (spec §9): the board always shows. While the AudioContext isn't running, a corner pill asks
+// for any click, touch or key (a TV remote can't aim at a button). The full-screen "Start the night" is
+// only for a night with no kid yet, until sound has been unlocked once on this page load.
 const audio = await createWebAudio()
 const sound = createSound({ audio, clock })
-const showStart = () => ($('start').hidden = sound.running)
+let kidsCounted = null // unknown until the first snapshot: the pill, not a flash of Start
+let unlockedOnce = false
+function showStart() {
+  const needsSound = !sound.running && !pastEventId
+  const startScreen = needsSound && kidsCounted === 0 && !unlockedOnce
+  $('start').hidden = !startScreen
+  $('sound-pill').hidden = !needsSound || startScreen
+}
 audio.onStateChange(showStart)
 showStart()
 if (sound.running) sound.unlock() // the kiosk's autoplay flag (ticket 37) starts it without a click
 // (the mix from the snapshot is applied when it arrives, below)
-$('start').addEventListener('click', async () => {
+async function unlockSound() {
+  if (sound.running) return
   await sound.unlock()
+  if (sound.running) unlockedOnce = true
   showStart()
-})
+}
+document.addEventListener('pointerdown', unlockSound)
+document.addEventListener('keydown', unlockSound)
 
 // ---- the giant count: set, bump, quiet roll-up, quiet dip
 let shown = null // the number on screen
@@ -433,9 +451,14 @@ const teaser = createTeaser({
 })
 const quietOrAway = (state) => !live?.connected || over(state)
 
-// ---- live state (or, with /tv?event=<id>, one past night's recap from stored data)
-const pastEventId = new URLSearchParams(location.search).get('event')
-const live = pastEventId ? null : connectLive()
+// ---- live state (or, with /tv?event=<id>, one past night's recap from stored data). A TV link reads with its
+// token; a bare /tv, for now, on a signed-in Manager's session.
+const live = pastEventId ? null : connectLive(tvToken ? `/api/stream?key=${encodeURIComponent(tvToken)}` : '/api/stream')
+live?.onRefused(() => {
+  $('unavailable').hidden = false // a rotated link, or a Household that's gone: nothing to say about which
+  $('start').hidden = true
+  $('sound-pill').hidden = true
+})
 let wasDisconnected = false
 
 function renderSnapshot(state, cause) {
@@ -452,7 +475,6 @@ function renderSnapshot(state, cause) {
 }
 
 if (pastEventId) {
-  $('start').hidden = true // a recap to look at: no sound needed
   fetch(`/api/snapshot?event=${encodeURIComponent(pastEventId)}`)
     .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
     .then((state) => renderSnapshot(state, 'snapshot'))
@@ -466,6 +488,8 @@ live?.on(({ state, cause, delta }) => {
     return // stay frozen: no error screen, spinner or red
   }
   teaser.pause(quietOrAway(state))
+  kidsCounted = state.kids.length
+  showStart()
   if (cause === 'snapshot') {
     teaser.activity() // (re)connected: the 45 s count from now
     return renderSnapshot(state, cause)

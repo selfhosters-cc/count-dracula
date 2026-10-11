@@ -1,7 +1,7 @@
 // The Ledger: every write goes through apply(), every read through snapshot(), each on one Household.
 // See .scratch/count-dracula/modules.md §1 and .scratch/multi-household/spec.md §4.
 import { toBuckets } from '../shared/night-maths.js'
-import { migrate } from './migrations.js'
+import { migrate, randomToken } from './migrations.js'
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -138,8 +138,8 @@ export function openLedger(db, config) {
       if (!isTimeZone(timeZone)) throw new BadCommand('A household needs its time zone')
       return db.transaction(() => {
         const { id } = db
-          .query('INSERT INTO households (display_name, time_zone, join_key, signed_up_at) VALUES (?, ?, ?, ?) RETURNING id')
-          .get(name, timeZone, randomKey(), now())
+          .query('INSERT INTO households (display_name, time_zone, join_key, tv_token, signed_up_at) VALUES (?, ?, ?, ?, ?) RETURNING id')
+          .get(name, timeZone, randomKey(), randomToken(), now())
         const rehearsal = db
           .query("INSERT INTO events (household_id, name, live, rehearsal, golden_count) VALUES (?, 'Rehearsal', 1, 1, 0) RETURNING id")
           .get(id)
@@ -176,6 +176,12 @@ export function openLedger(db, config) {
         db.query('DELETE FROM households WHERE id = ?').run(id)
       })()
       opened.delete(id)
+    },
+
+    // The Household whose TV link carries this token, or null.
+    householdByTvToken(token) {
+      if (typeof token !== 'string' || token === '') return null
+      return db.query('SELECT id FROM households WHERE tv_token = ?').get(token)?.id ?? null
     },
 
     households() {
@@ -609,6 +615,12 @@ export function openLedger(db, config) {
         return []
       },
 
+      // Rotate TV link (spec §9): a new secret; the HTTP layer closes every stream on the old one.
+      rotateTvLink() {
+        db.query('UPDATE households SET tv_token = ? WHERE id = ?').run(randomToken(), householdId)
+        return []
+      },
+
       // Cuts off phones that joined with the old key; the HTTP layer hands the new one back.
       changeKey() {
         db.query('UPDATE households SET join_key = ? WHERE id = ?').run(randomKey(), householdId)
@@ -668,6 +680,10 @@ export function openLedger(db, config) {
 
       joinKey() {
         return household().join_key
+      },
+
+      tvToken() {
+        return household().tv_token
       },
 
       // A counts-only past night from half-hour buckets ({ name, buckets: [{ start, end, count }] }),
