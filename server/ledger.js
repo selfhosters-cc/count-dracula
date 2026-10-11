@@ -977,13 +977,15 @@ export function openLedger(db, config) {
         return []
       },
 
-      // Any Event but a Live one (spec v2.1 §3), after typing the name to confirm. Anything racing against it
-      // goes to None. Deleting the door's Event moves the door (apply() tells screens).
+      // Any Event but a Live one (spec v2.1 §3): with its name typed to confirm when it has kids (imported counts
+      // included), after a plain confirm otherwise. Anything racing against it goes to None. Deleting the door's
+      // Event moves the door (apply() tells screens).
       deleteEvent({ eventId, confirm }) {
         const event = eventById(eventId)
         if (!event) return []
         if (event.state === 'live') throw new BadCommand('End the night first')
-        if (confirm !== event.name) throw new BadCommand(`Type "${event.name}" to delete it`)
+        const hasKids = event.counts_only === 1 || liveCount.get(event.id).n > 0
+        if (hasKids && confirm !== event.name) throw new BadCommand(`Type "${event.name}" to delete it`)
         const door = doorRow()
         const racedByDoor = door != null && door.id !== event.id && door.race_against_id === event.id
         removeEvent(event.id) // all of it: SQLite can reuse a deleted event's id, so nothing may be left pointing at it
@@ -1162,16 +1164,33 @@ export function openLedger(db, config) {
       },
 
       // Every event for the Setup page, newest first. Never includes the join key.
-      // `note` is what the tick did to it, or null (tickNote).
+      // `note` is what the tick did to it, or null (tickNote). `counted` is imported counts' total (null for any
+      // other Event). `golden` is { drawn, won, left } (left: not won and not expired), or null with the switch off.
       events() {
         const tagsOf = db.query('SELECT * FROM tags WHERE event_id = ? ORDER BY sort_order')
         const kidCount = db.query('SELECT COUNT(*) AS n FROM kids WHERE event_id = ? AND deleted_at IS NULL')
+        const countedOf = db.query('SELECT COALESCE(SUM(count), 0) AS n FROM ghost_buckets WHERE event_id = ?')
+        const goldenOf = db.query(`
+          SELECT COUNT(*) AS drawn, COUNT(kid_id) AS won,
+            SUM(CASE WHEN kid_id IS NULL AND state IN ('hidden', 'rolled', 'released') THEN 1 ELSE 0 END) AS left
+          FROM golden_tickets WHERE event_id = ?`)
+        const golden = (id) => {
+          const { drawn, won, left } = goldenOf.get(id)
+          return { drawn, won, left: left ?? 0 }
+        }
         const { time_zone: timeZone } = household()
         const at = now()
         return db
           .query('SELECT * FROM events WHERE household_id = ? ORDER BY id DESC')
           .all(householdId)
-          .map((row) => ({ ...toEventSummary(row), note: tickNote(row, timeZone, at), kids: kidCount.get(row.id).n, tags: tagsOf.all(row.id).map(toTag) }))
+          .map((row) => ({
+            ...toEventSummary(row),
+            note: tickNote(row, timeZone, at),
+            kids: kidCount.get(row.id).n,
+            counted: row.counts_only ? countedOf.get(row.id).n : null,
+            golden: switches.goldenTickets ? golden(row.id) : null,
+            tags: tagsOf.all(row.id).map(toTag),
+          }))
       },
 
       // The Night summary (spec §12): one Ended or Past night, from stored data, with no phone names. null while

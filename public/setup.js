@@ -1,27 +1,34 @@
-// /setup (v2 spec §6): a signed-in Manager runs their Household.
-import { raceChoices } from '/shared/race-against.js'
-import { atEventTime, clockTime as zoneClock, eventNow, minuteOfDay, slots, stamp, tickNoteText, zonedTime } from '/shared/night-maths.js'
+// /setup (spec v2.1 §9): a signed-in Manager runs their Household. Three tabs, Tonight · Nights · Household,
+// and a screen per night. setup-view.js decides what shows; setup-night.js and setup-household.js draw it.
+import { zonedTime, clockTime as zoneClock } from '../shared/night-maths.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
-import { createLocationPicker } from '/location-picker.js'
 import { showFirstRun } from '/first-run.js'
-import { helperLink, helperWording } from '/door-view.js'
+import { helperLink, helperWording } from './door-view.js'
+import { $, h, option } from './setup-dom.js'
+import {
+  closeConfirm, deleteConfirm, doorEvent, endConfirm, goLiveConfirm, goLiveOffer, nightGroups, nightsTabLabel,
+  resetConfirm, screenFrom, searchFor, waitingNights,
+} from './setup-view.js'
+import { alsoOpen, doorCard, nightRow, nightScreen, nothingOpen, typedMissed, waiting } from './setup-night.js'
+import { wireHousehold } from './setup-household.js'
 
-const $ = (id) => document.getElementById(id)
-const HOUR = 3_600_000
-let batches = []
-
-let house = null // { id, displayName, timeZone, joinKey, manager, operator }
-let joinKey = ''
+let house = null // /api/household: { id, displayName, timeZone, joinKey, tvToken, checklist, lastYear, … }
 let events = []
-let editingId = null
 let shares = [] // the nights shared by a public link: [{ eventId, url, hideName }]
-let timeZone // the Household's: every time of night in Setup reads in it (v2 spec §8)
+let batches = [] // the shown night's Add missed kids batches
+let screen = screenFrom(location.search) // { tab: 'tonight' | 'nights' | 'household', event: id or null }
+// What's open on screen: End's choices (an Event id), Add missed kids (an Event id), a helper's QR (by place).
+const ui = { ending: null, missed: null, helper: { tonight: false, house: false } }
+const timeZone = () => house.timeZone // the Household's: every time of night in Setup reads in it
 
+let sayTimer
 function say(text, isError = false) {
   $('status').textContent = text
   $('status').classList.toggle('err', isError)
-  if (!isError) setTimeout(() => $('status').textContent === text && ($('status').textContent = ''), 2500)
+  clearTimeout(sayTimer)
+  sayTimer = setTimeout(() => $('status').textContent === text && ($('status').textContent = ''), isError ? 6000 : 2500)
 }
+$('status').addEventListener('click', () => ($('status').textContent = ''))
 
 // Setup is a signed-in Manager's: the session cookie rides along, and a lapsed one goes back to sign-in.
 async function get(path) {
@@ -33,21 +40,15 @@ async function get(path) {
 
 async function load() {
   house = await get('/api/household')
-  joinKey = house.joinKey
-  timeZone = house.timeZone
-  events = await get('/api/events')
-  batches = await get('/api/batches')
-  shares = await get('/api/shares')
+  ;[events, shares] = await Promise.all([get('/api/events'), get('/api/shares')])
+  const shown = shownNight()
+  batches = shown?.open ? await get(`/api/batches?event=${shown.id}`) : []
   render()
   return true
 }
 
 async function admin(command, done) {
-  const res = await fetch('/api/admin', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(command),
-  })
+  const res = await fetch('/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(command) })
   if (res.status === 401) location.href = '/signup'
   if (!res.ok) {
     say(await res.text(), true)
@@ -59,25 +60,20 @@ async function admin(command, done) {
   return body
 }
 
-// ---- helper phones (spec v2.1 §4): this phone, or someone else's by QR or a shared link. Both open /door, and
-// the wording names the Household, never an Event: one key works on every night.
-const joinUrl = () => helperLink(location.origin, joinKey)
-
-$('count-here').addEventListener('click', () => {
-  localStorage.setItem('cd.joinKey', joinKey)
-  location.href = '/door'
-})
-
-$('add-helper').addEventListener('click', () => {
-  const qr = qrcode(0, 'M')
-  qr.addData(joinUrl())
-  qr.make()
-  $('helper-qr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true })
-  $('helper-says').textContent = helperWording(house?.displayName)
-  $('helper').hidden = !$('helper').hidden
-})
-
-$('share-join').addEventListener('click', () => share(joinUrl(), `Help count trick-or-treaters at ${house?.displayName ?? 'our door'}`))
+// End, Resume and Release are the door phone's commands (any phone with the join key): Setup sends them the
+// same way, naming the Event and the go-live stamp it shows.
+async function nightCall(path, event, done) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Join-Key': house.joinKey },
+    body: JSON.stringify(named(event)),
+  }).catch(() => null)
+  if (!res?.ok) say(res ? await res.text() : "Couldn't reach the server", true)
+  await load()
+  if (res?.ok && done) say(done)
+}
+// What a night command names: the Event and its go-live stamp.
+const named = (event) => ({ eventId: event?.id, stamp: event?.wentLiveAt })
 
 // The phone's share sheet, or Copy where there isn't one.
 async function share(url, title) {
@@ -92,64 +88,252 @@ async function share(url, title) {
   say('Link copied')
 }
 
-// ---- Pair a TV (spec §9): the code a bare /tv shows, typed or arriving from its QR as ?pair=<code>
-async function redeem(code) {
-  const res = await fetch('/api/pair/redeem', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
-  if (res.status === 401) location.href = '/signup'
-  if (!res.ok) {
-    say(await res.text(), true)
-    return false
+// "Sat Oct 31, 4:00 PM" in the Household's zone.
+const zoneDay = (ms) => `${new Date(ms).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', timeZone: timeZone() })}, ${zoneClock(ms, timeZone())}`
+
+// ---- the screens: a tab, or a night's screen (kept in the URL, so a reload or the phone's Back keeps it)
+const shownNight = () => (screen.event == null ? null : events.find((e) => e.id === screen.event) ?? null)
+
+function go(next, { push = false } = {}) {
+  if (next.event !== screen.event) {
+    ui.missed = null
+    ui.ending = null
   }
-  if (!house.firstRunPassed) await admin({ type: 'passFirstRun' }) // the TV's on: first-run's job is done
-  return true
+  screen = next
+  const url = `${location.pathname}${searchFor(screen)}`
+  if (push) history.pushState({ setup: true }, '', url)
+  else history.replaceState(history.state, '', url)
+  load().catch((err) => say(err.message, true))
+  scrollTo(0, 0)
+}
+const openNight = (e) => go({ tab: screen.tab === 'nights' ? 'nights' : 'tonight', event: e.id }, { push: true })
+addEventListener('popstate', () => {
+  screen = screenFrom(location.search)
+  ui.missed = ui.ending = null
+  load().catch((err) => say(err.message, true))
+})
+for (const tab of document.querySelectorAll('[role="tab"]')) tab.addEventListener('click', () => go({ tab: tab.dataset.tab, event: null }))
+
+// ---- the actions every night's buttons call (setup-night.js)
+const act = {
+  open: openNight,
+  tab: (tab) => go({ tab, event: null }),
+  back() {
+    if (history.state?.setup) history.back()
+    else go({ tab: screen.tab, event: null })
+  },
+  goLive(e) {
+    if (confirm(goLiveConfirm(e))) admin({ type: 'goLive', eventId: e.id }, `${e.name} is live`)
+  },
+  // 🌙 End the night. With golden tickets still to find, v2's three choices instead of a plain yes/no.
+  end(e) {
+    if (e.golden?.left > 0) {
+      ui.ending = e.id
+      return render()
+    }
+    if (confirm(endConfirm(e))) nightCall('/api/end', e, `🌙 ${e.name} ended`)
+  },
+  endRelease(e) {
+    ui.ending = null
+    nightCall('/api/release', e, '🎫 Released: the next kids win')
+  },
+  endAnyway(e) {
+    ui.ending = null
+    nightCall('/api/end', e, `🌙 ${e.name} ended: the tickets expired`)
+  },
+  endCancel() {
+    ui.ending = null
+    render()
+  },
+  resume: (e) => nightCall('/api/resume', e, `☀️ ${e.name} is back on`),
+  close(e) {
+    if (confirm(closeConfirm(e))) admin({ type: 'close', eventId: e.id }, `${e.name} is closed`)
+  },
+  // Reset (spec v2.1 §6): back to Upcoming with no kids. Above 20 kids, the Event's name typed.
+  reset(e) {
+    const { typed, text } = resetConfirm(e, Date.now())
+    let confirmed
+    if (typed) {
+      confirmed = prompt(text)
+      if (confirmed === null) return
+      if (confirmed !== e.name) return say('The name didn’t match, so nothing was reset', true)
+    } else if (!confirm(text)) return
+    admin({ type: 'reset', eventId: e.id, confirm: confirmed }, `${e.name} is back to Upcoming`)
+  },
+  // Delete (spec v2.1 §3): refused while Live; the name typed when it has kids.
+  delete(e) {
+    const { typed, text } = deleteConfirm(e)
+    let confirmed
+    if (typed) {
+      confirmed = prompt(text)
+      if (confirmed == null) return
+      if (confirmed !== e.name) return say("That didn't match, so nothing was deleted", true)
+    } else if (!confirm(text)) return
+    admin({ type: 'deleteEvent', eventId: e.id, confirm: confirmed }, `Deleted ${e.name}`)
+  },
+  // Draws one more number between the night's count + 5 and the top of its range (spec §9).
+  async ticket(e) {
+    if (!confirm(`Add a golden ticket to "${e.name}"? Its number is drawn secretly from the rest of the range.`)) return
+    const done = await admin({ type: 'addTicket', ...named(e) })
+    if (done) say(`Ticket added: ${done.deltas[0].golden.left} left`)
+  },
+  // Add missed kids: on the night's own screen. From Tonight, it opens there.
+  missed(e, fromTonight) {
+    if (fromTonight) {
+      go({ tab: 'tonight', event: e.id }, { push: true })
+      ui.missed = e.id
+      return
+    }
+    ui.missed = ui.missed === e.id ? null : e.id
+    render()
+  },
+  async backfill(e, rows, clear) {
+    if (!rows.length) return say('Type a count in at least one row', true)
+    const total = rows.reduce((n, r) => n + r.count, 0)
+    clear()
+    ui.typed = null
+    await admin({ type: 'backfill', rows, ...named(e) }, `Added ${total} kids to ${e.name}`)
+  },
+  removeBatch(e, b) {
+    if (confirm(`Remove these ${b.kids} added kids?`)) admin({ type: 'removeBatch', batchId: b.id, ...named(e) }, `Removed ${b.kids} kids`)
+  },
+  // ⬇ CSV: the server makes it; fetch it and save it here.
+  async csv(e) {
+    const res = await fetch(`/api/export?event=${e.id}`)
+    if (!res.ok) return say(`Export failed: ${await res.text()}`, true)
+    const name = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'event.csv'
+    const link = h('a', { href: URL.createObjectURL(await res.blob()), download: name })
+    link.click()
+    URL.revokeObjectURL(link.href)
+    say(`Exported ${name}`)
+  },
+  // The Night summary's public link (spec §12): turning sharing off kills it, and on again makes a new one.
+  async share(e, on, box) {
+    if (!on) {
+      if (!confirm(`Stop sharing "${e.name}"? Its public link stops working at once.`)) return (box.checked = true)
+      const res = await fetch('/api/share/off', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: e.id }) })
+      if (!res.ok) say(await res.text(), true)
+      else say('Sharing off')
+      return load()
+    }
+    const res = await fetch('/api/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: e.id, hideName: false }) })
+    if (!res.ok) say(res.status === 404 ? 'Sharing is off right now' : await res.text(), true)
+    else say(`Sharing on: "${house.displayName}" shows on the link unless you untick Show our name`)
+    await load()
+  },
+  async showName(e, show) {
+    const res = await fetch('/api/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: e.id, hideName: !show }) })
+    if (!res.ok) say(await res.text(), true)
+    else say(show ? 'Your name shows on the link' : 'Your name is off the link')
+    await load()
+  },
+  shareLink: (s) => share(s.url, 'Our Halloween night'),
+  saveSettings(e, { goesLive, ...changes }) {
+    admin({
+      type: 'settings',
+      eventId: e.id,
+      ...changes,
+      // The wall time typed is the Household's, whatever zone this phone is in.
+      ...(goesLive === undefined ? {} : { goesLiveAt: goesLive ? zonedTime(goesLive.slice(0, 10), goesLive.slice(11, 16), timeZone()) : null }),
+    }, 'Settings saved')
+  },
+  addTag: (e, { name, emoji }) => admin({ type: 'createTag', eventId: e.id, name, emoji }, `Added ${name}`),
+  saveTag: (tag, changes) => admin({ type: 'updateTag', tagId: tag.id, ...changes }, `Saved ${changes.name}`),
+  deleteTag(tag) {
+    if (confirm(`Delete "${tag.name}"? Any kids wearing it become untagged.`)) admin({ type: 'deleteTag', tagId: tag.id }, `Deleted ${tag.name}`)
+  },
 }
 
-async function pairTv(code) {
-  if (!confirm('Show our TV here?')) return
-  if (!(await redeem(code))) return
-  $('pair-code').value = ''
-  say('✓ Paired: your TV is showing your board')
+// ---- helper phones (spec v2.1 §4): this device, or someone else's by QR or a shared link. Both open /door, and
+// the wording names the Household, never an Event: one key works on every night.
+const joinUrl = () => helperLink(location.origin, house.joinKey)
+function helperBox(place) {
+  const open = ui.helper[place]
+  const qr = () => {
+    const code = qrcode(0, 'M')
+    code.addData(joinUrl())
+    code.make()
+    const box = h('div', { className: 'qr-box' })
+    box.innerHTML = code.createSvgTag({ cellSize: 6, margin: 2, scalable: true })
+    return box
+  }
+  return [
+    h('div', { className: 'row' },
+      h('button', { className: 'primary', textContent: '📱 Count on this device', onclick: countHere }),
+      h('button', { textContent: '➕ Add a helper', ariaExpanded: String(open), onclick: () => {
+        ui.helper[place] = !open
+        render()
+      } })),
+    open ? [qr(), h('p', { className: 'muted', textContent: helperWording(house.displayName) }),
+      h('div', { className: 'row' }, h('button', { className: 'primary', textContent: 'Share join link', onclick: () => share(joinUrl(), `Help count trick-or-treaters at ${house.displayName}`) }))] : null,
+  ]
+}
+function countHere() {
+  localStorage.setItem('cd.joinKey', house.joinKey)
+  location.href = '/door'
 }
 
-$('pair-form').addEventListener('submit', (e) => {
+// ---- drawing
+const context = () => ({ events, door: doorEvent(events), timeZone: timeZone(), shares, batches, day: zoneDay, now: Date.now, ui, act })
+
+function render() {
+  $('house-name').textContent = house.displayName
+  const night = shownNight()
+  if (screen.event != null && !night) { // deleted meanwhile: back to the tab it opened from
+    screen = { tab: screen.tab, event: null }
+    history.replaceState(null, '', `${location.pathname}${searchFor(screen)}`)
+  }
+  for (const tab of document.querySelectorAll('[role="tab"]')) tab.setAttribute('aria-selected', String(tab.dataset.tab === screen.tab))
+  $('tab-nights').textContent = nightsTabLabel(events)
+  $('screen-tonight').hidden = !!night || screen.tab !== 'tonight'
+  $('screen-nights').hidden = !!night || screen.tab !== 'nights'
+  $('screen-household').hidden = !!night || screen.tab !== 'household'
+  $('screen-night').hidden = !night
+
+  const ctx = context()
+  if (night) {
+    ui.typed = ui.missed === night.id ? typedMissed($('night')) : null
+    $('night').replaceChildren(...nightScreen(night, ctx).filter(Boolean))
+  } else $('night').replaceChildren()
+  renderTonight(ctx)
+  renderNights(ctx)
+  household.render()
+  renderChecklist()
+}
+
+function renderTonight(ctx) {
+  const door = ctx.door
+  const others = events.filter((e) => e.open && e !== door).sort((a, b) => b.wentLiveAt - a.wentLiveAt)
+  const waits = waitingNights(events)
+  $('tonight').replaceChildren(...[
+    door ? doorCard(door, ctx) : nothingOpen(goLiveOffer(events), ctx),
+    others.length ? alsoOpen(others, ctx) : null,
+    waits.length ? waiting(waits, ctx) : null,
+    h('section', { data: { help: 'helpers' } }, h('h2', {}, '📱 Helpers'), helperBox('tonight')),
+  ].filter(Boolean))
+}
+
+function renderNights(ctx) {
+  const { open, coming, past } = nightGroups(events)
+  const group = (title, list) => (list.length ? [h('div', { className: 'group-title', textContent: title }), list.map((e) => nightRow(e, ctx))] : [])
+  const all = [...group(`Open (${open.length} of 3)`, open), ...group('Coming up', coming), ...group('Past', past)]
+  $('nights').replaceChildren(...(all.length ? all.flat() : [h('p', { className: 'muted', textContent: 'No nights yet. Make one below.' })]))
+  const copy = $('c-copy').value
+  $('c-copy').replaceChildren(option('', 'Nothing (start empty)', copy === ''), ...events.filter((e) => !e.countsOnly).map((e) => option(e.id, e.name, String(e.id) === copy)))
+}
+
+$('create-form').addEventListener('submit', async (e) => {
   e.preventDefault()
-  if ($('pair-code').value.trim()) pairTv($('pair-code').value.trim())
+  const copy = $('c-copy').value
+  const done = await admin({ type: 'createEvent', name: $('c-name').value, copyTagsFrom: copy === '' ? null : Number(copy) }, `Made ${$('c-name').value}`)
+  if (done) {
+    $('c-name').value = ''
+    openNight(done.deltas[0].event) // a new night opens its screen
+  }
 })
 
-// ---- the TV link (spec §9): shared from here only, never shown on the TV
-const tvUrl = () => `${location.origin}/tv/k/${house.tvToken}`
-
-$('tv-share').addEventListener('click', () => share(tvUrl(), 'Our trick-or-treat TV'))
-
-$('tv-copy').addEventListener('click', async () => {
-  await navigator.clipboard.writeText(tvUrl())
-  say('TV link copied')
-})
-
-$('tv-qr').addEventListener('click', () => {
-  const qr = qrcode(0, 'M')
-  qr.addData(tvUrl())
-  qr.make()
-  $('qr-full-code').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true })
-  $('qr-full').hidden = false
-})
-$('qr-full').addEventListener('click', () => ($('qr-full').hidden = true))
-
-$('tv-here').addEventListener('click', () => (location.href = tvUrl()))
-
-$('tv-rotate').addEventListener('click', async () => {
-  if (!confirm('Rotate the TV link? Every screen watching with the old link stops at once, your porch TV included, until it gets the new one.')) return
-  if (await admin({ type: 'rotateTvLink' }, 'TV link rotated')) render()
-})
-
-// The door's Event (spec v2.1 §2): the open Event that went live most recently, or null with none open.
-// "Live now" shows it; tickets 57 and 58 give every open Event its own place.
-const doorEvent = () => events.filter((e) => e.open).sort((a, b) => b.wentLiveAt - a.wentLiveAt)[0] ?? null
-// What a night command names: the Event and its go-live stamp.
-const named = (event) => ({ eventId: event?.id, stamp: event?.wentLiveAt })
-
-// ---- the ready-for-Halloween checklist (spec §6): ticks itself from real state, hides when done or dismissed.
-// A tick, a skip and the dismissal are remembered on this phone.
+// ---- the ready-for-Halloween checklist (spec §6), at the top of Tonight: ticks itself from real state, hides
+// when done or dismissed. A tick, a skip and the dismissal are remembered on this phone. Ticket 58 rewords it.
 const remembered = (what) => {
   try {
     return localStorage.getItem(`cd.checklist.${house.id}.${what}`) === '1'
@@ -164,7 +348,7 @@ const remember = (what) => {
 }
 // The night the checklist is about: the next one that goes live by itself, or else the door's Event.
 const halloweenNight = () =>
-  events.filter((e) => e.goesLiveAt != null && e.state === 'upcoming').sort((a, b) => a.goesLiveAt - b.goesLiveAt)[0] ?? doorEvent()
+  events.filter((e) => e.goesLiveAt != null && e.state === 'upcoming').sort((a, b) => a.goesLiveAt - b.goesLiveAt)[0] ?? doorEvent(events)
 
 function renderChecklist() {
   if (house.checklist.anyKids > 0) remember('kid')
@@ -177,7 +361,7 @@ function renderChecklist() {
   $('check-kid').classList.toggle('done', kid)
   $('check-night').classList.toggle('done', nightDone)
   $('check-night-when').textContent = !night
-    ? 'Create it below, under Create an event.'
+    ? 'Make it under Nights.'
     : night.open ? `${night.name} is live.` : `${night.name} goes live ${zoneDay(night.goesLiveAt)}. How many kids do you expect?`
   $('check-night-form').hidden = !night || nightDone
   $('checklist').hidden = remembered('hidden') || (tv && kid && nightDone)
@@ -191,388 +375,25 @@ $('check-night-form').addEventListener('submit', async (e) => {
   const night = halloweenNight()
   if (night && $('check-expected').value !== '') await admin({ type: 'settings', eventId: night.id, expectedKids: Number($('check-expected').value) }, 'Expected kids saved')
 })
-// "About how many kids came last year?" (spec §14): a ghost to race, made from one number.
-async function setLastYear(total, done) {
-  await admin({ type: 'setLastYear', total }, done)
-}
 $('check-last-year-save').addEventListener('click', () => {
-  if ($('check-last-year').value) setLastYear(Number($('check-last-year').value), 'Last year saved: race it on the night')
+  if ($('check-last-year').value) admin({ type: 'setLastYear', total: Number($('check-last-year').value) }, 'Last year saved: race it on the night')
 })
-$('s-last-year-save').addEventListener('click', () => {
-  if ($('s-last-year').value) setLastYear(Number($('s-last-year').value), 'Last year saved')
-})
-$('s-last-year-clear').addEventListener('click', () => {
-  if (confirm('Clear last year? Your night races nobody until you set it again.')) setLastYear(null, 'Last year cleared')
-})
-
 $('check-night-skip').addEventListener('click', () => {
   remember('night')
   renderChecklist()
 })
 
-// ---- a night shared by a public link (spec §12): turning sharing off kills the link
-function sharingOff(event) {
-  if (!shares.some((s) => s.eventId === event.id)) return []
-  return [h('button', { className: 'danger', textContent: 'Stop sharing', onclick: async () => {
-    if (!confirm(`Stop sharing "${event.name}"? Its public link stops working at once.`)) return
-    const res = await fetch('/api/share/off', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: event.id }) })
-    if (!res.ok) return say(await res.text(), true)
-    say('Sharing off')
-    await load()
-  } })]
-}
+// ---- Household: everything not about one night
+const household = wireHousehold({ house: () => house, events: () => events, admin, say, share, load, helperBox, zoneDay, setHouse: (next) => (house = next) })
 
-// ---- Managers and invites (spec §3)
-async function loadManagers() {
-  const res = await fetch('/api/managers')
-  if (!res.ok) return
-  const { me, managers, invites } = await res.json()
-  $('managers').replaceChildren(
-    ...managers.map((m) =>
-      h('div', { className: 'item' },
-        h('span', { className: 'grow', textContent: `${m.name || m.email}${m.id === me ? ' (you)' : ''}` }),
-        ...(m.name ? [h('span', { className: 'muted', textContent: m.email })] : []),
-        ...(m.id === me ? [] : [h('button', { className: 'danger', textContent: 'Remove', onclick: () => removeManager(m) })]),
-      ),
-    ),
-  )
-  $('invites').replaceChildren(
-    ...invites.map((i) =>
-      h('div', { className: 'item' },
-        h('span', { className: 'grow muted', textContent: `Invite from ${i.madeByName || i.madeByEmail || 'the Operator'}, until ${zoneDay(i.expiresAt)}` }),
-        h('button', { textContent: 'Share', onclick: () => share(i.url, 'Help run our trick-or-treat night') }),
-        h('button', { className: 'danger', textContent: 'Revoke', onclick: () => revokeInvite(i) }),
-      ),
-    ),
-  )
-  $('leave').hidden = managers.length < 2 // the last Manager deletes the household instead
-}
-
-async function managerCall(path, body, done) {
-  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) })
-  if (!res.ok) {
-    say(await res.text(), true)
-    return null
-  }
-  if (done) say(done)
-  await loadManagers()
-  return res
-}
-
-$('invite').addEventListener('click', async () => {
-  const res = await managerCall('/api/invites', {})
-  if (res) await share((await res.json()).url, 'Help run our trick-or-treat night')
-  await loadManagers()
-})
-
-function removeManager(m) {
-  if (confirm(`Remove ${m.name || m.email}? Their account details are deleted; the household and its nights stay.`)) managerCall('/api/managers/remove', { managerId: m.id }, 'Removed')
-}
-
-function revokeInvite(i) {
-  if (confirm('Cancel this invite link?')) managerCall('/api/invites/revoke', { key: i.key }, 'Invite cancelled')
-}
-
-$('leave').addEventListener('click', async () => {
-  if (!confirm('Leave this household? Your account details are deleted. The household and its nights stay with the other Managers.')) return
-  const res = await fetch('/api/managers/leave', { method: 'POST' })
-  if (!res.ok) return say(await res.text(), true)
-  location.href = '/signup'
-})
-
-// ---- your household: its name, signing out, and deleting it
-$('name-form').addEventListener('submit', async (e) => {
-  e.preventDefault()
-  await admin({ type: 'rename', displayName: $('h-name').value }, 'Household name saved')
-})
-
-$('delete-household').addEventListener('click', async () => {
-  const typed = prompt(`Delete "${house.displayName}" and everything in it, for good? Type its name to confirm.`)
-  if (typed == null) return
-  if (typed !== house.displayName) return say("That didn't match, so nothing was deleted", true)
-  const res = await fetch('/api/household/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: typed }) })
-  if (!res.ok) return say(await res.text(), true)
-  location.href = '/signup'
-})
-
-// ---- rendering
-function appendAll(node, children) {
-  node.append(...children)
-  return node
-}
-const h = (tag, props, ...children) => appendAll(Object.assign(document.createElement(tag), props), children)
-const option = (value, text, selected) => h('option', { value, textContent: text, selected })
-
-function render() {
-  const live = doorEvent() // null with no night on
-  const others = events.filter((e) => e.open && e !== live)
-  const upcoming = events.filter((e) => e.state === 'upcoming' && !e.countsOnly)
-  const past = events.filter((e) => e.past || e.countsOnly)
-  const editable = [live, ...others, ...upcoming].filter(Boolean)
-  if (!editable.some((e) => e.id === editingId)) editingId = editable[0]?.id ?? null
-
-  $('live-name').textContent = !live ? 'no night on right now' : others.length ? `${live.name} (also open: ${others.map((e) => e.name).join(', ')})` : live.name
-  $('time-zone').textContent = timeZone ?? ''
-  if (document.activeElement !== $('h-name')) $('h-name').value = house.displayName
-  $('signed-in').textContent = house.manager.email
-  $('tv-link').textContent = tvUrl()
-  $('h-zone').textContent = timeZone
-  $('live-kids').textContent = live?.kids ?? 0
-  $('join-key').textContent = joinKey || '(not set on this phone)'
-
-  $('editing').replaceChildren(...editable.map((e) => option(e.id, e.open ? `${e.name} (${e.state})` : e.name, e.id === editingId)))
-  const editing = events.find((e) => e.id === editingId)
-  $('settings-form').hidden = $('new-tag').hidden = !editing
-  if (editing) renderEditing(editing)
-  $('auto-ended').hidden = !(live?.ended && live.endedAutomatically)
-  $('auto-ended-summary').href = `/summary?event=${live?.id}`
-  // What the tick did to each Event (ticket 53), until ticket 57 shows it on the Event itself. The door's
-  // auto-end has its own section above.
-  const noted = events.filter((e) => e.note && !(e === live && e.note.kind === 'autoEnded'))
-  $('tick-notes').hidden = !noted.length
-  $('tick-notes-list').replaceChildren(...noted.map((e) => h('li', {}, h('b', { textContent: `${e.name}: ` }), tickNoteText(e.note, timeZone))))
-  renderChecklist()
-
-  $('tags').replaceChildren(...(editing?.tags ?? []).map(tagRow))
-  $('c-copy').replaceChildren(option('', 'Nothing (start empty)', true), ...events.filter((e) => !e.countsOnly).map((e) => option(e.id, e.name)))
-
-  // Every open Event, the door's first, with its own tools, until ticket 57 gives each its own card: an Ended
-  // one's Night summary straight away (spec v2.1 §7), its tally sheet and CSV, and Reset (§6).
-  $('open-nights').replaceChildren(...[live, ...others].filter(Boolean).map((e) =>
-    h('div', { className: 'item' },
-      h('span', { className: 'grow', textContent: `${e.name} · ${e.state} · ${e.kids} kids` }),
-      ...(e.ended ? [summaryLink(e), ...sharingOff(e)] : []),
-      tallyLink(e),
-      h('button', { textContent: '⬇ Export', onclick: () => exportEvent(e) }),
-      h('button', { className: 'danger', textContent: '↺ Reset', ariaLabel: `Reset ${e.name}`, onclick: () => resetEvent(e) }))))
-
-  renderBackfill(live)
-  renderLists(upcoming, past)
-}
-
-function renderEditing(editing) {
-  $('s-name').value = editing.name
-  $('s-race').replaceChildren(
-    option('', 'None', editing.raceAgainstId == null),
-    ...raceChoices(events, editing).map((e) => option(e.id, e.name, e.id === editing.raceAgainstId)),
-  )
-  $('s-shift').value = editing.clockShiftMs / HOUR
-  $('s-expected').value = editing.expectedKids ?? ''
-  $('s-visit').value = editing.visitWindowMs / 1000
-  $('s-golden').value = editing.goldenCount
-  $('goes-row').hidden = editing.state !== 'upcoming'
-  $('last-year').hidden = !house.canEstimateLastYear
-  if (document.activeElement !== $('s-last-year')) $('s-last-year').value = house.lastYear ?? ''
-  $('s-last-year-clear').hidden = house.lastYear == null
-  $('goes-zone').textContent = timeZone
-  $('s-goes').value = editing.goesLiveAt == null ? '' : stamp(editing.goesLiveAt, timeZone).slice(0, 16).replace(' ', 'T')
-}
-
-// Per Event (spec v2.1 §7): every Ended or Past Event has a Night summary; the tally sheet names its Event.
-const summaryLink = (e) => h('a', { href: `/summary?event=${e.id}`, textContent: '✨ Night summary', style: 'color: var(--orange); font-weight: 700' })
-const tallyLink = (e) => h('a', { href: `/tally?event=${e.id}`, target: '_blank', textContent: '🖨 Tally sheet', style: 'color: var(--orange); font-weight: 700' })
-
-function renderLists(upcoming, past) {
-  $('upcoming').replaceChildren(
-    ...upcoming.map((e) =>
-      h('div', { className: 'item' },
-        h('span', { className: 'grow', textContent: `${e.name} · ${e.tags.length} costumes${e.goesLiveAt == null ? '' : ` · goes live ${zoneDay(e.goesLiveAt)}`}` }),
-        tallyLink(e),
-        h('button', { className: 'primary', textContent: 'Go live', onclick: () => goLive(e) })),
-    ),
-  )
-  $('past').replaceChildren(
-    ...(past.length
-      ? past.map((e) =>
-          h('div', { className: 'item' },
-            h('span', { className: 'grow', textContent: `${e.name} · ${e.countsOnly ? 'counts only' : `${e.kids} kids`}` }),
-            ...(e.countsOnly ? [] : [
-              summaryLink(e),
-              ...sharingOff(e),
-              h('a', { href: `/tv?event=${e.id}`, target: '_blank', textContent: 'View recap', style: 'color: var(--orange); font-weight: 700' }),
-              h('button', { textContent: '⬇ Export', onclick: () => exportEvent(e) }),
-            ]),
-            h('button', { className: 'danger', textContent: 'Delete', onclick: () => deleteEvent(e) })),
-        )
-      : [h('p', { className: 'muted', textContent: 'None yet.' })]),
-  )
-}
-
-// ---- Add missed kids: rows in event time, none later than the event's "now" (spec §6).
-const clockTime = (ms, shift) => zoneClock(ms + shift, timeZone)
-// "Sat Oct 31, 4:00 PM" in the Household's zone.
-const zoneDay = (ms) => `${new Date(ms).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', timeZone })}, ${zoneClock(ms, timeZone)}`
-function renderBackfill(live) {
-  const shift = live?.clockShiftMs ?? 0
-  const nowMinute = Math.floor(minuteOfDay(eventNow(Date.now(), shift), timeZone))
-  const typed = new Map([...document.querySelectorAll('#backfill-rows input')].map((i) => [i.dataset.start, i.value]))
-  $('backfill-rows').replaceChildren(
-    ...slots('17:30', '21:00', 15).map(({ start, end }) => {
-      const [hh, mm] = start.split(':').map(Number)
-      const input = h('input', { type: 'number', min: 0, max: 1000, value: typed.get(start) ?? '', disabled: hh * 60 + mm > nowMinute })
-      input.dataset.start = start
-      input.dataset.end = end
-      return h('label', {}, h('span', { textContent: `${clockTime(atEventTime(start, Date.now(), shift, timeZone), shift)}` }), input)
-    }),
-  )
-  $('batches').replaceChildren(
-    ...batches.map((b) => {
-      const from = Math.min(...b.rows.map((r) => r.startMs))
-      const to = Math.max(...b.rows.map((r) => r.endMs))
-      return h('div', { className: 'item' },
-        h('span', { className: 'grow', textContent: `+${b.kids} kids, ${clockTime(from, shift)}–${clockTime(to, shift)}` }),
-        h('button', { className: 'danger', textContent: 'Remove', onclick: () => {
-          if (confirm(`Remove these ${b.kids} added kids?`)) admin({ type: 'removeBatch', batchId: b.id, ...named(live) }, `Removed ${b.kids} kids`)
-        } }))
-    }),
-  )
-}
-
-$('backfill-form').addEventListener('submit', async (e) => {
-  e.preventDefault()
-  const live = doorEvent()
-  if (!live) return say('No night on right now', true)
-  const rows = [...document.querySelectorAll('#backfill-rows input')]
-    .filter((i) => !i.disabled && Number(i.value) > 0)
-    .map((i) => ({
-      startMs: atEventTime(i.dataset.start, Date.now(), live.clockShiftMs, timeZone),
-      endMs: atEventTime(i.dataset.end, Date.now(), live.clockShiftMs, timeZone),
-      count: Number(i.value),
-    }))
-  if (!rows.length) return say('Type a count in at least one row', true)
-  const total = rows.reduce((n, r) => n + r.count, 0)
-  document.querySelectorAll('#backfill-rows input').forEach((i) => (i.value = ''))
-  await admin({ type: 'backfill', rows, ...named(live) }, `Added ${total} kids`)
-})
-
-function tagRow(tag) {
-  const emoji = h('input', { className: 'emoji', value: tag.emoji ?? '', ariaLabel: 'Emoji' })
-  const name = h('input', { className: 'grow', value: tag.name, ariaLabel: 'Name' })
-  const order = h('input', { className: 'order', type: 'number', min: 1, value: tag.order, ariaLabel: 'Order' })
-  return h('div', { className: 'item tag-row' }, emoji, name, order,
-    h('button', {
-      textContent: 'Save',
-      onclick: () => admin({ type: 'updateTag', tagId: tag.id, name: name.value, emoji: emoji.value || null, order: Number(order.value) }, `Saved ${name.value}`),
-    }),
-    h('button', {
-      className: 'danger',
-      textContent: '✕',
-      ariaLabel: `Delete ${tag.name}`,
-      onclick: () => {
-        if (confirm(`Delete "${tag.name}"? Any kids wearing it become untagged.`)) admin({ type: 'deleteTag', tagId: tag.id }, `Deleted ${tag.name}`)
-      },
-    }))
-}
-
-// ---- actions
-$('editing').addEventListener('change', (e) => {
-  editingId = Number(e.target.value)
-  render()
-})
-
-$('settings-form').addEventListener('submit', (e) => {
-  e.preventDefault()
-  const race = $('s-race').value
-  admin({
-    type: 'settings',
-    eventId: editingId,
-    name: $('s-name').value,
-    raceAgainstId: race === '' ? null : Number(race),
-    clockShiftMs: Math.round(Number($('s-shift').value || 0) * HOUR),
-    expectedKids: $('s-expected').value === '' ? null : Number($('s-expected').value),
-    visitWindowMs: Math.round(Number($('s-visit').value || 15) * 1000),
-    goldenCount: Number($('s-golden').value || 0),
-    // The wall time typed is the Household's, whatever zone this phone is in.
-    ...(events.find((ev) => ev.id === editingId)?.state !== 'upcoming'
-      ? {}
-      : { goesLiveAt: $('s-goes').value ? zonedTime($('s-goes').value.slice(0, 10), $('s-goes').value.slice(11, 16), timeZone) : null }),
-  }, 'Settings saved')
-})
-
-$('new-tag').addEventListener('submit', async (e) => {
-  e.preventDefault()
-  if (await admin({ type: 'createTag', eventId: editingId, name: $('t-name').value, emoji: $('t-emoji').value || null }, `Added ${$('t-name').value}`)) {
-    $('t-name').value = ''
-    $('t-emoji').value = ''
-  }
-})
-
-$('create-form').addEventListener('submit', async (e) => {
-  e.preventDefault()
-  const copy = $('c-copy').value
-  const done = await admin({ type: 'createEvent', name: $('c-name').value, copyTagsFrom: copy === '' ? null : Number(copy) }, `Created ${$('c-name').value}`)
-  if (done) {
-    $('c-name').value = ''
-    editingId = done.deltas[0].event.id
-    render()
-  }
-})
-
-// ⬇ Export event: the server makes the CSV; fetch it and save it here.
-async function exportEvent(event) {
-  const res = await fetch(`/api/export?event=${event.id}`)
-  if (!res.ok) return say(`Export failed: ${await res.text()}`, true)
-  const name = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'event.csv'
-  const link = h('a', { href: URL.createObjectURL(await res.blob()), download: name })
-  link.click()
-  URL.revokeObjectURL(link.href)
-  say(`Exported ${name}`)
-}
-$('export-live').addEventListener('click', () => (doorEvent() ? exportEvent(doorEvent()) : say('No night on right now', true)))
-
-function goLive(event) {
-  if (!confirm(`Go live with "${event.name}"?\n\nPhones and the TV switch to it by themselves. Any other live night stays open.`)) return
-  admin({ type: 'goLive', eventId: event.id }, `${event.name} is live`)
-}
-
-// Reset (spec v2.1 §6): back to Upcoming with no kids. A plain confirm naming the count; above 20 kids, the
-// Event's name typed. A Goes live at that has passed is cleared, and the confirm says so.
-function resetEvent(event) {
-  const kids = !event.kids ? 'It' : event.kids === 1 ? 'Its 1 kid is deleted and it' : `Its ${event.kids} kids are deleted and it`
-  const cleared = event.goesLiveAt != null && event.goesLiveAt <= Date.now()
-  const text = `Reset "${event.name}"? ${kids} goes back to Upcoming.${cleared ? `\n\n${event.name} won't go live by itself again. Go live when you're ready.` : ''}`
-  let confirmed
-  if (event.kids > 20) {
-    confirmed = prompt(`${text}\n\nType its name to confirm.`)
-    if (confirmed === null) return
-    if (confirmed !== event.name) return say('The name didn’t match, so nothing was reset', true)
-  } else if (!confirm(text)) return
-  admin({ type: 'reset', eventId: event.id, confirm: confirmed }, `${event.name} is back to Upcoming`)
-}
-
-function deleteEvent(event) {
-  const typed = prompt(`Delete "${event.name}" for good? Type its name to confirm.`)
-  if (typed == null) return
-  if (typed !== event.name) return say("That didn't match, so nothing was deleted", true)
-  admin({ type: 'deleteEvent', eventId: event.id, confirm: typed }, `Deleted ${event.name}`)
-}
-
-// Draws one more number between tonight's count + 5 and the top of the range (spec §9).
-$('add-ticket').addEventListener('click', async () => {
-  if (!confirm('Add a golden ticket to tonight? Its number is drawn secretly from the rest of the range.')) return
-  const done = await admin({ type: 'addTicket', ...named(doorEvent()) })
-  if (done) say(`Ticket added: ${done.deltas[0].golden.left} left`)
-})
-
-$('change-key').addEventListener('click', async () => {
-  if (!confirm('Change the join key? Every phone using the old key stops counting until it rejoins.')) return
-  const done = await admin({ type: 'changeKey' }, 'Join key changed')
-  if (done) {
-    // This phone counts on with the new key if it had the old one; everyone else rejoins.
-    if (localStorage.getItem('cd.joinKey') === joinKey) localStorage.setItem('cd.joinKey', done.joinKey)
-    joinKey = done.joinKey
-    $('helper').hidden = true
-    render()
-  }
-})
-
+if (new URLSearchParams(location.search).has('pair')) screen = { tab: 'household', event: null }
 await load()
 $('admin').hidden = false
-loadManagers()
+household.start()
 
 // First-run until screen 3 has been passed once; not when a TV's QR brought us here to pair.
 const firstRun = !house.firstRunPassed && !new URLSearchParams(location.search).has('pair')
-  ? showFirstRun($('first-run'), { house: structuredClone(house), admin, redeem, tvUrl, share })
+  ? showFirstRun($('first-run'), { house: structuredClone(house), admin, redeem: household.redeem, tvUrl: household.tvUrl, share })
   : null
 
 // The checklist and first-run's TV tick from state the page can't hear over a stream: ask every 3 s.
@@ -583,18 +404,6 @@ setInterval(async () => {
   renderChecklist()
   firstRun?.update(house)
 }, 3_000)
-createLocationPicker($('location'), {
-  cell: house.location,
-  async save(cell) {
-    if (!(await admin({ type: 'setLocation', cell }, cell ? 'Location saved' : 'Location removed'))) throw new Error("Couldn't save the Location")
-  },
-})
 
-// Arrived from a TV's scan-to-pair QR: the code is filled in, and one confirm pairs it.
-const pairParam = new URLSearchParams(location.search).get('pair')
-if (pairParam) {
-  history.replaceState(null, '', location.pathname)
-  $('pair-code').value = pairParam
-  $('pair-form').scrollIntoView({ block: 'center' })
-  pairTv(pairParam)
-}
+// Arrived from a TV's scan-to-pair QR: the Household tab, the code filled in, and one confirm pairs it.
+household.pairFromUrl()

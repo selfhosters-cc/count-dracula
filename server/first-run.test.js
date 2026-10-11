@@ -124,14 +124,18 @@ describe('/setup', () => {
     expect(html).not.toContain('this phone')
   })
 
-  test('the household name comes first, above the checklist and the live night', async () => {
+  test("the Household's name heads the page, above the tabs; the checklist tops Tonight (spec v2.1 §8, §9)", async () => {
     const { app } = await newManager()
 
     const html = await (await fetch(`${app.url}/setup.html`)).text()
 
-    const name = html.indexOf('id="name-form"')
+    const name = html.indexOf('id="house-name"')
     expect(name).toBeGreaterThan(-1)
-    expect(name).toBeLessThan(html.indexOf('id="checklist"'))
-    expect(name).toBeLessThan(html.indexOf('Live now'))
+    expect(name).toBeLessThan(html.indexOf('role="tablist"'))
+    const tonight = html.indexOf('id="screen-tonight"')
+    expect(html.indexOf('id="checklist"')).toBeGreaterThan(tonight)
+    expect(html.indexOf('id="checklist"')).toBeLessThan(html.indexOf('id="tonight"'))
+    expect(html).not.toContain('Live now')
+    expect(html.indexOf('id="name-form"')).toBeGreaterThan(html.indexOf('id="screen-household"'))
   })
 })
