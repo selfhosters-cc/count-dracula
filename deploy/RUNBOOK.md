@@ -47,8 +47,8 @@ rm /tmp/practice.sqlite*
 3. `deploy/deploy.sh`. It copies the database, removes the v1 config's dead keys (and says so), writes
    `/etc/count-dracula/env`, and checks `/healthz`. The migration runs as the server starts.
 4. Switch the public host on (ticket 35's prepared site block, on the shared Caddy, with the user's OK):
-   `/opt/docker-compose/caddy-int/host-public.sh add "$PUBLIC_HOST" 192.168.5.31:3131`, then the block's own log,
-   masking, `stream_close_delay 10m` and `request_body` as ticket 35 wrote them.
+   `host-public.sh add "$PUBLIC_HOST" 192.168.5.31:3131`, then make its block match `deploy/caddy-site.caddy`
+   (its own log, the masking, `stream_close_delay 10m` and `request_body`), with `$PUBLIC_HOST` for the example host.
 5. Check it's v2 and ours:
    - `https://$PUBLIC_HOST/healthz` says `ok`; `https://$PUBLIC_HOST/api/snapshot` says 403 (reads aren't open).
    - Sign in at `https://$PUBLIC_HOST/signup` → **Sign in with Google** with `HOUSEHOLD1_MANAGER_EMAIL`. `/setup` shows
@@ -65,7 +65,7 @@ See [section 2](#2-load-check). About 15 minutes. If it fails, lower the caps, r
 - `https://$PUBLIC_HOST/privacy` shows the real `OPERATOR_CONTACT`. Send a test email to it from another account;
   it arrives.
 - A TV-link token is masked in the Caddy log. Open the TV link once, then on LXC 117 grep the Count Dracula access
-  log (its path is in ticket 35's block) for `/tv/k/`: the token shows as `REDACTED`, and so does `key=`.
+  log (`/var/log/caddy/count-dracula.log`, from `deploy/caddy-site.caddy`) for `/tv/k/`: the token shows as `REDACTED`, and so does `key=`.
 - OSM tiles load only after the tap: open `/setup` with the browser's network panel, filter `openstreetmap`: nothing
   until **Pick on a map**.
 

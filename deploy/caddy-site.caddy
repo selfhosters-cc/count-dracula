@@ -1,0 +1,35 @@
+# The Count Dracula site block for the shared Caddy (LXC 117), v2 ticket 35. Replace the host with $PUBLIC_HOST
+# from deploy/local.env when adding it; the repo only ever says count-dracula.example.com.
+# Checked on Caddy 2.11: every token below logs as REDACTED, X-Join-Key isn't logged, and a 100 KB POST gets 413.
+count-dracula.example.com {
+	request_body {
+		max_size 64KB
+	}
+	reverse_proxy 192.168.5.31:3131 {
+		# Other sites' reloads don't cut the TVs' and phones' streams for 10 minutes.
+		stream_close_delay 10m
+	}
+	# Its own log, 30 days and at most ~500 MB, so Halloween doesn't push the other sites' logs out.
+	log {
+		output file /var/log/caddy/count-dracula.log {
+			roll_size 50MiB
+			roll_keep 10
+			roll_keep_for 720h
+		}
+		format filter {
+			wrap json
+			# A token in the path or the query: the TV link, join keys, Invites, share links, paired TVs.
+			request>uri multi_regexp {
+				regexp "/tv/k/[^/?#]+" "/tv/k/REDACTED"
+				regexp "([?&](?:key|device)=)[^&#]*" "${1}REDACTED"
+			}
+			# The same URLs come back as a same-origin Referer.
+			request>headers>Referer multi_regexp {
+				regexp "/tv/k/[^/?#]+" "/tv/k/REDACTED"
+				regexp "([?&](?:key|device)=)[^&#]*" "${1}REDACTED"
+			}
+			# Phones send their join key as a header.
+			request>headers>X-Join-Key delete
+		}
+	}
+}

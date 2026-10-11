@@ -43,3 +43,7 @@ The URL shapes that carry a secret, as built (tickets 22–44). The masking need
 | `device=<token>` | a paired TV's device token | `/api/stream?key=…&device=…` |
 
 Nothing else puts a secret in a URL: the TV pairing wait secret and the session travel in the body or the cookie. `?pair=<code>` (a 10-minute pairing code) is harmless.
+
+Two more places a secret lands in a log, found writing the block: phones send their join key as an **`X-Join-Key` header**, and with `Referrer-Policy: strict-origin-when-cross-origin` every same-origin request carries the page's full URL (`/tv/k/<token>`, `?key=`) as a **`Referer`**. The block deletes the first and masks the second.
+
+The block is [deploy/caddy-site.caddy](../../../deploy/caddy-site.caddy), with the example host. Checked on Caddy 2.11.7 (Docker) in front of the dev app: `/tv/k/…`, `key=` and `device=` in the path, the query and the Referer all logged as `REDACTED`; `X-Join-Key` wasn't logged; a 100 KB POST got 413. Streams heartbeat every 15 s, inside Cloudflare's ~100 s idle cut.
