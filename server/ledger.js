@@ -155,6 +155,9 @@ const LAST_YEAR_SHAPE = [
 const ESTIMATED_NAME = 'Halloween 2025 (estimated)'
 const MAX_LAST_YEAR = 100_000
 
+// The ready checklist's marks (sign-in-simplify 06), kept on the Household.
+const CHECKLIST_MARKS = ['kid', 'night', 'hidden']
+
 export function openLedger(db, config) {
   const switches = { ...DEFAULT_SWITCHES, ...config.switches }
   const now = config.now ?? Date.now
@@ -928,6 +931,14 @@ export function openLedger(db, config) {
         return []
       },
 
+      // The ready checklist's marks (sign-in-simplify 06): kid, night (item 3 skipped) or hidden (✕), each set once
+      // and never unset. Every Manager and phone sees the same list.
+      checklist({ item }) {
+        if (!CHECKLIST_MARKS.includes(item)) throw new BadCommand('Not a checklist item')
+        db.query("UPDATE households SET checklist = json_set(checklist, '$.' || ?, json('true')) WHERE id = ?").run(item, householdId)
+        return []
+      },
+
       // The Location (spec §10): a 5-character geohash cell picked in the browser, or null to remove it.
       // Only the cell is kept; changing it keeps no history.
       setLocation({ cell }) {
@@ -1112,7 +1123,13 @@ export function openLedger(db, config) {
         return household().test_night_event_id ?? null
       },
 
-      // Kids counted on any of the Household's Events: the checklist's "A phone counted a test kid".
+      // The checklist's marks: { kid, night, hidden }, each true or false.
+      checklistMarks() {
+        const marks = JSON.parse(household().checklist ?? '{}')
+        return Object.fromEntries(CHECKLIST_MARKS.map((m) => [m, marks[m] === true]))
+      },
+
+      // Kids counted on any of the Household's Events: the checklist's "Count a test kid".
       anyKids() {
         return db
           .query('SELECT COUNT(*) AS n FROM kids k JOIN events e ON e.id = k.event_id WHERE e.household_id = ? AND k.deleted_at IS NULL')

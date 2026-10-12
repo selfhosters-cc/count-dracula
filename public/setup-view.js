@@ -138,9 +138,9 @@ export function checklistNight(events, testNightId) {
   return scheduled ?? doorEvent(events.filter((e) => e.id !== testNightId))
 }
 
-// What the checklist shows (spec v2.1 §8, sign-in-simplify 05). `kid` is item 2's tick (a kid on any Event,
-// remembered on this phone); `lastYear` is the Household's "About how many kids came last year?"; `skipped` and
-// `dismissed` are remembered on this phone. `named` (renamed from "Our household") and `located` (a Location set)
+// What the checklist shows (spec v2.1 §8, sign-in-simplify 05). `kid` is item 2's tick (a kid seen on any Event);
+// `lastYear` is the Household's "About how many kids came last year?"; `skipped` (item 3) and `dismissed` (✕).
+// All three are the Household's marks (sign-in-simplify 06). `named` (renamed from "Our household") and `located` (a Location set)
 // drive the optional Also lines, which never hold the list up.
 export function checklist({ events, testNightId, tvWatching, kid, lastYear, skipped, dismissed, named = true, located = true, day }) {
   const night = checklistNight(events, testNightId)

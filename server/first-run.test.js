@@ -79,6 +79,22 @@ describe('the ready checklist', () => {
 
     expect((await household()).checklist.anyKids).toBe(1)
   })
+
+  test('remembered by the Household, for every Manager and phone: the kid once seen, Skip and ✕ (sign-in-simplify 06)', async () => {
+    const { app, admin, household, info } = await newManager()
+    expect((await household()).checklist).toMatchObject({ kid: false, night: false, hidden: false })
+
+    await tap(app, info.joinKey, 'test-kid')
+    expect((await household()).checklist.kid).toBe(true)
+    // The Test night reset: no kids left, and still tested.
+    expect((await admin({ type: 'reset', eventId: info.testNightEventId })).status).toBe(200)
+    expect((await household()).checklist).toMatchObject({ anyKids: 0, kid: true })
+
+    expect((await admin({ type: 'checklist', item: 'night' })).status).toBe(200)
+    expect((await admin({ type: 'checklist', item: 'hidden' })).status).toBe(200)
+    expect((await household()).checklist).toMatchObject({ kid: true, night: true, hidden: true })
+    expect((await admin({ type: 'checklist', item: 'nonsense' })).status).toBe(400)
+  })
 })
 
 describe('/help/tv', () => {

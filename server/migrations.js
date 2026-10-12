@@ -217,6 +217,12 @@ const MIGRATIONS = [
     db.exec('ALTER TABLE email_links ADD COLUMN code_hash TEXT')
     db.exec('ALTER TABLE email_links ADD COLUMN tries INTEGER NOT NULL DEFAULT 0')
   },
+
+  // 18 → 19: the ready checklist's memory belongs to the Household, not a phone (sign-in-simplify 06): a JSON
+  // object of marks, each true once (kid: a kid was counted; night: item 3 skipped; hidden: ✕).
+  (db) => {
+    db.exec("ALTER TABLE households ADD COLUMN checklist TEXT NOT NULL DEFAULT '{}'")
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

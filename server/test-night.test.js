@@ -125,7 +125,7 @@ describe('/api/household', () => {
 
     expect(house.testNightEventId).toEqual(expect.any(Number))
     expect(house.door).toEqual({ id: house.testNightEventId, name: 'Test night' })
-    expect(house.checklist).toEqual({ tvWatching: false, anyKids: 0, named: true }) // named at sign-in: 'House A'
+    expect(house.checklist).toEqual({ tvWatching: false, anyKids: 0, named: true, kid: false, night: false, hidden: false }) // named at sign-in: 'House A'
   })
 
   test('a Halloween-evening sign-up has no Test night; its TV shows Halloween 2026', async () => {

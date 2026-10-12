@@ -382,35 +382,24 @@ $('create-form').addEventListener('submit', async (e) => {
 })
 
 // ---- the ready-for-Halloween checklist (spec v2.1 §8), at the top of Tonight: ticks itself from real state,
-// hides when done or dismissed. A tick, a skip and the dismissal are remembered on this phone.
-const remembered = (what) => {
-  try {
-    return localStorage.getItem(`cd.checklist.${house.id}.${what}`) === '1'
-  } catch {
-    return false
-  }
-}
-const remember = (what) => {
-  try {
-    localStorage.setItem(`cd.checklist.${house.id}.${what}`, '1')
-  } catch {}
-}
+// hides when done or dismissed. A kid seen, a skip and the dismissal are the Household's (sign-in-simplify 06),
+// so every Manager and phone sees the same list.
+const remember = (what) => admin({ type: 'checklist', item: what })
 const checks = () =>
   checklist({
     events,
     testNightId: house.testNightEventId,
     tvWatching: house.checklist.tvWatching,
-    kid: remembered('kid'),
+    kid: house.checklist.kid,
     lastYear: house.lastYear,
-    skipped: remembered('night'),
-    dismissed: remembered('hidden'),
+    skipped: house.checklist.night,
+    dismissed: house.checklist.hidden,
     named: house.checklist.named,
     located: house.location != null,
     day: zoneDay,
   })
 
 function renderChecklist() {
-  if (house.checklist.anyKids > 0) remember('kid')
   const view = checks()
   $('check-last-year-row').hidden = !house.canEstimateLastYear
   $('check-tv').classList.toggle('done', view.tv)
@@ -430,10 +419,7 @@ function renderChecklist() {
   $('check-night-form').hidden = !view.night || view.nightDone
   $('checklist').hidden = view.hidden
 }
-$('checklist-hide').addEventListener('click', () => {
-  remember('hidden')
-  renderChecklist()
-})
+$('checklist-hide').addEventListener('click', () => remember('hidden'))
 $('check-night-form').addEventListener('submit', async (e) => {
   e.preventDefault()
   const night = checks().night
@@ -442,10 +428,7 @@ $('check-night-form').addEventListener('submit', async (e) => {
 $('check-last-year-save').addEventListener('click', () => {
   if ($('check-last-year').value) admin({ type: 'setLastYear', total: Number($('check-last-year').value) }, 'Last year saved: race it on the night')
 })
-$('check-night-skip').addEventListener('click', () => {
-  remember('night')
-  renderChecklist()
-})
+$('check-night-skip').addEventListener('click', () => remember('night'))
 // Item 1, Put it on your TV (first-run's screen 3, sign-in-simplify 05): pair by the TV's code, send the link to
 // whatever will be the TV, or make this screen the TV. It ticks when a TV connects (the 3 s poll).
 $('check-pair-form').addEventListener('submit', async (e) => {
@@ -476,6 +459,15 @@ const household = wireHousehold({ house: () => house, events: () => events, admi
 if (new URLSearchParams(location.search).has('pair')) screen = { tab: 'household', event: null }
 await load()
 $('admin').hidden = false
+
+// What this phone remembered before the checklist was the Household's: sent up once, then forgotten here.
+for (const what of ['kid', 'night', 'hidden']) {
+  const key = `cd.checklist.${house.id}.${what}`
+  try {
+    if (localStorage.getItem(key) === '1' && !house.checklist[what]) await remember(what)
+    localStorage.removeItem(key)
+  } catch {}
+}
 
 help.update(screenKey())
 household.start()
