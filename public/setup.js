@@ -2,12 +2,11 @@
 // and a screen per night. setup-view.js decides what shows; setup-night.js and setup-household.js draw it.
 import { zonedTime, clockTime as zoneClock } from '../shared/night-maths.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
-import { showFirstRun } from '/first-run.js'
 import { helperLink, helperWording, joinCodeLine, tvQrButton, tvQrSays } from './door-view.js'
 import { $, h, option } from './setup-dom.js'
 import {
   checklist, closeConfirm, deleteConfirm, doorEvent, endConfirm, goLiveConfirm, goLiveOffer, nightGroups, nightsTabLabel,
-  resetConfirm, screenFrom, searchFor, waitingNights,
+  resetConfirm, screenFrom, searchFor, tvTick, waitingNights,
 } from './setup-view.js'
 import { alsoOpen, doorCard, nightRow, nightScreen, nothingOpen, typedMissed, waiting } from './setup-night.js'
 import { wireHousehold } from './setup-household.js'
@@ -344,6 +343,10 @@ function render() {
   household.render()
   renderChecklist()
   help.update(screenKey())
+  if (ui.scrollTo && screen.tab === 'household') {
+    document.querySelector(`[data-help="${ui.scrollTo}"]`)?.scrollIntoView({ block: 'start' })
+    ui.scrollTo = null
+  }
 }
 
 function renderTonight(ctx) {
@@ -401,6 +404,8 @@ const checks = () =>
     lastYear: house.lastYear,
     skipped: remembered('night'),
     dismissed: remembered('hidden'),
+    named: house.checklist.named,
+    located: house.location != null,
     day: zoneDay,
   })
 
@@ -409,6 +414,12 @@ function renderChecklist() {
   const view = checks()
   $('check-last-year-row').hidden = !house.canEstimateLastYear
   $('check-tv').classList.toggle('done', view.tv)
+  const tick = tvTick(house.door) // "✓ Your TV is showing Test night" (spec v2.1 §8)
+  $('check-tv-line').replaceChildren(tick.text, ...(tick.name ? [h('i', { textContent: tick.name })] : []))
+  for (const where of document.querySelectorAll('.tv-where')) where.textContent = `${location.host}/tv`
+  $('check-name-form').hidden = !view.also.name
+  $('check-location').hidden = !view.also.location
+  $('check-also').hidden = !view.also.name && !view.also.location
   $('check-kid').classList.toggle('done', view.kid)
   $('check-kid-tools').replaceChildren(...(view.kid ? [] : helperBox('checklist').flat().filter(Boolean)))
   $('check-kid-line').hidden = !view.kidLine
@@ -435,6 +446,26 @@ $('check-night-skip').addEventListener('click', () => {
   remember('night')
   renderChecklist()
 })
+// Item 1, Put it on your TV (first-run's screen 3, sign-in-simplify 05): pair by the TV's code, send the link to
+// whatever will be the TV, or make this screen the TV. It ticks when a TV connects (the 3 s poll).
+$('check-pair-form').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const code = $('check-pair-code').value.trim()
+  if (!code || !(await household.redeem(code))) return
+  $('check-pair-code').value = ''
+  say('Paired: waiting for your TV…')
+})
+$('check-tv-send').addEventListener('click', () => share(household.tvUrl(), 'Our trick-or-treat TV'))
+$('check-tv-here').addEventListener('click', () => (location.href = household.tvUrl()))
+// Also, when you like: the name here; the Location on Household, where its map lives.
+$('check-name-form').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  if ($('check-name').value.trim()) await admin({ type: 'rename', displayName: $('check-name').value }, 'Household name saved')
+})
+$('check-location').addEventListener('click', () => {
+  go({ tab: 'household', event: null })
+  ui.scrollTo = 'location'
+})
 
 // ---- the help (spec v2.1 §9): the column at 900 px and up, a "?" on each heading on phones
 const help = createHelp({ column: $('help-col'), root: $('admin'), contact: document.querySelector('footer a[href^="mailto:"]').href })
@@ -449,12 +480,7 @@ $('admin').hidden = false
 help.update(screenKey())
 household.start()
 
-// First-run until screen 3 has been passed once; not when a TV's QR brought us here to pair.
-const firstRun = !house.firstRunPassed && !new URLSearchParams(location.search).has('pair')
-  ? showFirstRun($('first-run'), { house: structuredClone(house), admin, redeem: household.redeem, tvUrl: household.tvUrl, share })
-  : null
-
-// The checklist and first-run's TV tick from state the page can't hear over a stream: ask every 3 s.
+// The checklist's ticks from state the page can't hear over a stream: ask every 3 s.
 setInterval(async () => {
   const res = await fetch('/api/household').catch(() => null)
   if (!res?.ok) return
@@ -462,7 +488,6 @@ setInterval(async () => {
   ui.tvQr.until = Date.now() + house.joinQrMsLeft // shown or hidden from a door phone meanwhile
   renderChecklist()
   help.update(screenKey()) // the checklist may have come or gone
-  firstRun?.update(house)
 }, 3_000)
 
 // Arrived from a TV's scan-to-pair QR: the Household tab, the code filled in, and one confirm pairs it.

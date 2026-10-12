@@ -80,7 +80,7 @@ describe('signing up', () => {
     expect(res.status).toBe(303)
     expect(res.headers.get('Location')).toBe('/setup')
     const house = await household(server.app, cookieOf(res))
-    expect(house).toMatchObject({ displayName: 'Our household', timeZone: 'America/Vancouver', firstRunPassed: false, manager: { email: 'alice@example.com' } })
+    expect(house).toMatchObject({ displayName: 'Our household', timeZone: 'America/Vancouver', manager: { email: 'alice@example.com' } })
     const events = await (await fetch(`${server.app.url}/api/events`, as(cookieOf(res)))).json()
     expect(events.filter((e) => e.live)).toMatchObject([{ name: 'Test night' }])
   })

@@ -138,9 +138,11 @@ export function checklistNight(events, testNightId) {
   return scheduled ?? doorEvent(events.filter((e) => e.id !== testNightId))
 }
 
-// What the checklist shows. `kid` is item 2's tick (a kid on any Event, remembered on this phone); `lastYear` is
-// the Household's "About how many kids came last year?"; `skipped` and `dismissed` are remembered on this phone.
-export function checklist({ events, testNightId, tvWatching, kid, lastYear, skipped, dismissed, day }) {
+// What the checklist shows (spec v2.1 §8, sign-in-simplify 05). `kid` is item 2's tick (a kid on any Event,
+// remembered on this phone); `lastYear` is the Household's "About how many kids came last year?"; `skipped` and
+// `dismissed` are remembered on this phone. `named` (renamed from "Our household") and `located` (a Location set)
+// drive the optional Also lines, which never hold the list up.
+export function checklist({ events, testNightId, tvWatching, kid, lastYear, skipped, dismissed, named = true, located = true, day }) {
   const night = checklistNight(events, testNightId)
   const nightDone = !!night && (night.expectedKids != null || lastYear != null || skipped)
   const nightLine = !night ? null : night.state === 'upcoming' ? `${night.name} goes live ${day(night.goesLiveAt)}` : night.state === 'live' ? `${night.name} is live` : `${night.name} has ended`
@@ -150,12 +152,12 @@ export function checklist({ events, testNightId, tvWatching, kid, lastYear, skip
   const kidLine = tvWatching && kid
     ? [testNight && `${testNight.name} ends by itself at 3 am.`, next && `Your TV switches to ${next.name} when it goes live.`].filter(Boolean).join(' ') || null
     : null
-  return { tv: tvWatching, kid, night, nightDone, nightLine, kidLine, hidden: dismissed || (tvWatching && kid && (!night || nightDone)) }
+  return { tv: tvWatching, kid, night, nightDone, nightLine, kidLine, also: { name: !named, location: !located }, hidden: dismissed || (tvWatching && kid && (!night || nightDone)) }
 }
 
-// First-run screen 3's tick: the Event the TV is on, the door's (null with none open).
+// Item 1's tick: the Event the TV is on, the door's (null with none open). The list draws the ✓.
 export function tvTick(door) {
-  return door ? { text: '✓ Your TV is showing ', name: door.name } : { text: '✓ Your TV is watching. No night is on right now.', name: null }
+  return door ? { text: 'Your TV is showing ', name: door.name } : { text: 'Your TV is watching. No night is on right now.', name: null }
 }
 
 // The screen in the URL: ?event=<id> is a night's screen, ?tab=nights|household a tab, else Tonight.

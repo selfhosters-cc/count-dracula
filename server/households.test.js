@@ -92,7 +92,7 @@ describe('create Household (sign-up)', () => {
     expect(snap.golden).toEqual({ left: 0, nextIsGolden: false })
     expect(house.joinKey()).toMatch(/^[A-Za-z0-9]{8,}$/)
     expect(ledger.householdByJoinKey(house.joinKey())).toBe(id)
-    expect(ledger.households()).toMatchObject([{ id, displayName: 'The Smiths', timeZone: 'America/Vancouver', location: null, firstRunPassed: false, suspendedSince: null }])
+    expect(ledger.households()).toMatchObject([{ id, displayName: 'The Smiths', timeZone: 'America/Vancouver', location: null, suspendedSince: null }])
   })
 
   test('needs a name of at most 40 characters and a real time zone', () => {

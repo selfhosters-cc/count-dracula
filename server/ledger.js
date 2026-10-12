@@ -376,12 +376,11 @@ export function openLedger(db, config) {
     households() {
       return db
         .query(`
-          SELECT id, display_name AS displayName, time_zone AS timeZone, location_cell AS location, first_run_passed AS firstRunPassed,
+          SELECT id, display_name AS displayName, time_zone AS timeZone, location_cell AS location,
             suspended_since AS suspendedSince, signed_up_at AS signedUpAt
           FROM households ORDER BY id
         `)
         .all()
-        .map((h) => ({ ...h, firstRunPassed: h.firstRunPassed === 1 }))
     },
   }
 
@@ -971,12 +970,6 @@ export function openLedger(db, config) {
           `).run(id, householdId)
         }
         return openRacers(id)
-      },
-
-      // First-run's screen 3 was passed (paired, sent, used here or skipped): it stops showing.
-      passFirstRun() {
-        db.query('UPDATE households SET first_run_passed = 1 WHERE id = ?').run(householdId)
-        return []
       },
 
       // Rotate TV link (spec §9): a new secret; the HTTP layer closes every stream on the old one.

@@ -1,6 +1,6 @@
 // The Location picker (v2 spec §10): nothing loads from OpenStreetMap until "Pick on a map" is tapped. The
 // chosen point is snapped to a 5-character geohash cell in the browser and shown shaded, never as a pin;
-// only the cell id is ever sent. Used in /setup and as first-run screen 2.
+// only the cell id is ever sent. Used on /setup's Household tab.
 import { cellBounds, encodeGeohash } from '/shared/geohash.js'
 
 const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
@@ -16,7 +16,7 @@ async function loadLeaflet() {
 }
 
 // container: an empty element. save(cell) stores it (null removes it); it rejects with a message to show.
-export function createLocationPicker(container, { cell = null, save, onSkip = null }) {
+export function createLocationPicker(container, { cell = null, save }) {
   let saved = cell
   let picked = null
   let map = null
@@ -26,8 +26,7 @@ export function createLocationPicker(container, { cell = null, save, onSkip = nu
   const summary = h('p', { className: 'muted' })
   const pickButton = h('button', { type: 'button', className: 'primary' })
   const removeButton = h('button', { type: 'button', className: 'danger', textContent: 'Remove' })
-  const skipButton = onSkip ? h('button', { type: 'button', textContent: 'Skip' }) : null
-  const buttons = h('div', { className: 'row' }, pickButton, removeButton, ...(skipButton ? [skipButton] : []))
+  const buttons = h('div', { className: 'row' }, pickButton, removeButton)
   const mapBox = h('div', { className: 'picker-map' })
   const status = h('p', { className: 'muted' })
   const locateButton = h('button', { type: 'button', textContent: '📍 Use my location' })
@@ -102,8 +101,6 @@ export function createLocationPicker(container, { cell = null, save, onSkip = nu
     saved = null
     render()
   })
-
-  skipButton?.addEventListener('click', onSkip)
 
   render()
   return { setCell(cell) { saved = cell; render() } }

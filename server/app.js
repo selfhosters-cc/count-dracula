@@ -5,7 +5,7 @@ import { Database } from 'bun:sqlite'
 import { resolve, sep } from 'node:path'
 import { loadConfig } from './config.js'
 import { BadCommand, DEFAULT_SWITCHES, openLedger } from './ledger.js'
-import { openAccounts } from './accounts.js'
+import { NEW_HOUSEHOLD_NAME, openAccounts } from './accounts.js'
 import { googleClient } from './google.js'
 import { createHub } from './hub.js'
 import { createPairing } from './pairing.js'
@@ -23,7 +23,7 @@ const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
 const PAGES = { '/': '/home.html', '/door': '/door.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html', '/privacy': '/privacy.html', '/summary': '/summary.html' }
-const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink', 'setLocation', 'passFirstRun', 'setLastYear', 'close', 'reset'])
+const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink', 'setLocation', 'setLastYear', 'close', 'reset'])
 
 // What a TV-link holder gets (spec §9): what the TV draws, without each kid's phone name.
 const withoutPhone = ({ phoneName, ...kid }) => kid
@@ -466,13 +466,14 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
     // The print tally sheet, opened from /setup.
     'GET /tally': managerPage('/tally'),
     'GET /api/household': manager((req, house, session) => {
-      const { displayName, timeZone, location, firstRunPassed } = ledger.households().find((h) => h.id === house.id)
+      const { displayName, timeZone, location } = ledger.households().find((h) => h.id === house.id)
       const streams = hub.counts().households[house.id]
       // The ready checklist ticks itself from these (spec v2.1 §8); /setup polls for them.
-      const checklist = { tvWatching: (streams?.tvLink ?? 0) + (streams?.paired ?? 0) > 0, anyKids: house.anyKids() }
+      // named: renamed from sign-up's "Our household", for the checklist's Also line (sign-in-simplify 05).
+      const checklist = { tvWatching: (streams?.tvLink ?? 0) + (streams?.paired ?? 0) > 0, anyKids: house.anyKids(), named: displayName !== NEW_HOUSEHOLD_NAME }
       // The door's Event is what the TV shows: first-run's tick names it (spec v2.1 §8).
       const door = house.doorEvent()
-      return Response.json({ id: house.id, displayName, timeZone, location, firstRunPassed, checklist, testNightEventId: house.testNightId(), door: door && { id: door.id, name: door.name }, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), joinKey: house.joinKey(), joinQrMsLeft: joinQrLeft(house), tvToken: house.tvToken(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
+      return Response.json({ id: house.id, displayName, timeZone, location, checklist, testNightEventId: house.testNightId(), door: door && { id: door.id, name: door.name }, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), joinKey: house.joinKey(), joinQrMsLeft: joinQrLeft(house), tvToken: house.tvToken(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
     }),
     // Delete my Household: typed name to confirm; everything goes at once, and its streams close.
     'POST /api/household/delete': manager(async (req, house) => {

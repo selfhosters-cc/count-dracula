@@ -18,7 +18,6 @@ export function wireHousehold(core) {
       say(await res.text(), true)
       return false
     }
-    if (!house().firstRunPassed) await admin({ type: 'passFirstRun' }) // the TV's on: first-run's job is done
     return true
   }
 

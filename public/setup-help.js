@@ -7,7 +7,7 @@ export const HELP = {
   checklist: {
     title: 'Ready for Halloween',
     p: [
-      "Up to three things to check before the night. They tick themselves as you do them, and the list goes once they're done.",
+      "Up to three things to do before the night: put it on your TV, count a test kid, and set up your Halloween night. They tick themselves as you do them, and the list goes once they're done. Naming your household and adding a rough Location sit under them, for whenever you like.",
       "Hide it with ✕ whenever you like: that's remembered on this phone only, and nothing else depends on it.",
     ],
   },

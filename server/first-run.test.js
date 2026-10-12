@@ -40,28 +40,26 @@ async function open(app, query) {
 
 const tap = (app, key, id) => fetch(`${app.url}/api/taps`, { method: 'POST', headers: { 'X-Join-Key': key }, body: JSON.stringify({ ...doorNamed(app.ledger, app.ledger.householdByJoinKey(key)), id, tagId: null, tappedAt: Date.now(), phoneName: 'Dad' }) })
 
-describe('first-run', () => {
-  test('shows until screen 3 has been passed once', async () => {
-    const { admin, household, info } = await newManager()
-    expect(info.firstRunPassed).toBe(false)
+describe('first-run is gone: the checklist is the one onboarding (sign-in-simplify 05)', () => {
+  test('no firstRunPassed, and passFirstRun is refused', async () => {
+    const { admin, info } = await newManager()
 
-    expect((await admin({ type: 'passFirstRun' })).status).toBe(200)
-
-    expect((await household()).firstRunPassed).toBe(true)
-  })
-
-  test('a migrated Household #1 has nothing to run through', () => {
-    const db = new Database(':memory:')
-    db.exec("CREATE TABLE events (id INTEGER PRIMARY KEY, name TEXT NOT NULL, live INTEGER NOT NULL DEFAULT 0, frozen INTEGER NOT NULL DEFAULT 0, ended INTEGER NOT NULL DEFAULT 0, join_key TEXT, clock_shift_ms INTEGER NOT NULL DEFAULT 0, race_against_id INTEGER, expected_kids INTEGER, visit_window_ms INTEGER NOT NULL DEFAULT 15000, golden_count INTEGER NOT NULL DEFAULT 0, counts_only INTEGER NOT NULL DEFAULT 0)")
-    db.exec("INSERT INTO events (name, live, join_key) VALUES ('Rehearsal', 1, 'abcdefghij')")
-
-    const ledger = openLedger(db, {})
-
-    expect(ledger.households()[0].firstRunPassed).toBe(true)
+    expect(info).not.toHaveProperty('firstRunPassed')
+    expect((await admin({ type: 'passFirstRun' })).status).toBe(400)
   })
 })
 
 describe('the ready checklist', () => {
+  test('"Name your household" shows while it is still "Our household"', async () => {
+    const { admin, household } = await newManager()
+    await admin({ type: 'rename', displayName: 'Our household' }) // as Continue with Google makes it
+    expect((await household()).checklist.named).toBe(false)
+
+    await admin({ type: 'rename', displayName: 'The Bs' })
+
+    expect((await household()).checklist.named).toBe(true)
+  })
+
   test('"A TV is watching" ticks while a TV-link or paired screen is connected', async () => {
     const { app, household, info } = await newManager()
     expect((await household()).checklist.tvWatching).toBe(false)

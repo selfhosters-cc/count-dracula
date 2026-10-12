@@ -94,12 +94,11 @@
     .checks li.done::marker { content: '✓  '; color: var(--ok); }
     .checks li.done [data-todo], .checks li:not(.done) [data-done] { display: none; }
 
-    /* first-run, the Location picker, the TV's QR */
-    #first-run { position: fixed; inset: 0; z-index: 25; background: var(--bg); overflow: auto; padding: 16px; }
-    .first-run { max-width: 560px; margin: 0 auto; }
-    .first-run h2 { font-size: 24px; margin: 6px 0 14px; }
-    .first-run .alternatives { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
-    .first-run .alternatives a { color: var(--orange); font-weight: 700; padding: 8px 0; }
+    /* the checklist's Also lines; the Location picker, the TV's QR */
+    .also { border-top: 1px solid #ffffff10; margin-top: 12px; padding-top: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+    .also form { width: 100%; }
+    .also .link-button { font-size: 14px; }
+    .small-link { display: inline-block; margin-top: 8px; font-size: 14px; }
     .tv-status { font-weight: 700; color: var(--ok); min-height: 1.4em; }
     .picker-map { height: 340px; border-radius: 12px; margin: 10px 0; background: var(--bg); }
     .picker-panel .row button { flex: 1 1 auto; }
@@ -203,8 +202,14 @@
       <section id="checklist" data-help="checklist" hidden>
         <div class="row"><h2 style="margin: 0">🎃 Ready for Halloween</h2><button id="checklist-hide" class="fit" aria-label="Hide the checklist">✕</button></div>
         <ol class="checks">
-          <li id="check-tv"><b>A TV is watching</b><span class="muted" data-todo>Open /tv on the TV's computer, then Pair a TV under Household.</span></li>
-          <li id="check-kid"><b>A phone counted a test kid</b><span class="muted" data-todo>Tap 📱 Count on this device, then +1 Kid, or ➕ Add a helper and count on their phone.</span>
+          <li id="check-tv"><b>Put it on your TV</b><span class="muted" id="check-tv-line" data-done></span>
+            <div data-todo>
+              <span class="muted">On the TV's computer, open Chrome and go to <b class="tv-where"></b>. Type its code here, or scan its QR with your phone's camera.</span>
+              <form id="check-pair-form" class="row"><input id="check-pair-code" placeholder="K7Q-M4X" aria-label="The code on the TV" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="primary" type="submit">Pair</button></form>
+              <div class="row"><button type="button" id="check-tv-send">Send the link instead</button><button type="button" id="check-tv-here">Use this screen as the TV</button></div>
+              <a href="/help/tv" target="_blank" class="link small-link">Help with TV setup</a>
+            </div></li>
+          <li id="check-kid"><b>Count a test kid</b><span class="muted" data-todo>Tap 📱 Count on this device, then +1 Kid, or ➕ Add a helper and count on their phone.</span>
             <div id="check-kid-tools" data-todo></div><span class="muted" id="check-kid-line" hidden></span></li>
           <li id="check-night"><b>Your Halloween night</b><span class="muted" id="check-night-when"></span>
             <form id="check-night-form" data-todo>
@@ -212,6 +217,12 @@
               <div class="row" id="check-last-year-row" style="margin-top: 6px"><input id="check-last-year" type="number" min="1" placeholder="About how many kids came last year?" aria-label="About how many kids came last year?"><button type="button" id="check-last-year-save">Race it</button></div>
             </form></li>
         </ol>
+        <!-- Also, when you like: optional, and never holds the list up. -->
+        <div id="check-also" class="also">
+          <span class="muted">Also, when you like:</span>
+          <form id="check-name-form" class="row"><input id="check-name" maxlength="40" autocomplete="off" placeholder="Your household's name" aria-label="Name your household"><button type="submit">Save</button></form>
+          <button type="button" id="check-location" class="link-button">📍 Add a rough Location, to see how busy it is near you</button>
+        </div>
       </section>
       <div id="tonight"></div>
     </div>
@@ -315,7 +326,6 @@
   <aside class="help" id="help-col" aria-label="Help" hidden></aside>
   </div>
 
-  <div id="first-run" hidden></div>
   <div id="qr-full" hidden><div id="qr-full-code"></div><p>Tap anywhere to close</p></div>
 
   <script type="module" src="/setup.js"></script>

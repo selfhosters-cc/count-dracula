@@ -186,7 +186,7 @@ describe('the URL', () => {
 describe('the ready checklist (spec v2.1 §8)', () => {
   // Signed up Oct 20: the Test night (id 1) Live, Halloween 2026 (id 2) going live by itself.
   const october = [ev(1, 'Test night', 'live', { wentLiveAt: 10 }), ev(2, 'Halloween 2026', 'upcoming', { goesLiveAt: 5000 })]
-  const base = { events: october, testNightId: 1, tvWatching: false, kid: false, lastYear: null, skipped: false, dismissed: false, day }
+  const base = { events: october, testNightId: 1, tvWatching: false, kid: false, lastYear: null, skipped: false, dismissed: false, named: false, located: false, day }
 
   test('item 3 follows the next night with a Goes live at', () => {
     expect(checklistNight(october, 1).name).toBe('Halloween 2026')
@@ -231,6 +231,12 @@ describe('the ready checklist (spec v2.1 §8)', () => {
     expect(checklist({ ...base, events: november, testNightId: 7, tvWatching: true, kid: true }).kidLine).toBe('Garage test ends by itself at 3 am.')
   })
 
+  test('Also, when you like: the name while it is "Our household", the Location while there is none; neither holds the list up', () => {
+    expect(checklist(base).also).toEqual({ name: true, location: true })
+    expect(checklist({ ...base, named: true, located: true }).also).toEqual({ name: false, location: false })
+    expect(checklist({ ...base, tvWatching: true, kid: true, skipped: true }).hidden).toBe(true)
+  })
+
   test('hides when every shown item is done, or dismissed', () => {
     expect(checklist(base).hidden).toBe(false)
     expect(checklist({ ...base, dismissed: true }).hidden).toBe(true)
@@ -240,10 +246,10 @@ describe('the ready checklist (spec v2.1 §8)', () => {
   })
 })
 
-describe("first-run's tick (spec v2.1 §8)", () => {
+describe("item 1's tick (spec v2.1 §8)", () => {
   test("names the Event the TV shows: the door's", () => {
-    expect(tvTick({ name: 'Test night' })).toEqual({ text: '✓ Your TV is showing ', name: 'Test night' })
+    expect(tvTick({ name: 'Test night' })).toEqual({ text: 'Your TV is showing ', name: 'Test night' })
     expect(tvTick({ name: 'Halloween 2026' }).name).toBe('Halloween 2026')
-    expect(tvTick(null)).toEqual({ text: '✓ Your TV is watching. No night is on right now.', name: null })
+    expect(tvTick(null)).toEqual({ text: 'Your TV is watching. No night is on right now.', name: null })
   })
 })

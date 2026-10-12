@@ -120,12 +120,12 @@ describe('/api/household', () => {
     return (await fetch(`${app.url}/api/household`, { headers: { Cookie: cookie } })).json()
   }
 
-  test("names the Test night and the door's Event, for the checklist and first-run's tick", async () => {
+  test("names the Test night and the door's Event, for the checklist and its TV tick", async () => {
     const house = await managerAt('2026-10-20T16:00:00Z')
 
     expect(house.testNightEventId).toEqual(expect.any(Number))
     expect(house.door).toEqual({ id: house.testNightEventId, name: 'Test night' })
-    expect(house.checklist).toEqual({ tvWatching: false, anyKids: 0 })
+    expect(house.checklist).toEqual({ tvWatching: false, anyKids: 0, named: true }) // named at sign-in: 'House A'
   })
 
   test('a Halloween-evening sign-up has no Test night; its TV shows Halloween 2026', async () => {

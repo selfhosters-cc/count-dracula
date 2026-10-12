@@ -204,7 +204,7 @@ describe('the link', () => {
     expect((await follow(server.app, token)).status).toBe(303)
   })
 
-  test('a new address gets a new Household, "Our household", with that address as its first Manager, and lands in first-run', async () => {
+  test('a new address gets a new Household, "Our household", with that address as its first Manager, and lands on Setup', async () => {
     const server = start()
 
     const res = await emailSignIn(server, 'New.Person@Example.com')
@@ -212,7 +212,7 @@ describe('the link', () => {
     expect(res.status).toBe(303)
     expect(res.headers.get('Location')).toBe('/setup')
     const house = await household(server.app, cookieOf(res))
-    expect(house).toMatchObject({ displayName: 'Our household', timeZone: 'America/Toronto', firstRunPassed: false, manager: { email: 'New.Person@Example.com' } })
+    expect(house).toMatchObject({ displayName: 'Our household', timeZone: 'America/Toronto', manager: { email: 'New.Person@Example.com' } })
     const events = await (await fetch(`${server.app.url}/api/events`, { headers: { Cookie: cookieOf(res) } })).json()
     expect(events.filter((e) => e.live)).toMatchObject([{ name: 'Test night' }])
   })

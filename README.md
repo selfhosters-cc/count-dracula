@@ -69,8 +69,8 @@ phones. A TV facing the porch celebrates every kid live and races tonight's coun
 
 Every household counting on the same night adds to a shared picture, without anyone giving away where they live.
 
-- **Opt in with a rough location.** A household picks its spot on a map in Setup (it's optional, and first-run
-  offers a Skip). Only a cell a few kilometres across is stored: the exact point never leaves the phone. No
+- **Opt in with a rough location.** A household picks its spot on a map in Setup (it's optional: the ready
+  checklist offers it, and nothing waits on it). Only a cell a few kilometres across is stored: the exact point never leaves the phone. No
   location, no sharing.
 - **"Near you" on the TV and phones**, refreshed every 10 minutes:
   - TV: *"🏘️ Near you tonight: ~90 kids in the last half hour · 14 houses counting · 🧙 Witch on top"*
