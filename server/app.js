@@ -222,7 +222,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     'POST /api/pair/redeem': manager(async (req, house, session) => {
       if (!guard.take('redeem', session.manager.id)) return tooMany()
       const { code } = await req.json()
-      if (!pairing.redeem(code, house.id)) return new Response("That code isn't on any TV right now. Check it, or wait for the TV's next one.", { status: 404 })
+      if (!pairing.redeem(code, house.id)) return new Response('That code has expired: your TV shows a new one now. Scan it again, or type the new one.', { status: 404 })
       return Response.json({ paired: true })
     }),
     'POST /api/taps': write(async (req, house) => {

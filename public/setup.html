@@ -98,6 +98,8 @@
     .also { border-top: 1px solid #ffffff10; margin-top: 12px; padding-top: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
     .also form { width: 100%; }
     .also .link-button { font-size: 14px; }
+    .pair-card { border: 2px solid var(--orange); }
+    .pair-card p { margin: 0 0 10px; }
     .small-link { display: inline-block; margin-top: 8px; font-size: 14px; }
     .tv-status { font-weight: 700; color: var(--ok); min-height: 1.4em; }
     .picker-map { height: 340px; border-radius: 12px; margin: 10px 0; background: var(--bg); }
@@ -190,6 +192,11 @@
   <div id="status" role="status"></div>
 
   <div id="admin" hidden>
+    <!-- A TV's scan-to-pair QR brought us here (/setup?pair=): ask on the page, on every tab (sign-in-simplify 07). -->
+    <section id="pair-card" class="pair-card" hidden>
+      <p><b id="pair-card-text"></b> <span class="muted">It shows your household's nights on that screen.</span></p>
+      <div class="row"><button class="primary" id="pair-card-yes">Pair</button><button id="pair-card-no">Not now</button></div>
+    </section>
     <nav class="tabs" role="tablist" aria-label="Setup">
       <button role="tab" id="tab-tonight" data-tab="tonight" aria-controls="screen-tonight">Tonight</button>
       <button role="tab" id="tab-nights" data-tab="nights" aria-controls="screen-nights">Nights</button>

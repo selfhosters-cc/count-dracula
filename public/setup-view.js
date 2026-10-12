@@ -1,6 +1,7 @@
 // What /setup shows (spec v2.1 §9): its tabs, the night groups, and each Event's actions, tools, lines and
 // confirms. Pure: setup.js draws the screens from these and sends the commands.
 import { goLiveNowTarget } from './door-view.js'
+import { tvCodeFrom } from '../shared/codes.js'
 
 export const MAX_OPEN = 3
 // Reset (spec v2.1 §6): above this many kids, the Event's name is typed to confirm. The Ledger checks it too.
@@ -153,6 +154,13 @@ export function checklist({ events, testNightId, tvWatching, kid, lastYear, skip
     ? [testNight && `${testNight.name} ends by itself at 3 am.`, next && `Your TV switches to ${next.name} when it goes live.`].filter(Boolean).join(' ') || null
     : null
   return { tv: tvWatching, kid, night, nightDone, nightLine, kidLine, also: { name: !named, location: !located }, hidden: dismissed || (tvWatching && kid && (!night || nightDone)) }
+}
+
+// A TV's scan-to-pair QR lands on /setup?pair=<code> (sign-in-simplify 07): the card that asks, on the page rather
+// than in a browser dialog. null for no code, or one that isn't a TV's.
+export function pairOffer(param) {
+  const code = tvCodeFrom(param)
+  return code && { code, text: `Pair the TV showing ${code.slice(0, 3)}-${code.slice(3)}?` }
 }
 
 // Item 1's tick: the Event the TV is on, the door's (null with none open). The list draws the ✓.

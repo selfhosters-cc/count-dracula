@@ -96,7 +96,16 @@ describe('redeeming', () => {
     const res = await redeem(app, cookie, 'AAAAAA')
 
     expect(res.status).toBe(404)
-    expect(await res.text()).toContain('code')
+    // Most often the code expired while the Manager signed in: the TV already shows a new one.
+    expect(await res.text()).toBe('That code has expired: your TV shows a new one now. Scan it again, or type the new one.')
+  })
+
+  test("the TV's pairing screen leads with the QR, then the address and code (sign-in-simplify 07)", async () => {
+    const { app } = await setUp()
+
+    const html = await (await fetch(`${app.url}/tv`)).text()
+
+    expect(html).toContain("<p>Scan this with your phone's camera, or on your phone go to <b id=\"pair-where\"></b> and enter</p>")
   })
 
   test('a code works once', async () => {

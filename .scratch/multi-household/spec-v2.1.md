@@ -183,6 +183,8 @@ About this addendum:
 
 ## 8. Sign-up, first-run and the ready checklist
 
+> **Amended 2026-10-12** by [Simpler sign-in and onboarding](../sign-in-simplify/README.md): one sign-in block with Google's own button, invites and a 6-digit code by email, the checklist instead of first-run (remembered by the Household), and a pair card instead of `confirm()`.
+
 ([Sign-up, first-run and the ready checklist](../events-rework/issues/09-sign-up-and-first-run.md))
 
 ### What sign-up creates
@@ -329,6 +331,8 @@ Prototype: branch `prototype/setup-help`, `public/setup-help-prototype.html`. It
 ---
 
 ## 11. The homepage
+
+> **Amended 2026-10-12** by [Simpler sign-in and onboarding](../sign-in-simplify/README.md): one sign-in block with Google's own button, invites and a 6-digit code by email, the checklist instead of first-run (remembered by the Household), and a pair card instead of `confirm()`.
 
 ([The homepage](../events-rework/issues/11-homepage.md), [Sign-up, first-run and the ready checklist](../events-rework/issues/09-sign-up-and-first-run.md))
 

@@ -18,6 +18,7 @@ import {
   screenFrom,
   searchFor,
   waitingNights,
+  pairOffer,
   tvTick,
   whenLine,
 } from './setup-view.js'
@@ -251,5 +252,13 @@ describe("item 1's tick (spec v2.1 §8)", () => {
     expect(tvTick({ name: 'Test night' })).toEqual({ text: 'Your TV is showing ', name: 'Test night' })
     expect(tvTick({ name: 'Halloween 2026' }).name).toBe('Halloween 2026')
     expect(tvTick(null)).toEqual({ text: 'Your TV is watching. No night is on right now.', name: null })
+  })
+})
+
+describe("a TV's scan-to-pair QR (sign-in-simplify 07)", () => {
+  test('asks on the page, naming the code as the TV shows it; junk asks nothing', () => {
+    expect(pairOffer('k7qm4x')).toEqual({ code: 'K7QM4X', text: 'Pair the TV showing K7Q-M4X?' })
+    expect(pairOffer('/evil')).toBeNull()
+    expect(pairOffer(null)).toBeNull()
   })
 })

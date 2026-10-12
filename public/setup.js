@@ -6,7 +6,7 @@ import { helperLink, helperWording, joinCodeLine, tvQrButton, tvQrSays } from '.
 import { $, h, option } from './setup-dom.js'
 import {
   checklist, closeConfirm, deleteConfirm, doorEvent, endConfirm, goLiveConfirm, goLiveOffer, nightGroups, nightsTabLabel,
-  resetConfirm, screenFrom, searchFor, tvTick, waitingNights,
+  pairOffer, resetConfirm, screenFrom, searchFor, tvTick, waitingNights,
 } from './setup-view.js'
 import { alsoOpen, doorCard, nightRow, nightScreen, nothingOpen, typedMissed, waiting } from './setup-night.js'
 import { wireHousehold } from './setup-household.js'
@@ -456,7 +456,6 @@ const help = createHelp({ column: $('help-col'), root: $('admin'), contact: docu
 // ---- Household: everything not about one night
 const household = wireHousehold({ house: () => house, events: () => events, admin, say, share, load, helperBox, zoneDay, setHouse: (next) => (house = next) })
 
-if (new URLSearchParams(location.search).has('pair')) screen = { tab: 'household', event: null }
 await load()
 $('admin').hidden = false
 
@@ -482,5 +481,16 @@ setInterval(async () => {
   help.update(screenKey()) // the checklist may have come or gone
 }, 3_000)
 
-// Arrived from a TV's scan-to-pair QR: the Household tab, the code filled in, and one confirm pairs it.
-household.pairFromUrl()
+// Arrived from a TV's scan-to-pair QR (/setup?pair=): a card asks, on whatever tab this is. The code leaves the
+// address bar at once, so a reload doesn't ask again.
+const offer = pairOffer(new URLSearchParams(location.search).get('pair'))
+if (new URLSearchParams(location.search).has('pair')) history.replaceState(history.state, '', `${location.pathname}${searchFor(screen)}`)
+if (offer) {
+  $('pair-card-text').textContent = offer.text
+  $('pair-card').hidden = false
+  $('pair-card-yes').addEventListener('click', async () => {
+    $('pair-card').hidden = true
+    await household.pairTv(offer.code)
+  })
+  $('pair-card-no').addEventListener('click', () => ($('pair-card').hidden = true))
+}

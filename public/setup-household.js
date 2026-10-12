@@ -22,7 +22,6 @@ export function wireHousehold(core) {
   }
 
   async function pairTv(code) {
-    if (!confirm('Show our TV here?')) return
     if (!(await redeem(code))) return
     $('pair-code').value = ''
     say('✓ Paired: your TV is showing your board')
@@ -165,14 +164,7 @@ export function wireHousehold(core) {
         },
       })
     },
-    // Arrived from a TV's scan-to-pair QR: the code is filled in, and one confirm pairs it.
-    pairFromUrl() {
-      const code = new URLSearchParams(location.search).get('pair')
-      if (!code) return
-      history.replaceState(null, '', `${location.pathname}?tab=household`)
-      $('pair-code').value = code
-      $('pair-form').scrollIntoView({ block: 'center' })
-      pairTv(code)
-    },
+    // Arrived from a TV's scan-to-pair QR: setup.js's card asks, then pairs with this.
+    pairTv,
   }
 }
