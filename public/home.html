@@ -40,9 +40,11 @@
     .link-button { display: inline; width: auto; margin: 0; padding: 0; background: none; border: 0; color: var(--orange);
       font-weight: inherit; text-decoration: underline; }
     #signed-in form { display: inline; }
-    .cta-row { display: grid; grid-template-columns: 3fr 2fr; gap: 8px; margin: 0 0 8px; }
-    .cta-row .button, .cta-row button, .sticky-cta button { margin: 0; height: 100%; }
-    .top-note { text-align: center; margin: 0 0 14px; }
+    .sign-in .pair-note { margin-bottom: 12px; }
+    .sign-in form > button { margin-top: 0; }
+    .sign-in #email-form button { margin-top: 10px; }
+    .sign-in .after { margin: 12px 0 0; }
+    .code-line { text-align: center; margin: 0 0 18px; }
     .how { background: none; padding: 0; }
     .how h2 { font-size: 24px; margin-bottom: 4px; }
     .how > p { color: var(--dim); }
@@ -55,7 +57,7 @@
     .how-step img.first { margin-bottom: 8px; }
     .how-step .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     footer { text-align: center; padding: 8px 0 16px; }
-    /* Phones: Continue with Google / Got a code? slide up while neither the top row nor the forms are on screen. */
+    /* Phones: Sign in or start / Got a code? slide up while neither the sign-in block nor the code box is on screen. */
     .sticky-cta { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
       background: #14101cee; border-top: 1px solid #ffffff18; display: grid; grid-template-columns: 3fr 2fr; gap: 8px;
       max-width: 560px; margin-inline: auto; transform: translateY(110%); transition: transform .2s; }
@@ -70,8 +72,8 @@
     .error { color: #ff8a8a; margin: 8px 0 0; }
     .pair-note { background: var(--panel2); border-radius: 10px; padding: 10px 12px; margin: 0 0 4px; }
 
-    /* Laptops and desktops: a wider page, a hero with the porch TV, How it works in three columns, and the two
-       ways in side by side. Phones keep the one column above. */
+    /* Laptops and desktops: a wider page, a hero with the porch TV, How it works in three columns, and the
+       code box centred under it. Phones keep the one column above. */
     .hero-art { display: none; }
     @media (min-width: 900px) {
       body { max-width: 1180px; padding: 40px 32px 8px; }
@@ -79,10 +81,9 @@
       h1 { font-size: clamp(40px, 4.4vw, 52px); letter-spacing: .3px; }
       .lede { font-size: 22px; line-height: 1.45; margin: 14px 0 24px; max-width: 30em; }
       .site-line { display: inline-block; margin-bottom: 22px; }
-      .cta-row { max-width: 440px; }
-      .cta-row button, .cta-row .button { padding: 14px 16px; }
-      .top-note { text-align: left; max-width: 440px; }
-      .paused { max-width: 440px; margin-bottom: 10px; }
+      .sign-in { max-width: 440px; }
+      .sign-in button { padding: 14px 16px; }
+      .code-line { text-align: left; max-width: 440px; margin: 0; }
       #signed-in { display: grid; grid-template-columns: 1fr 1fr; column-gap: 10px; max-width: 560px; padding: 20px; }
       #signed-in > :not(.button, button) { grid-column: 1 / -1; }
       .hero-art { display: block; position: relative; padding: 0 36px 48px 0; }
@@ -100,9 +101,7 @@
       .how-step { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; margin: 0; padding: 18px 18px 20px; }
       .how-step p { margin-bottom: 14px; }
       .how-step img.phone { max-width: none; width: auto; height: 280px; }
-      .ways { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-bottom: 24px; }
-      .ways:has(> #sign-in[hidden]) { grid-template-columns: minmax(0, 640px); justify-content: center; }
-      .ways section { margin: 0; }
+      #code { max-width: 640px; margin: 0 auto 24px; }
       footer { padding: 16px 0 24px; }
     }
   </style>
@@ -127,18 +126,29 @@
     <div class="muted after">Not you? <form method="post" action="/auth/signout"><button class="link-button" type="submit">Sign out</button></form></div>
   </section>
 
-  <!-- One way in (spec v2.1 §11): Continue with Google signs in, or starts a household for an account new here.
-       Continue with email and the code box sit after How it works. -->
-  <div class="cta-row" id="cta-top">
+  <!-- One way in (spec v2.1 §11): Continue with Google signs in, or starts a household for an account new here,
+       with Continue with email under it, all in one block (sign-in-simplify 01). Got a code? sits after How it works. -->
+  <section id="sign-in" class="sign-in">
+    <p class="pair-note" id="signed-out-note" hidden>You're signed out of Count Dracula. Your Google account is still signed in to Google.<span id="still-counting" hidden> This phone still counts at the door: <a href="/door">Back to the door ›</a></span></p>
+    <p class="pair-note" id="pair-note" hidden>Sign in to put your TV on: it's showing <b id="pair-note-code"></b>.</p>
     <form method="post" action="/auth/google/start">
       <input type="hidden" name="timeZone">
       <input type="hidden" name="pair">
       <button class="primary" type="submit">Continue with Google</button>
     </form>
-    <a class="button" href="#code">Got a code?</a>
-  </div>
-  <p class="paused" id="paused" hidden>New households are paused for now. Signing in still works.</p>
-  <p class="muted top-note" id="top-note"><span id="email-line" hidden>No Google account? <a href="#sign-in">Use your email</a> · </span>By continuing you agree to the <a href="/privacy">Privacy notice and House rules</a>.</p>
+    <form method="post" action="/auth/email/start" id="email-form" hidden>
+      <p class="or">or</p>
+      <input type="hidden" name="timeZone">
+      <input type="hidden" name="pair">
+      <label for="email">Your email</label>
+      <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com">
+      <button type="submit">Continue with email</button>
+    </form>
+    <p class="paused" id="paused" hidden>New households are paused for now. Signing in still works.</p>
+    <p class="muted after">New here? We make your household as you sign in. Already counting? You land in yours.
+      By continuing you agree to the <a href="/privacy">Privacy notice and House rules</a>.</p>
+  </section>
+  <p class="muted code-line" id="code-line">Got a code from a TV or a host? <a href="#code">Enter it here</a></p>
   </div>
   <div class="hero-art" aria-hidden="true">
     <img class="hero-tv" src="/tv.png" width="800" height="450" loading="lazy" alt="">
@@ -174,30 +184,6 @@
     </div>
   </section>
 
-  <div class="ways">
-
-  <!-- Sign in, or start: the same button. A new account gets a household, named on Setup's first screen. -->
-  <section id="sign-in">
-    <h2>Start counting, or sign in</h2>
-    <p class="muted">New here? We make your household as you sign in, and you name it next. Already counting? You land in yours.</p>
-    <p class="pair-note" id="signed-out-note" hidden>You're signed out of Count Dracula. Your Google account is still signed in to Google.<span id="still-counting" hidden> This phone still counts at the door: <a href="/door">Back to the door ›</a></span></p>
-    <p class="pair-note" id="pair-note" hidden>Sign in to put your TV on: it's showing <b id="pair-note-code"></b>.</p>
-    <form method="post" action="/auth/google/start">
-      <input type="hidden" name="timeZone">
-      <input type="hidden" name="pair">
-      <button class="primary" type="submit">Continue with Google</button>
-    </form>
-    <form method="post" action="/auth/email/start" id="email-form" hidden>
-      <p class="or">or</p>
-      <input type="hidden" name="timeZone">
-      <input type="hidden" name="pair">
-      <label for="email">Your email: we'll send you a sign-in link</label>
-      <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com">
-      <button type="submit">Continue with email</button>
-    </form>
-    <p class="muted after">By continuing you agree to the <a href="/privacy">Privacy notice and House rules</a>.</p>
-  </section>
-
   <!-- The one code box (spec v2.1 §11): a TV's pairing code or a host's join code; the page tells them apart. -->
   <section id="code">
     <h2>Got a code?</h2>
@@ -210,17 +196,12 @@
       <p class="error" id="code-error" role="alert" hidden>That isn't a code we know. A TV shows 6 characters, like K7Q-M4X; a host's helper code is 10 letters and numbers.</p>
     </form>
   </section>
-  </div>
 
   <footer class="muted"><a href="/privacy">Privacy and House rules</a> · <a href="/help/tv">TV setup help</a> · Help: <a href="mailto:__CONTACT__">email us</a></footer>
   <div class="sticky-space" id="sticky-space"></div>
 
   <div class="sticky-cta" id="sticky-cta">
-    <form method="post" action="/auth/google/start">
-      <input type="hidden" name="timeZone">
-      <input type="hidden" name="pair">
-      <button class="primary" type="submit">Continue with Google</button>
-    </form>
+    <a class="button primary" href="#sign-in">Sign in or start</a>
     <a class="button" href="#code">Got a code?</a>
   </div>
 

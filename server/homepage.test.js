@@ -59,25 +59,30 @@ describe('/ is the homepage', () => {
     expect(res.headers.get('Location')).toBe('/')
   })
 
-  test('one Continue with Google (no household name), Continue with email, Got a code?, and the footer\'s three links', async () => {
+  test('one sign-in block: Continue with Google, then Continue with email; Got a code? and the footer\'s three links', async () => {
     const { app } = boot()
 
     const html = await (await get(app, '/')).text()
 
-    // The top row, the Sign in section and the sticky phone bar: each the same Google form, with the zone and a TV's code.
-    expect(html.match(/<form method="post" action="\/auth\/google\/start">/g)).toHaveLength(3)
-    expect(html.match(/<button class="primary" type="submit">Continue with Google<\/button>/g)).toHaveLength(3)
+    // One Google form and one email form, together in the block /#sign-in lands on, each with the zone and a TV's code.
+    const block = html.slice(html.indexOf('<section id="sign-in"'), html.indexOf('</section>', html.indexOf('<section id="sign-in"')))
+    expect(html.match(/<form method="post" action="\/auth\/google\/start">/g)).toHaveLength(1)
+    expect(html.match(/action="\/auth\/email\/start"/g)).toHaveLength(1)
+    expect(block).toContain('<form method="post" action="/auth/google/start">')
+    expect(block).toContain('<form method="post" action="/auth/email/start" id="email-form" hidden>')
+    expect(block).toContain('>Continue with Google</button>')
+    expect(block).toContain('<input id="email" name="email" type="email"')
+    expect(block).toContain('>Continue with email</button>')
+    expect(block).toContain('New households are paused for now. Signing in still works.')
+    expect(block).toContain('id="signed-out-note"')
+    expect(block).toContain('id="pair-note"')
     expect(html).not.toContain('name="displayName"')
-    expect(html).not.toContain('Start your household')
-    expect(html.match(/<input type="hidden" name="timeZone">/g)).toHaveLength(4)
-    expect(html.match(/<input type="hidden" name="pair">/g)).toHaveLength(4)
-    expect(html.match(/<a class="button" href="#code">Got a code\?<\/a>/g)).toHaveLength(2)
-    expect(html).toContain('id="sign-in"')
-    expect(html).toContain('<form method="post" action="/auth/email/start" id="email-form" hidden>')
-    expect(html).toContain('<input id="email" name="email" type="email"')
-    expect(html).toContain('>Continue with email</button>')
+    expect(html.match(/<input type="hidden" name="timeZone">/g)).toHaveLength(2)
+    expect(html.match(/<input type="hidden" name="pair">/g)).toHaveLength(2)
+    // The phones' sticky bar goes to the block and to the code box.
+    expect(html).toContain('<a class="button primary" href="#sign-in">Sign in or start</a>')
+    expect(html).toContain('<a class="button" href="#code">Got a code?</a>')
     expect(html).toContain('<form id="code-form"')
-    expect(html).toContain('New households are paused for now. Signing in still works.')
     expect(html).toContain('<a href="/privacy">Privacy and House rules</a>')
     expect(html).toContain('<a href="/help/tv">TV setup help</a>')
     expect(html).toContain('Help: <a href="mailto:help@count-dracula.example.com">email us</a>')

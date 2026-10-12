@@ -24,14 +24,14 @@ for (const input of document.querySelectorAll('input[name="timeZone"]')) {
   input.value = Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
-// The sticky Continue with Google / Got a code? bar on phones: up while neither the top row nor the forms are on screen.
+// The sticky Sign in or start / Got a code? bar on phones: up while neither the sign-in block nor the code box is on screen.
 const sticky = $('sticky-cta')
 const inView = new Map()
 const watch = new IntersectionObserver((entries) => {
   for (const e of entries) inView.set(e.target.id, e.isIntersecting)
   sticky.classList.toggle('show', ![...inView.values()].some(Boolean))
 })
-for (const id of ['cta-top', 'sign-in', 'code']) watch.observe($(id))
+for (const id of ['sign-in', 'code']) watch.observe($(id))
 
 const getJson = (path) => fetch(path).then((r) => (r.ok ? r.json() : null)).catch(() => null)
 
@@ -51,12 +51,11 @@ getJson('/api/home').then((home) => {
   $('paused').hidden = !home.signUpsPaused
   // Continue with email, once the server can send mail.
   $('email-form').hidden = !home.emailSignIn
-  $('email-line').hidden = !home.emailSignIn
-  // A signed-in Manager runs one Household: Welcome back replaces the row, the bar and the Sign in section.
+  // A signed-in Manager runs one Household: Welcome back replaces the sign-in block and the bar.
   if (home.household != null) {
     $('house-name').textContent = home.household
     $('signed-in').hidden = false
-    for (const id of ['cta-top', 'paused', 'top-note', 'sign-in', 'sticky-cta', 'sticky-space']) $(id).hidden = true
+    for (const id of ['sign-in', 'code-line', 'sticky-cta', 'sticky-space']) $(id).hidden = true
     watch.disconnect()
   }
 })
