@@ -69,9 +69,48 @@
     #code-input { font-family: ui-monospace, Menlo, monospace; letter-spacing: 0.04em; }
     .error { color: #ff8a8a; margin: 8px 0 0; }
     .pair-note { background: var(--panel2); border-radius: 10px; padding: 10px 12px; margin: 0 0 4px; }
+
+    /* Laptops and desktops: a wider page, a hero with the porch TV, How it works in three columns, and the two
+       ways in side by side. Phones keep the one column above. */
+    .hero-art { display: none; }
+    @media (min-width: 900px) {
+      body { max-width: 1180px; padding: 40px 32px 8px; }
+      .hero { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 56px; align-items: center; margin: 8px 0 64px; }
+      h1 { font-size: clamp(40px, 4.4vw, 52px); letter-spacing: .3px; }
+      .lede { font-size: 22px; line-height: 1.45; margin: 14px 0 24px; max-width: 30em; }
+      .site-line { display: inline-block; margin-bottom: 22px; }
+      .cta-row { max-width: 440px; }
+      .cta-row button, .cta-row .button { padding: 14px 16px; }
+      .top-note { text-align: left; max-width: 440px; }
+      .paused { max-width: 440px; margin-bottom: 10px; }
+      #signed-in { display: grid; grid-template-columns: 1fr 1fr; column-gap: 10px; max-width: 560px; padding: 20px; }
+      #signed-in > :not(.button, button) { grid-column: 1 / -1; }
+      .hero-art { display: block; position: relative; padding: 0 36px 48px 0; }
+      .hero-tv { display: block; width: 100%; height: auto; border-radius: 12px; border: 10px solid #000;
+        box-shadow: 0 24px 60px #0009, 0 0 0 1px #ffffff18; }
+      .hero-phone { position: absolute; right: 0; bottom: 0; width: 24%; height: auto; border-radius: 18px; border: 5px solid #000;
+        box-shadow: 0 16px 40px #000b, 0 0 0 1px #ffffff18; }
+      section { padding: 22px; }
+      .how { padding: 0; margin-bottom: 40px; }
+      .how h2 { font-size: 30px; }
+      .how > p { margin-bottom: 18px; }
+      /* Each step's heading, words and screenshots line up across the three (a subgrid of three rows). */
+      .how-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto auto; column-gap: 20px; }
+      .how-step h3 { font-size: 19px; }
+      .how-step { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; margin: 0; padding: 18px 18px 20px; }
+      .how-step p { margin-bottom: 14px; }
+      .how-step img.phone { max-width: none; width: auto; height: 280px; }
+      .ways { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-bottom: 24px; }
+      .ways:has(> #sign-in[hidden]) { grid-template-columns: minmax(0, 640px); justify-content: center; }
+      .ways section { margin: 0; }
+      footer { padding: 16px 0 24px; }
+    }
   </style>
 </head>
 <body>
+  <!-- From 900 px wide: the hero, the pitch and the way in on the left, the porch TV on the right. -->
+  <div class="hero">
+  <div class="hero-text">
   <header>
     <h1>🧛 Count Dracula</h1>
     <p class="lede">Count your trick-or-treaters on your phones, while a TV on the porch cheers every kid.</p>
@@ -100,30 +139,42 @@
   </div>
   <p class="paused" id="paused" hidden>New households are paused for now. Signing in still works.</p>
   <p class="muted top-note" id="top-note"><span id="email-line" hidden>No Google account? <a href="#sign-in">Use your email</a> · </span>By continuing you agree to the <a href="/privacy">Privacy notice and House rules</a>.</p>
+  </div>
+  <div class="hero-art" aria-hidden="true">
+    <img class="hero-tv" src="/tv.png" width="800" height="450" loading="lazy" alt="">
+    <img class="hero-phone" src="/phone.png" width="390" height="844" loading="lazy" alt="">
+  </div>
+  </div>
 
   <section class="how" id="how">
     <h2>How it works</h2>
     <p>Three things on Halloween night. Nothing to install.</p>
+    <div class="how-steps">
     <div class="how-step">
       <h3><span class="n">1</span>📺 Put a TV on the porch</h3>
       <p>Any computer on HDMI with Chrome. Open the TV page, scan its code with your phone, and it's paired.</p>
-      <img src="/tv.png" width="800" height="450" alt="The porch TV: tonight's count, a race against last year, and every kid as a dot">
+      <div class="shots"><img src="/tv.png" width="800" height="450" alt="The porch TV: tonight's count, a race against last year, and every kid as a dot"></div>
     </div>
     <div class="how-step">
       <h3><span class="n">2</span>📱 Tap a costume at the door</h3>
       <p>Your phone counts, and so does every helper you hand the join link to. One big tap per kid.</p>
-      <img class="phone" src="/phone.png" width="390" height="844" loading="lazy" alt="The door phone: one tap per costume">
+      <div class="shots"><img class="phone" src="/phone.png" width="390" height="844" loading="lazy" alt="The door phone: one tap per costume"></div>
     </div>
     <div class="how-step">
       <h3><span class="n">3</span>🎉 The TV cheers every kid</h3>
       <p>Milestones, golden tickets, a race against last year, and a recap and summary to share after.</p>
+      <div class="shots">
       <img class="first" src="/tv-milestone.png" width="800" height="450" loading="lazy" alt="A milestone on the TV">
       <div class="pair">
         <img src="/tv-golden.png" width="800" height="450" loading="lazy" alt="A golden ticket on the TV">
         <img src="/tv-recap.png" width="800" height="450" loading="lazy" alt="The recap on the TV">
       </div>
+      </div>
+    </div>
     </div>
   </section>
+
+  <div class="ways">
 
   <!-- Sign in, or start: the same button. A new account gets a household, named on Setup's first screen. -->
   <section id="sign-in">
@@ -159,6 +210,7 @@
       <p class="error" id="code-error" role="alert" hidden>That isn't a code we know. A TV shows 6 characters, like K7Q-M4X; a host's helper code is 10 letters and numbers.</p>
     </form>
   </section>
+  </div>
 
   <footer class="muted"><a href="/privacy">Privacy and House rules</a> · <a href="/help/tv">TV setup help</a> · Help: <a href="mailto:__CONTACT__">email us</a></footer>
   <div class="sticky-space" id="sticky-space"></div>
