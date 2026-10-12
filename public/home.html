@@ -30,6 +30,12 @@
       cursor: pointer; background: var(--panel2); text-align: center; text-decoration: none; color: var(--text); }
     .primary { background: var(--orange); color: #1a0d00; }
     .muted { color: var(--dim); font-size: 13px; }
+    /* Continue with Google is Google's own button (its branding guidelines): white, the G, dark grey words. */
+    .google { display: flex; align-items: center; justify-content: center; gap: 12px; background: #fff; color: #1f1f1f;
+      border: 1px solid #747775; font-weight: 600; }
+    .google img { width: 20px; height: 20px; flex: none; }
+    .google:hover { background: #f2f2f2; }
+    .google:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
     a { color: var(--orange); }
     .lede { font-size: 17px; margin: 6px 0 14px; }
     .site-line { background: var(--panel); border-radius: 12px; padding: 10px 14px; font-weight: 500; margin-bottom: 14px; }
@@ -134,7 +140,7 @@
     <form method="post" action="/auth/google/start">
       <input type="hidden" name="timeZone">
       <input type="hidden" name="pair">
-      <button class="primary" type="submit">Continue with Google</button>
+      <button class="google" type="submit"><img src="/google-g.svg" alt="" width="20" height="20">Continue with Google</button>
     </form>
     <form method="post" action="/auth/email/start" id="email-form" hidden>
       <p class="or">or</p>

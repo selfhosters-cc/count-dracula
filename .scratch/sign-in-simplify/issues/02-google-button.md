@@ -1,7 +1,7 @@
 # Google's standard button
 
 Type: build (AFK)
-Status: todo
+Status: done
 Blocked by: 01
 
 ## What to build
@@ -15,6 +15,14 @@ button people already know, and the guidelines ask for it.
 
 ## Acceptance criteria
 
-- [ ] The homepage and `/invite` show the white G button
-- [ ] It meets the guidelines' colours, logo and wording
-- [ ] `bun test` passes
+- [x] The homepage and `/invite` show the white G button
+- [x] It meets the guidelines' colours, logo and wording
+- [x] `bun test` passes
+
+## Notes from the build
+
+- The G is `public/google-g.svg` (Google's four-colour mark), drawn 20 px as an `<img>` in
+  `<button class="google">`. The homepage's CSS and `page()`'s inline style both define `.google`; the server's
+  copy of the button is `GOOGLE_BUTTON` in `server/app.js`.
+- Weight 600 rather than Roboto Medium: the page's system font at 500 looked thin on the dark panel.
+- Checked at 390 px on the homepage block and an invite page.

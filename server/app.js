@@ -413,7 +413,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       return page(
         'You\'re invited',
         `<p>Help run ${invite.displayName ? `<b>${esc(invite.displayName)}</b>'s` : 'a'} trick-or-treat night on Count Dracula, as one of its Managers.</p>
-<form method="post" action="/auth/google/start"><input type="hidden" name="invite" value="${esc(key)}"><button style="font:inherit;font-weight:700;padding:12px 16px;border:0;border-radius:10px;background:#ff7a1a;color:#1a0d00">Continue with Google</button></form>
+<form method="post" action="/auth/google/start"><input type="hidden" name="invite" value="${esc(key)}">${GOOGLE_BUTTON}</form>
 <p style="color:#a99cbc;font-size:13px">By continuing you agree to the <a href="/privacy">Privacy notice and House rules</a>.</p>`,
         200,
       )
@@ -864,10 +864,14 @@ function redirect(location, headers = {}) {
 const esc = (text) => String(text ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 // A small plain page for the sign-in outcomes that aren't /setup.
+// Continue with Google as Google's own button (its branding guidelines), as on the homepage; page() styles it.
+const GOOGLE_BUTTON = '<button class="google" type="submit"><img src="/google-g.svg" alt="" width="20" height="20">Continue with Google</button>'
+
 function page(title, bodyHtml, status) {
   return new Response(
     `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
-<style>body{margin:0;padding:24px 16px;background:#14101c;color:#f5efe6;font:17px/1.5 system-ui,sans-serif;max-width:560px;margin-inline:auto}a{color:#ff7a1a}</style></head>
+<style>body{margin:0;padding:24px 16px;background:#14101c;color:#f5efe6;font:17px/1.5 system-ui,sans-serif;max-width:560px;margin-inline:auto}a{color:#ff7a1a}
+.google{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;max-width:400px;font:inherit;font-weight:600;padding:12px 16px;border-radius:10px;cursor:pointer;background:#fff;color:#1f1f1f;border:1px solid #747775}.google img{width:20px;height:20px}.google:focus-visible{outline:3px solid #ff7a1a;outline-offset:2px}</style></head>
 <body><h1>🧛 ${esc(title)}</h1>${bodyHtml}</body></html>`,
     { status, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
   )

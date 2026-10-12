@@ -88,6 +88,23 @@ describe('/ is the homepage', () => {
     expect(html).toContain('Help: <a href="mailto:help@count-dracula.example.com">email us</a>')
   })
 
+  test("Continue with Google is Google's own button: white, the G, on the homepage and an invite", async () => {
+    const { app, google } = boot()
+    const button = '<button class="google" type="submit"><img src="/google-g.svg" alt="" width="20" height="20">Continue with Google</button>'
+
+    const home = await (await get(app, '/')).text()
+    const owner = cookieOf(await signIn({ app, google }, { sub: 'g-1', email: 'alice@example.com', name: 'Alice' }))
+    const { url } = await (await fetch(`${app.url}/api/invites`, { method: 'POST', headers: { Cookie: owner } })).json()
+    const invite = await (await get(app, new URL(url).pathname + new URL(url).search)).text()
+
+    expect(home).toContain(button)
+    expect(invite).toContain(button)
+    expect(home).toMatch(/\.google \{[^}]*background: #fff;[^}]*color: #1f1f1f;[^}]*border: 1px solid #747775;/)
+    const g = await get(app, '/google-g.svg')
+    expect(g.headers.get('Content-Type')).toStartWith('image/svg+xml')
+    expect(await g.text()).toContain('#4285F4')
+  })
+
   test('the social card: title, description, og:* and a large image', async () => {
     const { app } = boot()
 
