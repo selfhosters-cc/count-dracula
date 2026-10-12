@@ -79,7 +79,7 @@ const when = (e, ctx) => [whenLine(e, ctx.day), goldenLine(e)].filter(Boolean).j
 
 // The door's Event, large (spec v2.1 §9).
 export function doorCard(e, ctx) {
-  return h('section', { data: { help: 'door' } },
+  return h('section', { className: 'door-card', data: { help: 'door' } },
     h('h2', { className: 'eyebrow' }, 'On the door & TV', pill(e)),
     h('div', { className: 'big' }, String(e.kids), ' ', h('small', { textContent: e.kids === 1 ? 'kid' : 'kids' })),
     h('b', { textContent: e.name }),
@@ -115,7 +115,7 @@ export function waiting(list, ctx) {
 
 // Nothing open: the next scheduled Event and Go live on it now (the door ☰'s Event).
 export function nothingOpen(next, ctx) {
-  return h('section', { data: { help: 'nothing' } },
+  return h('section', { className: 'door-card', data: { help: 'nothing' } },
     h('h2', {}, '🌙 No night on right now'),
     h('p', { className: 'muted', textContent: next ? `${next.name} goes live by itself ${ctx.day(next.goesLiveAt)}. The TV and door phones show a countdown.` : 'Nothing is scheduled. Go live on a night from Nights.' }),
     next
@@ -136,19 +136,23 @@ export function nightRow(e, ctx) {
 
 // ---- a night's screen
 
+// The header and Night tools, then Settings and Costumes: side by side from 1200 px wide, one column on phones.
 export function nightScreen(e, ctx) {
   const imported = !!e.countsOnly
   return [
     h('p', {}, h('button', { className: 'link-button', textContent: '‹ All nights', onclick: () => ctx.act.back() })),
-    h('header', { className: 'night-head', data: { help: nightHelpKey(e) } },
-      h('h1', {}, h('span', { textContent: e.name }), pill(e), doorPill(e, ctx)),
-      h('p', { className: 'muted', textContent: when(e, ctx) }),
-      notes(e, ctx),
-      actionRow(nightActions(e), e, ctx),
-      endChoices(e, ctx)),
-    imported ? null : h('section', { data: { help: 'tools' } }, h('h2', {}, 'Night tools'), tools(e, ctx), e.open && ctx.ui.missed === e.id ? missedKids(e, ctx) : null),
-    h('section', { data: { help: 'settings' } }, h('h2', {}, 'Settings'), imported ? h('p', { className: 'muted', textContent: 'Imported counts can only be raced against or deleted.' }) : settingsForm(e, ctx)),
-    imported ? null : h('section', { data: { help: 'costumes' } }, h('h2', {}, 'Costumes'), costumes(e, ctx)),
+    h('div', { className: 'night-cols' },
+      h('div', { className: 'night-main' },
+        h('header', { className: 'night-head', data: { help: nightHelpKey(e) } },
+          h('h1', {}, h('span', { textContent: e.name }), pill(e), doorPill(e, ctx)),
+          h('p', { className: 'muted', textContent: when(e, ctx) }),
+          notes(e, ctx),
+          actionRow(nightActions(e), e, ctx),
+          endChoices(e, ctx)),
+        imported ? null : h('section', { data: { help: 'tools' } }, h('h2', {}, 'Night tools'), tools(e, ctx), e.open && ctx.ui.missed === e.id ? missedKids(e, ctx) : null)),
+      h('div', { className: 'night-side' },
+        h('section', { data: { help: 'settings' } }, h('h2', {}, 'Settings'), imported ? h('p', { className: 'muted', textContent: 'Imported counts can only be raced against or deleted.' }) : settingsForm(e, ctx)),
+        imported ? null : h('section', { data: { help: 'costumes' } }, h('h2', {}, 'Costumes'), costumes(e, ctx)))),
   ]
 }
 

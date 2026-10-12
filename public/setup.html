@@ -132,6 +132,50 @@
     aside.help .topic .help-body { margin-top: 6px; }
     aside.help .foot { border-top: 1px solid #ffffff14; padding-top: 8px; margin: 4px 0 0; }
     .flash { outline: 2px solid var(--orange); outline-offset: 2px; }
+
+    /* Laptops and desktops (1200 px and up): the width is used, not one long column. Tonight's door card beside
+       the rest, the nights two to a row, a night's settings beside its header, Household in two columns; forms
+       stay a comfortable width and buttons are sized for a mouse. Phones and tablets keep the layout above. */
+    @media (min-width: 1200px) {
+      body { max-width: 1440px; padding: 24px 32px; }
+      .shell { grid-template-columns: minmax(0, 1fr) 320px; gap: 28px; }
+      .top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px 24px; flex-wrap: wrap; margin-bottom: 10px; }
+      .top h1 { margin: 0; font-size: 28px; }
+      .top .who { margin: 0; font-size: 14px; }
+      button { padding: 8px 14px; }
+      button.small { padding: 5px 10px; }
+      .tabs { gap: 6px; margin-bottom: 12px; border-bottom: 1px solid #ffffff14; }
+      .tabs button { flex: 0 0 auto; min-width: 150px; padding: 9px 22px; }
+      section, header.night-head { padding: 18px 20px; margin-bottom: 16px; }
+
+      /* Tonight: the checklist across the top, its three checks side by side; the door's night large on the left */
+      .checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 28px; }
+      .checks li { margin: 6px 0 0; }
+      #tonight { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: 16px; align-items: start; }
+      .door-card { padding: 22px 26px; }
+      .door-card .big { font-size: 80px; line-height: 1; margin: 10px 0 6px; letter-spacing: -1px; word-spacing: -14px; }
+      .door-card .big small { font-size: 26px; letter-spacing: 0; }
+      .door-card > b { font-size: 22px; }
+      .door-card .actions { margin-top: 18px; }
+      .door-card .tools { margin-top: 14px; padding-top: 14px; border-top: 1px solid #ffffff10; }
+      .tonight-side .qr-box { width: 220px; }
+      [data-help="helpers"] .row > button { flex: 1 1 auto; }
+
+      /* Nights: two rows to a line */
+      #nights { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+      #nights > :not(.night-row) { grid-column: 1 / -1; }
+      .group-title:first-child { margin-top: 4px; }
+      #create-form { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: center; }
+      #create-form label { margin: 0; }
+
+      /* One night's screen, and Household: two columns */
+      .night-cols, .house-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; align-items: start; }
+      header.night-head h1 { font-size: 28px; }
+      .tag-row { flex-wrap: nowrap; gap: 6px; }
+      .tag-row input.emoji { width: 2.6em; padding-inline: 4px; }
+      .tag-row input.order { width: 3.6em; }
+      .tag-row .grow { min-width: 0; }
+    }
   </style>
 </head>
 <body>
@@ -139,9 +183,11 @@
        carries data-help="<topic>" and a heading (h1 or h2) for its "?" (setup-help-ui.js). -->
   <div class="shell">
   <main>
+  <div class="top">
   <h1>🧛 <span id="house-name">Setup</span></h1>
   <!-- Who's signed in, and Sign out, on every tab: it ends only Count Dracula's session, never Google's. -->
   <div class="who muted" id="who" hidden>Signed in as <b id="who-email"></b> · <form method="post" action="/auth/signout"><button class="link-button" type="submit">Sign out</button></form></div>
+  </div>
   <div id="status" role="status"></div>
 
   <div id="admin" hidden>
@@ -187,7 +233,10 @@
     <div id="screen-night" hidden><div id="night"></div></div>
 
     <!-- Household: everything not about one night. -->
+    <!-- Two columns from 1200 px wide (.house-col); one on phones. -->
     <div id="screen-household" role="tabpanel" aria-labelledby="tab-household" hidden>
+      <div class="house-cols">
+      <div class="house-col">
       <section data-help="join">
         <h2>📱 Helpers and the join key</h2>
         <p class="muted">Join key <code id="join-key"></code> · works on every night</p>
@@ -231,6 +280,8 @@
         </form>
       </section>
 
+      </div>
+      <div class="house-col">
       <section data-help="location">
         <h2>📍 Location (optional)</h2>
         <div id="location"></div>
@@ -253,6 +304,8 @@
         <p class="muted">Deletes this household and every night, kid and costume in it, straight away. It can't be undone.</p>
         <button id="delete-household" class="danger">Delete my household…</button>
       </section>
+      </div>
+      </div>
     </div>
   </div>
 

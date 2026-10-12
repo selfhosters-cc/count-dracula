@@ -350,12 +350,13 @@ function renderTonight(ctx) {
   const door = ctx.door
   const others = events.filter((e) => e.open && e !== door).sort((a, b) => b.wentLiveAt - a.wentLiveAt)
   const waits = waitingNights(events)
-  $('tonight').replaceChildren(...[
+  // The door's night, then the rest: side by side from 1200 px wide, one column on phones.
+  $('tonight').replaceChildren(
     door ? doorCard(door, ctx) : nothingOpen(goLiveOffer(events), ctx),
-    others.length ? alsoOpen(others, ctx) : null,
-    waits.length ? waiting(waits, ctx) : null,
-    h('section', { data: { help: 'helpers' } }, h('h2', {}, '📱 Helpers'), helperBox('tonight')),
-  ].filter(Boolean))
+    h('div', { className: 'tonight-side' },
+      others.length ? alsoOpen(others, ctx) : null,
+      waits.length ? waiting(waits, ctx) : null,
+      h('section', { data: { help: 'helpers' } }, h('h2', {}, '📱 Helpers'), helperBox('tonight'))))
 }
 
 function renderNights(ctx) {

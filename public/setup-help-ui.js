@@ -1,7 +1,7 @@
 // The /setup help on the page (spec v2.1 §9), drawn from HELP (setup-help.js) as text, never as HTML.
 // - At 900 px and up: a sticky column, titled Help, lists the topics on the screen showing, in page order. The
-//   section in a band 15–45% down the viewport is open and highlighted; clicking a title scrolls to it. The
-//   column never scrolls the page by itself.
+//   section in a band 15–45% down the viewport is open and highlighted, or the one last clicked or focused in;
+//   clicking a title scrolls to it. The column never scrolls the page by itself.
 // - On phones: a round "?" on each section's heading opens its help in place, under the heading. Which are open
 //   is kept here, not in the DOM, because Tonight and a night's screen are redrawn after every command; a new
 //   screen (another tab, or a night's screen opened or left) closes them all.
@@ -93,6 +93,19 @@ export function createHelp({ column, root, contact }) {
       drawColumn(list)
     }
   }
+
+  // From 1200 px wide, sections sit side by side, so the band alone can't tell which one you're at: a click in a
+  // section, or focus moving into one, opens its topic too.
+  function pick(target) {
+    const key = target.closest?.('[data-help]')?.dataset.help
+    if (!key || !HELP[key]) return
+    pinnedUntil = Date.now() + 1200 // focus may scroll the page: the band doesn't take it straight back
+    if (key === current) return
+    current = key
+    drawColumn(sections())
+  }
+  root.addEventListener('pointerdown', (e) => pick(e.target))
+  root.addEventListener('focusin', (e) => pick(e.target))
 
   function watch(list) {
     observer?.disconnect()
