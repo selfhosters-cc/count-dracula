@@ -17,6 +17,7 @@ export const LIMITS = {
   signIn: { count: 30, perMs: HOUR }, // per IP
   emailLink: { count: 3, perMs: 15 * MINUTE }, // per address (a hash of it): sign-in links sent
   emailLinkIp: { count: 10, perMs: HOUR }, // per IP: sign-in links asked for
+  emailCode: { count: 10, perMs: DAY }, // per address (a hash of it): sign-in codes entered
   pairCode: { count: 30, perMs: HOUR }, // per IP
   redeem: { count: 10, perMs: 10 * MINUTE }, // per Manager
   invite: { count: 20, perMs: DAY }, // per Household

@@ -11,6 +11,7 @@ const STATE_MS = 10 * 60_000 // a sign-in has 10 minutes to come back from Googl
 const DELETIONS_KEPT_MS = 61 * 86_400_000 // "gone within 2 months" (spec §16)
 const INVITE_MS = 7 * 86_400_000
 const EMAIL_LINK_MS = 15 * 60_000 // a sign-in link works once, for 15 minutes
+const CODE_TRIES = 5 // wrong codes before a link's code stops working (the link still works)
 export const NEW_HOUSEHOLD_NAME = 'Our household' // until first-run's "Name your household"
 const EMAIL_SUB = 'email:' // google_sub of a Manager who has only signed in by email (migration 16)
 
@@ -62,14 +63,16 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
 
     // Continue with email: a link for this address, as a token to send, and the Household it would sign in
     // to (null: a new one, or the invite's), for the log. Only the token's hash is kept. Expired links are pruned
-    // here. invite: an Invite link's key, carried as Google's state carries it.
+    // here. invite: an Invite link's key, carried as Google's state carries it. code: the same link as 6 digits,
+    // to type where they asked (sign-in-simplify 04).
     beginEmailSignIn({ email, timeZone, pair = null, invite = null }) {
       const at = now()
       db.query('DELETE FROM email_links WHERE expires_at <= ?').run(at)
       const token = randomToken()
-      db.query('INSERT INTO email_links (token_hash, email, time_zone, pair, invite, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-        hashOf(token), String(email).trim(), isTimeZone(timeZone) ? timeZone : 'UTC', tvCodeFrom(pair), invite || null, at, at + EMAIL_LINK_MS)
-      return { token, householdId: managerByEmail(email)?.household_id ?? (invite ? inviteStatus(invite).householdId : null) }
+      const code = sixDigits()
+      db.query('INSERT INTO email_links (token_hash, email, time_zone, pair, invite, code_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+        hashOf(token), String(email).trim(), isTimeZone(timeZone) ? timeZone : 'UTC', tvCodeFrom(pair), invite || null, codeHashOf(hashOf(token), code), at, at + EMAIL_LINK_MS)
+      return { token, code, householdId: managerByEmail(email)?.household_id ?? (invite ? inviteStatus(invite).householdId : null) }
     },
 
     // What an email link says before its button is pressed: 'ok', or 'gone' (made up, used or expired). Uses nothing.
@@ -81,12 +84,22 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
     // The email link's Sign in button: the link is used up, then it signs in like Google with the address as
     // a verified identity. Returns what finishSignIn does; a made-up, used or expired link is { refused: 'link' }.
     finishEmailSignIn({ token, ip }) {
-      const at = now()
-      const link = db
-        .query('UPDATE email_links SET used_at = ? WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? RETURNING email, time_zone, pair, invite')
-        .get(at, hashOf(token), at)
-      if (!link) return { refused: 'link' }
-      return land({ sub: null, email: link.email, name: null }, { displayName: null, invite: link.invite, pair: link.pair, timeZone: link.time_zone }, ip)
+      return useLink(hashOf(token), ip)
+    },
+
+    // The code from the email, typed where they asked: it matches one of the address's live links (each of the
+    // last few emails has its own), and signs in as that link would. A wrong one is { refused: 'code' } and counts
+    // against every live code for the address; { refused: 'link' }: no live code left (used, expired or 5 wrong).
+    finishEmailCode({ email, code, ip }) {
+      const digits = String(code ?? '').replace(/\D/g, '')
+      const live = 'lower(email) = lower(?) AND used_at IS NULL AND expires_at > ? AND tries < ? AND code_hash IS NOT NULL'
+      const args = [String(email ?? '').trim(), now(), CODE_TRIES]
+      const links = db.query(`SELECT token_hash, code_hash FROM email_links WHERE ${live}`).all(...args)
+      if (!links.length) return { refused: 'link' }
+      const hit = digits.length === 6 && links.find((l) => l.code_hash === codeHashOf(l.token_hash, digits))
+      if (hit) return useLink(hit.token_hash, ip)
+      db.query(`UPDATE email_links SET tries = tries + 1 WHERE ${live}`).run(...args)
+      return { refused: 'code' }
     },
 
     // The session a cookie's token names: { manager, householdId, operator, renewed }, or null once it's
@@ -201,6 +214,16 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
     db.query('DELETE FROM deletions WHERE deleted_at < ?').run(now() - DELETIONS_KEPT_MS)
   }
 
+  // An email link or its code: used up, then it signs in like Google with the address as a verified identity.
+  function useLink(tokenHash, ip) {
+    const at = now()
+    const link = db
+      .query('UPDATE email_links SET used_at = ? WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? RETURNING email, time_zone, pair, invite')
+      .get(at, tokenHash, at)
+    if (!link) return { refused: 'link' }
+    return land({ sub: null, email: link.email, name: null }, { displayName: null, invite: link.invite, pair: link.pair, timeZone: link.time_zone }, ip)
+  }
+
   // A verified identity, from Google ({ sub, email, name }) or an email link (sub null), signs in: as the Manager
   // with that Google id, or else with that address; or by an invite; or as a new Household's first Manager.
   function land(identity, started, ip) {
@@ -244,6 +267,20 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
 
 function hashOf(token) {
   return new Bun.CryptoHasher('sha256').update(String(token ?? '')).digest('hex')
+}
+
+// A code's hash belongs to its link: the same 6 digits on two links never match each other's.
+function codeHashOf(tokenHash, code) {
+  return hashOf(`${tokenHash}:${code}`)
+}
+
+// 000000–999999, evenly: a 32-bit draw past the last whole million is drawn again.
+function sixDigits() {
+  const limit = 2 ** 32 - (2 ** 32 % 1_000_000)
+  let n
+  do n = crypto.getRandomValues(new Uint32Array(1))[0]
+  while (n >= limit)
+  return String(n % 1_000_000).padStart(6, '0')
 }
 
 function normalEmail(email) {

@@ -51,6 +51,9 @@ const ask = (app, email, { pair, invite, timeZone = 'America/Toronto', ip } = {}
 }
 const linkIn = (message) => message.text.match(/https:\/\/\S+/)[0]
 const tokenIn = (message) => new URL(linkIn(message)).searchParams.get('token')
+const codeIn = (message) => message.subject.match(/sign-in code: (\d{6})$/)[1]
+const enter = (app, email, code, { ip } = {}) =>
+  fetch(`${app.url}/auth/email/code`, { method: 'POST', body: new URLSearchParams({ email, code }), redirect: 'manual', headers: ip ? { 'CF-Connecting-IP': ip } : {} })
 const openLink = (app, token) => fetch(`${app.url}/auth/email?token=${encodeURIComponent(token)}`, { redirect: 'manual' })
 const follow = (app, token) => fetch(`${app.url}/auth/email`, { method: 'POST', body: new URLSearchParams({ token }), redirect: 'manual' })
 const settle = () => new Promise((r) => setTimeout(r, 20)) // the send runs after the reply
@@ -105,7 +108,7 @@ describe('asking for a link', () => {
     expect(server.sent.map((m) => m.to)).toEqual(['known@example.com', 'known@example.com', 'unknown@example.com'])
   })
 
-  test('the email: its subject, a 15-minute single-use link on the public host, who asked and when, and "ignore this"', async () => {
+  test('the email: the code in its subject and first, a 15-minute single-use link on the public host, who asked and when, and "ignore this"', async () => {
     const server = start()
 
     await ask(server.app, 'Alice@Example.com', { ip: '203.0.113.9' })
@@ -113,7 +116,9 @@ describe('asking for a link', () => {
 
     const [message] = server.sent
     expect(message.to).toBe('Alice@Example.com')
-    expect(message.subject).toBe('Your Count Dracula sign-in link')
+    expect(message.subject).toMatch(/^Your Count Dracula sign-in code: \d{6}$/)
+    expect(message.text.indexOf(codeIn(message))).toBeLessThan(message.text.indexOf(linkIn(message)))
+    expect(message.html).toContain(codeIn(message))
     expect(linkIn(message)).toMatch(/^https:\/\/count-dracula\.example\.com\/auth\/email\?token=[A-Za-z0-9_-]{43}$/)
     expect(message.text).toContain('Alice@Example.com')
     expect(message.text).toContain('203.0.113.9')
@@ -304,6 +309,111 @@ describe("a TV's code through email sign-in", () => {
   })
 })
 
+describe('the code in the email', () => {
+  test('"Check your email" has a box for it, a new code and a different email', async () => {
+    const server = start()
+
+    const html = await (await ask(server.app, 'alice@example.com', { pair: 'K7QM4X' })).text()
+
+    expect(html).toContain('<form method="post" action="/auth/email/code">')
+    expect(html).toContain('<input type="hidden" name="email" value="alice@example.com">')
+    expect(html).toMatch(/<input [^>]*name="code"[^>]*inputmode="numeric"[^>]*autocomplete="one-time-code"/)
+    // Send a new code asks again with the same address, zone and TV code.
+    expect(html).toContain('<input type="hidden" name="pair" value="K7QM4X">')
+    expect(html).toContain('>Send a new code</button>')
+    expect(html).toContain('>Use a different email</a>')
+  })
+
+  test('the right code signs in, once, carrying the TV; then neither the code nor the link works', async () => {
+    const server = start()
+    await ask(server.app, 'alice@example.com', { pair: 'K7QM4X' })
+    await settle()
+    const [message] = server.sent
+
+    const res = await enter(server.app, 'Alice@Example.com', `${codeIn(message).slice(0, 3)} ${codeIn(message).slice(3)}`)
+    const again = await enter(server.app, 'alice@example.com', codeIn(message))
+    const link = await follow(server.app, tokenIn(message))
+
+    expect(res.status).toBe(303)
+    expect(res.headers.get('Location')).toBe('/setup?pair=K7QM4X')
+    expect((await household(server.app, cookieOf(res))).manager.email).toBe('alice@example.com')
+    expect(again.status).toBe(400)
+    expect(link.status).toBe(400)
+  })
+
+  test('the link signs in, and then the code no longer works', async () => {
+    const server = start()
+    await ask(server.app, 'alice@example.com')
+    await settle()
+    const [message] = server.sent
+
+    await follow(server.app, tokenIn(message))
+    const res = await enter(server.app, 'alice@example.com', codeIn(message))
+
+    expect(res.status).toBe(400)
+    expect(await res.text()).toContain('Send a new code')
+  })
+
+  test("a wrong code says so; the 5th kills the code, not the link; after 15 minutes it's gone", async () => {
+    const server = start()
+    await ask(server.app, 'alice@example.com')
+    await settle()
+    const [message] = server.sent
+    const wrong = codeIn(message) === '000000' ? '111111' : '000000'
+
+    const first = await enter(server.app, 'alice@example.com', wrong)
+    for (let i = 0; i < 4; i++) await enter(server.app, 'alice@example.com', wrong)
+    const right = await enter(server.app, 'alice@example.com', codeIn(message))
+
+    expect(first.status).toBe(400)
+    expect(await first.text()).toContain('That code isn&#39;t right')
+    expect(cookieOf(first)).toBeNull()
+    expect(right.status).toBe(400)
+    expect((await follow(server.app, tokenIn(message))).status).toBe(303)
+
+    await ask(server.app, 'bob@example.com')
+    await settle()
+    server.clock.now += 15 * MINUTE + 1
+    expect((await enter(server.app, 'bob@example.com', codeIn(server.sent.at(-1)))).status).toBe(400)
+  })
+
+  test('10 tries per address a day: past that even the right code is refused', async () => {
+    const server = start()
+    for (let i = 0; i < 3; i++) await ask(server.app, 'alice@example.com', { ip: `203.0.113.${i}` })
+    await settle()
+    const wrong = (m) => (codeIn(m) === '000000' ? '111111' : '000000')
+
+    for (let i = 0; i < 10; i++) await enter(server.app, 'alice@example.com', wrong(server.sent[0]), { ip: `198.51.100.${i}` })
+    server.clock.now += 14 * MINUTE
+    const res = await enter(server.app, 'ALICE@example.com', codeIn(server.sent[2]), { ip: '198.51.100.99' })
+
+    expect(res.status).toBe(429)
+    expect(cookieOf(res)).toBeNull()
+  })
+
+  test('kept hashed, never as it was sent', async () => {
+    const server = start()
+    await ask(server.app, 'alice@example.com')
+    await settle()
+
+    const row = server.db().query('SELECT * FROM email_links').get()
+    expect(JSON.stringify(row)).not.toContain(codeIn(server.sent[0]))
+    expect(row.code_hash).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  test('carries an invite', async () => {
+    const server = start()
+    const alice = cookieOf(await signIn(server, { sub: 'g-alice', email: 'alice@example.com' }))
+    const { url } = await (await fetch(`${server.app.url}/api/invites`, { method: 'POST', headers: { Cookie: alice } })).json()
+    await ask(server.app, 'bob@example.com', { invite: new URL(url).searchParams.get('key') })
+    await settle()
+
+    const bob = cookieOf(await enter(server.app, 'bob@example.com', codeIn(server.sent.at(-1))))
+
+    expect((await household(server.app, bob)).id).toBe((await household(server.app, alice)).id)
+  })
+})
+
 describe('an Invite link through email sign-in', () => {
   // Alice runs "Our household" (by Google) and makes an invite; returns its key.
   async function inviteFrom(server) {
@@ -436,7 +546,7 @@ describe('through the real SMTP client', () => {
 
     const [session] = smtp.sessions
     expect(session.lines.slice(0, 3)).toEqual(['EHLO count-dracula.example.com', 'MAIL FROM:<sign-in@count-dracula.example.com>', 'RCPT TO:<alice@example.com>'])
-    expect(session.body).toContain('Subject: Your Count Dracula sign-in link')
+    expect(session.body).toMatch(/Subject: Your Count Dracula sign-in code: \d{6}\r\n/)
     const token = session.body.replace(/=\r\n/g, '').match(/auth\/email\?token=(?:3D)?([A-Za-z0-9_-]{43})/)[1]
     expect((await openLink(app, token)).status).toBe(200)
   })

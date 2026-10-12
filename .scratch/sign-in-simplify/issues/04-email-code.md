@@ -1,7 +1,7 @@
 # A code in the sign-in email
 
 Type: build (AFK)
-Status: todo
+Status: done
 Blocked by: 03
 
 ## What to build
@@ -23,7 +23,25 @@ do this). The link still works, and still needs its Sign in press.
 
 ## Acceptance criteria
 
-- [ ] The right code signs in, once; then neither the code nor the link works
-- [ ] A wrong code says so; the 5th kills the link; the address's daily limit refuses even the right code
-- [ ] Send a new code sends another; Use a different email goes back to the block
-- [ ] `bun test` passes
+- [x] The right code signs in, once; then neither the code nor the link works
+- [x] A wrong code says so; the 5th kills the link; the address's daily limit refuses even the right code
+- [x] Send a new code sends another; Use a different email goes back to the block
+- [x] `bun test` passes
+
+## Notes from the build
+
+- **Limits as built:** 5 wrong codes stop that link's *code*, never its link (the link is 256 bits, and killing it would
+  let anyone who knows an address spoil its email). The Guard's `emailCode` is 10 **tries** per address a day, right
+  or wrong, taken before anything is looked up, so a 429 never says whether the code was right. With 6 digits
+  that's 10 guesses in a million a day.
+- Migration 18: `email_links.code_hash` (sha-256 of the link's token hash and the code, so equal codes on two links
+  never match each other's) and `tries`. A code matches any of the address's live links (each of the last few
+  emails has its own); a wrong one counts against all of them. Spaces and dashes in a typed code are ignored.
+- `accounts.finishEmailCode({ email, code, ip })` → `useLink()`, the same path as the link's Sign in button, so a
+  code carries the TV and the invite.
+- **Check your email** (`checkEmail()` in `server/app.js`) carries the ask (address, zone, TV, invite) in hidden
+  fields, so Send a new code is the same ask again and a wrong code shows the page again with the problem. Use a
+  different email goes to `/#sign-in`, or back to the invite. `Cache-Control: no-store`.
+- The email's subject is *"Your Count Dracula sign-in code: 123456"*; the code comes first (large, in the HTML part),
+  then the link, then who asked. The privacy notice says "sign-in code".
+- Checked in the browser: a wrong code said so on the page, then the right one typed as "830 818" signed in.

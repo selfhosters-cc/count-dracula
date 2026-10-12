@@ -372,8 +372,8 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const why = invite && accounts.inviteStatus(invite).status
       if (invite && why !== 'ok') return REFUSALS.invite({ why })
       if (guard.take('emailLink', hashOf(email.toLowerCase()))) {
-        const { token, householdId } = accounts.beginEmailSignIn({ email, timeZone: form.get('timeZone'), pair: form.get('pair'), invite })
-        const message = signInEmail({ link: `${publicOrigin(req)}/auth/email?token=${token}`, to: email, ip, at: now(), timeZone: form.get('timeZone') })
+        const { token, code, householdId } = accounts.beginEmailSignIn({ email, timeZone: form.get('timeZone'), pair: form.get('pair'), invite })
+        const message = signInEmail({ link: `${publicOrigin(req)}/auth/email?token=${token}`, code, to: email, ip, at: now(), timeZone: form.get('timeZone') })
         Promise.resolve()
           .then(() => mail.send({ to: email, ...message }))
           .then(
@@ -381,8 +381,24 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
             (err) => console.error(`email-link failed to=${maskEmail(email)}: ${err?.message ?? err}`),
           )
       }
-      return page('Check your email', `<p>We've sent a sign-in link to <b>${esc(email)}</b>. Open it on this device: it works once, for 15 minutes.</p>
-<p>Nothing after a few minutes? Check your spam folder, or <a href="${SIGN_IN}">try again</a>.</p>`, 200)
+      return checkEmail({ email, timeZone: form.get('timeZone'), pair: form.get('pair'), invite }, 200)
+    },
+    // The code from the email, typed on Check your email (sign-in-simplify 04). 10 tries per address a day, right or
+    // wrong, so 6 digits are never worth guessing; a wrong one shows the page again, saying so.
+    'POST /auth/email/code': async (req, server) => {
+      if (!mail) return notFound()
+      const ip = clientIp(req, server)
+      if (!guard.take('signIn', ip)) return slowDown()
+      const form = await req.formData()
+      const email = String(form.get('email') ?? '').trim()
+      const asked = { email, timeZone: form.get('timeZone'), pair: form.get('pair'), invite: String(form.get('invite') ?? '') || null }
+      if (!guard.take('emailCode', hashOf(email.toLowerCase()))) {
+        return page('Too many tries', `<p>Too many codes were tried for this address today. Open the link in the email instead, or try again tomorrow.</p>`, 429)
+      }
+      const result = accounts.finishEmailCode({ email, code: form.get('code'), ip })
+      if (result.refused === 'code') return checkEmail({ ...asked, problem: "That code isn't right. Check the email, or send a new code." }, 400)
+      if (result.refused === 'link') return checkEmail({ ...asked, problem: 'That code has expired or was already used. Send a new code.' }, 400)
+      return signedIn(result)
     },
     // The link in the email: /auth/email?token=<token>, a shape the Caddy log masks. Opening it uses nothing up,
     // so a mail scanner that fetches links can't spend it: the Sign in button POSTs.
@@ -615,6 +631,22 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
       const res = await handler(req, ledger.household(credential.householdId), credential, server)
       return credential.session ? renew(res, credential.session, req) : res
     }
+  }
+
+  // Check your email (sign-in-simplify 04): the box for the code, Send a new code (the same ask again) and Use a
+  // different email. The same page whether or not the address has an account, or was sent anything.
+  function checkEmail({ email, timeZone, pair, invite, problem = null }, status) {
+    const hidden = (name, value) => (value ? `<input type="hidden" name="${name}" value="${esc(value)}">` : '')
+    const asked = hidden('email', email) + hidden('timeZone', timeZone) + hidden('pair', tvCodeFrom(pair)) + hidden('invite', invite)
+    const back = invite ? `/invite?key=${encodeURIComponent(invite)}` : SIGN_IN
+    const res = page('Check your email', `<p>We've sent a sign-in code to <b>${esc(email)}</b>. Type it here, or open the link in the email.</p>
+<form method="post" action="/auth/email/code">${asked}<label for="code">The 6-digit code</label>
+<input id="code" name="code" class="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required autofocus>
+${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button class="plain primary" type="submit">Sign in</button></form>
+<p style="color:#a99cbc;font-size:13px">It works once, for 15 minutes. Nothing after a few minutes? Check your spam folder.</p>
+<form method="post" action="/auth/email/start" class="links">${asked}<button class="link" type="submit">Send a new code</button> · <a href="${esc(back)}">Use a different email</a></form>`, status)
+    res.headers.set('Cache-Control', 'no-store')
+    return res
   }
 
   // Where a sign-in ends: /setup with the session cookie, carrying a TV's code on as /setup?pair= (spec v2.1
@@ -889,7 +921,9 @@ function page(title, bodyHtml, status) {
 .google{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;max-width:400px;font:inherit;font-weight:600;padding:12px 16px;border-radius:10px;cursor:pointer;background:#fff;color:#1f1f1f;border:1px solid #747775}.google img{width:20px;height:20px}.google:focus-visible{outline:3px solid #ff7a1a;outline-offset:2px}
 form{max-width:400px}label{display:block;color:#a99cbc;font-size:13px;margin:0 0 4px}input{box-sizing:border-box;width:100%;font:inherit;color:inherit;padding:12px;border-radius:10px;border:1px solid #ffffff30;background:#14101c}
 .plain{display:block;width:100%;margin-top:10px;font:inherit;font-weight:700;padding:12px 16px;border:0;border-radius:10px;cursor:pointer;background:#2d2340;color:#f5efe6}
-.or{display:flex;align-items:center;gap:10px;color:#a99cbc;font-size:13px;margin:16px 0 10px}.or::before,.or::after{content:"";flex:1;border-top:1px solid #ffffff20}</style></head>
+.or{display:flex;align-items:center;gap:10px;color:#a99cbc;font-size:13px;margin:16px 0 10px}.or::before,.or::after{content:"";flex:1;border-top:1px solid #ffffff20}
+.primary{background:#ff7a1a;color:#1a0d00}input.code{font:600 28px/1 ui-monospace,Menlo,monospace;letter-spacing:8px;text-align:center}.problem{color:#ff8a8a;margin:8px 0 0}
+.links{margin-top:16px;color:#a99cbc}.link{font:inherit;color:#ff7a1a;background:none;border:0;padding:0;text-decoration:underline;cursor:pointer}</style></head>
 <body><h1>🧛 ${esc(title)}</h1>${bodyHtml}</body></html>`,
     { status, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
   )

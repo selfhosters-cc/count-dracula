@@ -210,6 +210,13 @@ const MIGRATIONS = [
   (db) => {
     db.exec('ALTER TABLE email_links ADD COLUMN invite TEXT')
   },
+
+  // 17 → 18: the sign-in email carries a 6-digit code too (sign-in-simplify 04), kept hashed, for the same link:
+  // using either uses both. tries counts wrong codes; at 5 the code stops working, never the link.
+  (db) => {
+    db.exec('ALTER TABLE email_links ADD COLUMN code_hash TEXT')
+    db.exec('ALTER TABLE email_links ADD COLUMN tries INTEGER NOT NULL DEFAULT 0')
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.
