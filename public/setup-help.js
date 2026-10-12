@@ -168,7 +168,7 @@ export const HELP = {
   managers: {
     title: 'Managers',
     p: [
-      'Everyone here runs the household equally. Invite someone with a link: it works once, for 7 days, with a Google account.',
+      'Everyone here runs the household equally. Invite someone with a link: it works once, for 7 days, and they sign in with Google or their email. Each email address manages one household.',
       "Remove takes another Manager off, and Leave this household removes only you; the household and its nights stay. The last Manager can't leave: delete the household instead.",
     ],
   },

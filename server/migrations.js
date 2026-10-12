@@ -205,6 +205,11 @@ const MIGRATIONS = [
       );
     `)
   },
+
+  // 16 → 17: an Invite link rides with an email sign-in link too (sign-in-simplify 03), as it does through Google.
+  (db) => {
+    db.exec('ALTER TABLE email_links ADD COLUMN invite TEXT')
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

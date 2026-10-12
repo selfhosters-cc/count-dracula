@@ -61,14 +61,15 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
     },
 
     // Continue with email: a link for this address, as a token to send, and the Household it would sign in
-    // to (null: a new one), for the log. Only the token's hash is kept. Expired links are pruned here.
-    beginEmailSignIn({ email, timeZone, pair = null }) {
+    // to (null: a new one, or the invite's), for the log. Only the token's hash is kept. Expired links are pruned
+    // here. invite: an Invite link's key, carried as Google's state carries it.
+    beginEmailSignIn({ email, timeZone, pair = null, invite = null }) {
       const at = now()
       db.query('DELETE FROM email_links WHERE expires_at <= ?').run(at)
       const token = randomToken()
-      db.query('INSERT INTO email_links (token_hash, email, time_zone, pair, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-        hashOf(token), String(email).trim(), isTimeZone(timeZone) ? timeZone : 'UTC', tvCodeFrom(pair), at, at + EMAIL_LINK_MS)
-      return { token, householdId: managerByEmail(email)?.household_id ?? null }
+      db.query('INSERT INTO email_links (token_hash, email, time_zone, pair, invite, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+        hashOf(token), String(email).trim(), isTimeZone(timeZone) ? timeZone : 'UTC', tvCodeFrom(pair), invite || null, at, at + EMAIL_LINK_MS)
+      return { token, householdId: managerByEmail(email)?.household_id ?? (invite ? inviteStatus(invite).householdId : null) }
     },
 
     // What an email link says before its button is pressed: 'ok', or 'gone' (made up, used or expired). Uses nothing.
@@ -82,11 +83,10 @@ export function openAccounts(db, { ledger, google, now = Date.now, operatorEmail
     finishEmailSignIn({ token, ip }) {
       const at = now()
       const link = db
-        .query('UPDATE email_links SET used_at = ? WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? RETURNING email, time_zone, pair')
+        .query('UPDATE email_links SET used_at = ? WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? RETURNING email, time_zone, pair, invite')
         .get(at, hashOf(token), at)
       if (!link) return { refused: 'link' }
-      const email = link.email
-      return land({ sub: null, email, name: null }, { displayName: null, invite: null, pair: link.pair, timeZone: link.time_zone }, ip)
+      return land({ sub: null, email: link.email, name: null }, { displayName: null, invite: link.invite, pair: link.pair, timeZone: link.time_zone }, ip)
     },
 
     // The session a cookie's token names: { manager, householdId, operator, renewed }, or null once it's

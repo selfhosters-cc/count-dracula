@@ -367,8 +367,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const form = await req.formData()
       const email = String(form.get('email') ?? '').trim()
       if (!isMailAddress(email)) return page('Check the address', `<p>That doesn't look like an email address. <a href="${SIGN_IN}">Back</a></p>`, 400)
+      // An invite that's no good says so now, not after the email.
+      const invite = String(form.get('invite') ?? '') || null
+      const why = invite && accounts.inviteStatus(invite).status
+      if (invite && why !== 'ok') return REFUSALS.invite({ why })
       if (guard.take('emailLink', hashOf(email.toLowerCase()))) {
-        const { token, householdId } = accounts.beginEmailSignIn({ email, timeZone: form.get('timeZone'), pair: form.get('pair') })
+        const { token, householdId } = accounts.beginEmailSignIn({ email, timeZone: form.get('timeZone'), pair: form.get('pair'), invite })
         const message = signInEmail({ link: `${publicOrigin(req)}/auth/email?token=${token}`, to: email, ip, at: now(), timeZone: form.get('timeZone') })
         Promise.resolve()
           .then(() => mail.send({ to: email, ...message }))
@@ -414,6 +418,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
         'You\'re invited',
         `<p>Help run ${invite.displayName ? `<b>${esc(invite.displayName)}</b>'s` : 'a'} trick-or-treat night on Count Dracula, as one of its Managers.</p>
 <form method="post" action="/auth/google/start"><input type="hidden" name="invite" value="${esc(key)}">${GOOGLE_BUTTON}</form>
+${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : ''}
 <p style="color:#a99cbc;font-size:13px">By continuing you agree to the <a href="/privacy">Privacy notice and House rules</a>.</p>`,
         200,
       )
@@ -867,11 +872,24 @@ const esc = (text) => String(text ?? '').replace(/[&<>"']/g, (c) => `&#${c.charC
 // Continue with Google as Google's own button (its branding guidelines), as on the homepage; page() styles it.
 const GOOGLE_BUTTON = '<button class="google" type="submit"><img src="/google-g.svg" alt="" width="20" height="20">Continue with Google</button>'
 
+// Continue with email, as on the homepage, for a server page; `hidden` is the form's extra hidden inputs.
+// /time-zone.js fills in the browser's time zone (inline scripts are refused by the CSP).
+function emailForm(hidden = '') {
+  return `<form method="post" action="/auth/email/start">${hidden}<input type="hidden" name="timeZone">
+<p class="or">or</p><label for="email">Your email</label>
+<input id="email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com">
+<button class="plain" type="submit">Continue with email</button></form>
+<script src="/time-zone.js" defer></script>`
+}
+
 function page(title, bodyHtml, status) {
   return new Response(
     `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
 <style>body{margin:0;padding:24px 16px;background:#14101c;color:#f5efe6;font:17px/1.5 system-ui,sans-serif;max-width:560px;margin-inline:auto}a{color:#ff7a1a}
-.google{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;max-width:400px;font:inherit;font-weight:600;padding:12px 16px;border-radius:10px;cursor:pointer;background:#fff;color:#1f1f1f;border:1px solid #747775}.google img{width:20px;height:20px}.google:focus-visible{outline:3px solid #ff7a1a;outline-offset:2px}</style></head>
+.google{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;max-width:400px;font:inherit;font-weight:600;padding:12px 16px;border-radius:10px;cursor:pointer;background:#fff;color:#1f1f1f;border:1px solid #747775}.google img{width:20px;height:20px}.google:focus-visible{outline:3px solid #ff7a1a;outline-offset:2px}
+form{max-width:400px}label{display:block;color:#a99cbc;font-size:13px;margin:0 0 4px}input{box-sizing:border-box;width:100%;font:inherit;color:inherit;padding:12px;border-radius:10px;border:1px solid #ffffff30;background:#14101c}
+.plain{display:block;width:100%;margin-top:10px;font:inherit;font-weight:700;padding:12px 16px;border:0;border-radius:10px;cursor:pointer;background:#2d2340;color:#f5efe6}
+.or{display:flex;align-items:center;gap:10px;color:#a99cbc;font-size:13px;margin:16px 0 10px}.or::before,.or::after{content:"";flex:1;border-top:1px solid #ffffff20}</style></head>
 <body><h1>🧛 ${esc(title)}</h1>${bodyHtml}</body></html>`,
     { status, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
   )
@@ -883,7 +901,7 @@ const REFUSALS = {
   link: () => page('Start again', `<p>That sign-in link has expired or was already used: each one works once, for 15 minutes. <a href="${SIGN_IN}">Get a new one</a>.</p>`, 400),
   unverified: () => page('Email not verified', '<p>Google hasn\'t verified this account\'s email yet, so it can\'t sign in.</p>', 403),
   paused: () => page('Sign-ups are paused', '<p>Sign-ups are paused, try again later.</p>', 503),
-  alreadyManager: () => page('One household each', "<p>You already manage a household here, and a Google account can only manage one. To help this one, use another Google account.</p><p><a href=\"/setup\">Go to your household</a></p>", 409),
+  alreadyManager: () => page('One household each', "<p>You already manage a household here, and each email address can manage one. To help this one, sign in with another address.</p><p><a href=\"/setup\">Go to your household</a></p>", 409),
   invite: ({ why }) => page('Invite link', `<p>${INVITE_PROBLEMS[why] ?? INVITE_PROBLEMS.unknown}</p>`, 410),
 }
 

@@ -43,9 +43,10 @@ function start({ env = EMAIL_ENV, mailer = 'fake', limits = LIMITS, canSignUp } 
   return { app, google, clock, sent, logs, db: () => new Database(dbPath) }
 }
 
-const ask = (app, email, { pair, timeZone = 'America/Toronto', ip } = {}) => {
+const ask = (app, email, { pair, invite, timeZone = 'America/Toronto', ip } = {}) => {
   const body = new URLSearchParams({ email, timeZone })
   if (pair != null) body.set('pair', pair)
+  if (invite != null) body.set('invite', invite)
   return fetch(`${app.url}/auth/email/start`, { method: 'POST', body, redirect: 'manual', headers: ip ? { 'CF-Connecting-IP': ip } : {} })
 }
 const linkIn = (message) => message.text.match(/https:\/\/\S+/)[0]
@@ -300,6 +301,78 @@ describe("a TV's code through email sign-in", () => {
 
     expect(res.headers.get('Location')).toBe('/setup?pair=K7QM4X')
     expect(junk.headers.get('Location')).toBe('/setup')
+  })
+})
+
+describe('an Invite link through email sign-in', () => {
+  // Alice runs "Our household" (by Google) and makes an invite; returns its key.
+  async function inviteFrom(server) {
+    const alice = cookieOf(await signIn(server, { sub: 'g-alice', email: 'alice@example.com', name: 'Alice' }))
+    const { url } = await (await fetch(`${server.app.url}/api/invites`, { method: 'POST', headers: { Cookie: alice } })).json()
+    return { alice, key: new URL(url).searchParams.get('key') }
+  }
+  const invitesLeft = async (server, alice) => (await (await fetch(`${server.app.url}/api/managers`, { headers: { Cookie: alice } })).json()).invites.length
+
+  test('the invite page offers email too, carrying the invite; with email off, only Google', async () => {
+    const server = start()
+    const { key } = await inviteFrom(server)
+    const off = start({ env: {}, mailer: 'env' })
+    const offKey = (await inviteFrom(off)).key
+
+    const html = await (await fetch(`${server.app.url}/invite?key=${key}`)).text()
+    const offHtml = await (await fetch(`${off.app.url}/invite?key=${offKey}`)).text()
+
+    expect(html).toContain('<form method="post" action="/auth/email/start">')
+    expect(html.match(new RegExp(`<input type="hidden" name="invite" value="${key}">`, 'g'))).toHaveLength(2)
+    expect(html).toContain('>Continue with email</button>')
+    expect(offHtml).not.toContain('/auth/email/start')
+    expect(offHtml).toContain('Continue with Google')
+  })
+
+  test('a new address joins the invited household as an equal Manager, and uses the invite up', async () => {
+    const server = start()
+    const { alice, key } = await inviteFrom(server)
+
+    const bob = cookieOf(await emailSignIn(server, 'bob@example.com', { invite: key }))
+
+    expect((await household(server.app, bob)).id).toBe((await household(server.app, alice)).id)
+    expect(server.app.ledger.households()).toHaveLength(1)
+    expect(await invitesLeft(server, alice)).toBe(0)
+  })
+
+  test('a dead invite says so before any email goes, and one used meanwhile refuses at the link', async () => {
+    const server = start()
+    const { alice, key } = await inviteFrom(server)
+    await fetch(`${server.app.url}/api/invites/revoke`, { method: 'POST', headers: { Cookie: alice }, body: JSON.stringify({ key }) })
+    const second = await (await fetch(`${server.app.url}/api/invites`, { method: 'POST', headers: { Cookie: alice } })).json()
+    const live = new URL(second.url).searchParams.get('key')
+
+    const revoked = await ask(server.app, 'bob@example.com', { invite: key })
+    await settle()
+    const sentBefore = server.sent.length
+    await ask(server.app, 'carol@example.com', { invite: live })
+    await settle()
+    await emailSignIn(server, 'dan@example.com', { invite: live }) // Dan takes it first
+    const carol = await follow(server.app, tokenIn(server.sent[sentBefore]))
+
+    expect(revoked.status).toBe(410)
+    expect(await revoked.text()).toContain('cancelled')
+    expect(sentBefore).toBe(0)
+    expect(carol.status).toBe(410)
+    expect(await carol.text()).toContain('already been used')
+    expect(cookieOf(carol)).toBeNull()
+  })
+
+  test('a Manager of another household is refused, and the invite stays unused', async () => {
+    const server = start()
+    const { alice, key } = await inviteFrom(server)
+    await emailSignIn(server, 'dave@example.com') // Dave's own household
+
+    const res = await emailSignIn(server, 'dave@example.com', { invite: key })
+
+    expect(res.status).toBe(409)
+    expect(await res.text()).toContain('each email address can manage one')
+    expect(await invitesLeft(server, alice)).toBe(1)
   })
 })
 
