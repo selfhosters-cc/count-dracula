@@ -20,6 +20,8 @@ const CATCHING_UP_AFTER_MS = 20_000
 const ROLL_UP_MS = 2_000
 
 const confetti = createConfetti($('confetti'), { resize: true, useWorker: false })
+// Beside the title, where the TV came from: passers-by see it from the street. Not for a bare IP or localhost.
+$('site').textContent = /^[\d.]+$|^\[|^localhost$/.test(location.hostname) ? '' : location.host
 const clock = { now: () => Date.now(), setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (id) => clearTimeout(id) }
 
 // What this page shows: the TV link's live night (/tv/k/<token>), one past night's recap (/tv?event=<id>,
