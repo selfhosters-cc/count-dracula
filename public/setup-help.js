@@ -47,6 +47,14 @@ export const HELP = {
     ],
   },
 
+  watch: {
+    title: 'Watch',
+    p: [
+      'Watch on this device opens the TV screen right here, the same one your porch TV shows: handy on a tablet indoors, or to check the TV from your phone.',
+      "Send the TV link lets family watch from anywhere. Anyone with it sees tonight's count and costumes, never your phones' names. Rotate TV link in Household cuts everyone off, your porch TV too.",
+    ],
+  },
+
   // ---- Nights
   nights: {
     title: 'Your nights',

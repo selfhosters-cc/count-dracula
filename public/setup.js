@@ -359,7 +359,15 @@ function renderTonight(ctx) {
     h('div', { className: 'tonight-side' },
       others.length ? alsoOpen(others, ctx) : null,
       waits.length ? waiting(waits, ctx) : null,
-      h('section', { data: { help: 'helpers' } }, h('h2', {}, '📱 Helpers'), helperBox('tonight'))))
+      h('section', { data: { help: 'helpers' } }, h('h2', {}, '📱 Helpers'), helperBox('tonight')),
+      h('section', { data: { help: 'watch' } }, h('h2', {}, '📺 Watch'), watchBox())))
+}
+
+// Watching from anywhere: this device, or someone else's by the TV link, the same one the porch TV holds.
+function watchBox() {
+  return h('div', { className: 'row' },
+    h('button', { className: 'primary', textContent: '📺 Watch on this device', onclick: () => (location.href = household.tvUrl()) }),
+    h('button', { textContent: 'Send the TV link', onclick: () => share(household.tvUrl(), 'Our trick-or-treat TV') }))
 }
 
 function renderNights(ctx) {

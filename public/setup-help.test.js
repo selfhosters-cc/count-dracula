@@ -27,7 +27,7 @@ describe('the /setup help (spec v2.1 §9)', () => {
 
   test('every data-help key has an entry, and every entry is used', () => {
     const used = [...keysInUse()].sort()
-    expect(used).toHaveLength(23)
+    expect(used).toHaveLength(24)
     expect(Object.keys(HELP).sort()).toEqual(used)
   })
 
