@@ -662,6 +662,15 @@ async function keepAwake() {
 keepAwake()
 document.addEventListener('visibilitychange', keepAwake) // the lock drops whenever the page is hidden
 
+// ---- the pointer: hidden on the porch TV, back while someone watching on a computer moves their mouse
+const POINTER_IDLE_MS = 3_000
+let pointerTimer
+document.addEventListener('mousemove', () => {
+  document.body.classList.add('pointer')
+  clearTimeout(pointerTimer)
+  pointerTimer = setTimeout(() => document.body.classList.remove('pointer'), POINTER_IDLE_MS)
+})
+
 // ---- /tv?border: a test pattern for checking overscan on the real TV (spec §14)
 if (new URLSearchParams(location.search).has('border')) document.body.classList.add('overscan-test')
 
