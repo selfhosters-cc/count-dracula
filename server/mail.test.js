@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { buildMessage, quotedPrintable, sendMail } from './mail.js'
-import { fakeSmtp as startFakeSmtp } from '../test/fake-smtp.js'
+import { ca, fakeSmtp as startFakeSmtp } from '../test/fake-smtp.js'
 
 const running = []
 const fakeSmtp = (options) => {
@@ -85,6 +85,67 @@ describe('sendMail', () => {
 
     await expect(sendMail({ ...MAIL, port: smtp.port, to: 'alice@example.com\r\nBcc: x@example.com' })).rejects.toThrow('recipient')
     await expect(sendMail({ ...MAIL, port: smtp.port, to: 'alice' })).rejects.toThrow('recipient')
+    expect(smtp.sessions).toHaveLength(0)
+  })
+})
+
+describe('sendMail to a mail service: TLS and a login', () => {
+  const LOGIN = { user: 'resend', pass: 're_test_secret' }
+  const authLine = `AUTH PLAIN ${Buffer.from('\0resend\0re_test_secret').toString('base64')}`
+
+  test('STARTTLS by default with a login: EHLO again over TLS, then AUTH, then the message', async () => {
+    const smtp = fakeSmtp({ tls: 'starttls', auth: LOGIN })
+
+    await sendMail({ ...MAIL, port: smtp.port, ...LOGIN, ca })
+
+    const [session] = smtp.sessions
+    expect(session.lines).toEqual(['EHLO count-dracula.example.com', 'STARTTLS', 'EHLO count-dracula.example.com', authLine, 'MAIL FROM:<sign-in@count-dracula.example.com>', 'RCPT TO:<alice@example.com>', 'DATA', 'QUIT'])
+    expect(session.tlsFrom).toBe(2) // everything from the second EHLO on went over TLS
+    expect(session.user).toBe('resend')
+    expect(session.body).toContain('Subject: Your Count Dracula sign-in link\r\n')
+  })
+
+  test("implicit TLS with security: 'tls' (the default on port 465)", async () => {
+    const smtp = fakeSmtp({ tls: 'implicit', auth: LOGIN })
+
+    await sendMail({ ...MAIL, port: smtp.port, ...LOGIN, security: 'tls', ca })
+
+    const [session] = smtp.sessions
+    expect(session.tlsFrom).toBe(0)
+    expect(session.lines.slice(0, 3)).toEqual(['EHLO count-dracula.example.com', authLine, 'MAIL FROM:<sign-in@count-dracula.example.com>'])
+  })
+
+  test('a server that offers no STARTTLS never sees the login', async () => {
+    const smtp = fakeSmtp()
+
+    const err = await sendMail({ ...MAIL, port: smtp.port, ...LOGIN, ca }).catch((e) => e)
+
+    expect(err.message).toBe('SMTP STARTTLS not offered')
+    expect(smtp.sessions[0].lines.join('\n')).not.toContain('AUTH')
+  })
+
+  test('a certificate the client does not trust stops it before the login', async () => {
+    const starttls = fakeSmtp({ tls: 'starttls', auth: LOGIN })
+    const implicit = fakeSmtp({ tls: 'implicit', auth: LOGIN })
+
+    expect((await sendMail({ ...MAIL, port: starttls.port, ...LOGIN }).catch((e) => e)).message).toStartWith('SMTP TLS failed: ')
+    expect((await sendMail({ ...MAIL, port: implicit.port, ...LOGIN, security: 'tls' }).catch((e) => e)).message).toStartWith('SMTP TLS failed: ')
+    expect(starttls.sessions[0].lines).toEqual(['EHLO count-dracula.example.com', 'STARTTLS'])
+  })
+
+  test('a wrong password fails with the step and the code, never the password', async () => {
+    const smtp = fakeSmtp({ tls: 'starttls', auth: LOGIN })
+
+    const err = await sendMail({ ...MAIL, port: smtp.port, user: 'resend', pass: 're_wrong', ca }).catch((e) => e)
+
+    expect(err.message).toBe('SMTP AUTH refused: 535')
+    expect(smtp.sessions[0].lines).not.toContain('DATA')
+  })
+
+  test("a login with security: 'none' is refused before connecting", async () => {
+    const smtp = fakeSmtp()
+
+    await expect(sendMail({ ...MAIL, port: smtp.port, ...LOGIN, security: 'none' })).rejects.toThrow('SMTP login needs TLS')
     expect(smtp.sessions).toHaveLength(0)
   })
 })

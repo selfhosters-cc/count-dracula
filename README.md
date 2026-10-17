@@ -130,7 +130,7 @@ HTTPS, and the session cookie is HTTPS-only.
    | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | From step 1 |
    | `OPERATOR_EMAILS` | Your sign-in email: it also opens `/operator`, the whole-site dashboard |
    | `OPERATOR_CONTACT` | The contact address on `/privacy` and "Help: email us" |
-   | `SMTP_HOST`, `SMTP_PORT`, `EMAIL_FROM` | Optional *Continue with email*: an SMTP server on port 25 with no TLS or login, such as a relay on your network. Leave `SMTP_HOST` empty to hide it |
+   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | Optional *Continue with email*: a mail service such as Resend (TLS on port 465 or STARTTLS on 587, with its login), or a relay on your network on port 25 with no TLS or login. Leave `SMTP_HOST` empty to hide it |
 
 3. **Start it**, one of two ways:
    - **With the bundled Caddy for HTTPS.** Point the host's DNS at this machine and open ports 80 and 443; Caddy

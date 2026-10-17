@@ -43,7 +43,7 @@ const SESSION_COOKIE = 'cd_session'
 const sessionCookie = (token, maxAge = 90 * 86_400) => `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`
 
 // env: PUBLIC_HOST, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPERATOR_EMAILS, OPERATOR_CONTACT, SMTP_HOST, SMTP_PORT,
-// EMAIL_FROM (deploy/local.env). google, mailer, now, canSignUp, tickMs, limits and log are seams for the tests.
+// SMTP_USER, SMTP_PASS, EMAIL_FROM (deploy/local.env). google, mailer, now, canSignUp, tickMs, limits and log are seams for the tests.
 export function startServer({ configPath, port, heartbeatMs, env = process.env, google, mailer, now = Date.now, canSignUp, tickMs = 60_000, limits = LIMITS, log = console.log }) {
   const config = loadConfig(configPath)
   const guard = createGuard({ now, limits, log })
@@ -79,13 +79,14 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   })
   const hub = createHub({ heartbeatMs })
   const pairing = createPairing({ now })
-  // Continue with email (spec v2.1 §11): the LAN's relay, plain SMTP. Hidden, and its routes refused, until
-  // SMTP_HOST and EMAIL_FROM are both set. mailer.send({ to, subject, text, html }) resolves once the relay has it.
+  // Continue with email (spec v2.1 §11): a relay with plain SMTP, or a mail service over TLS with SMTP_USER and
+  // SMTP_PASS (implicit TLS on port 465, STARTTLS on any other). Hidden, and its routes refused, until SMTP_HOST
+  // and EMAIL_FROM are both set. mailer.send({ to, subject, text, html }) resolves once the server has it.
   const mail =
     mailer !== undefined
       ? mailer
       : env.SMTP_HOST && env.EMAIL_FROM
-        ? { send: (message) => sendMail({ host: env.SMTP_HOST, port: Number(env.SMTP_PORT) || 25, from: env.EMAIL_FROM, ...message }) }
+        ? { send: (message) => sendMail({ host: env.SMTP_HOST, port: Number(env.SMTP_PORT) || 25, user: env.SMTP_USER || null, pass: env.SMTP_PASS, from: env.EMAIL_FROM, ...message }) }
         : null
 
   // The minute tick (spec §7): nights go live and end by themselves. The first runs at start, catching up on

@@ -550,4 +550,28 @@ describe('through the real SMTP client', () => {
     const token = session.body.replace(/=\r\n/g, '').match(/auth\/email\?token=(?:3D)?([A-Za-z0-9_-]{43})/)[1]
     expect((await openLink(app, token)).status).toBe(200)
   })
+
+  test('SMTP_USER and SMTP_PASS log in only over TLS: a relay with no STARTTLS never sees them', async () => {
+    const smtp = fakeSmtp()
+    running.push(smtp)
+    const dir = mkdtempSync(join(tmpdir(), 'count-dracula-email-'))
+    writeFileSync(join(dir, 'config.json'), JSON.stringify({ dbPath: join(dir, 'db.sqlite') }))
+    const logs = []
+    const env = { ...EMAIL_ENV, SMTP_HOST: '127.0.0.1', SMTP_PORT: String(smtp.port), SMTP_USER: 'resend', SMTP_PASS: 're_test_secret' }
+    const app = startServer({ configPath: join(dir, 'config.json'), port: 0, google: fakeGoogle(), env, log: (line) => logs.push(line) })
+    running.push(app)
+    const errors = []
+    const original = console.error
+    console.error = (...args) => errors.push(args.join(' '))
+    try {
+      expect((await ask(app, 'alice@example.com')).status).toBe(200)
+      for (let i = 0; i < 100 && !errors.length; i++) await new Promise((r) => setTimeout(r, 20))
+    } finally {
+      console.error = original
+    }
+
+    expect(errors.join('\n')).toContain('SMTP STARTTLS not offered')
+    expect(smtp.sessions[0].lines).toEqual(['EHLO count-dracula.example.com', 'QUIT'])
+    expect([...errors, ...logs].join('\n')).not.toContain('re_test_secret')
+  })
 })
