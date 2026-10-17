@@ -217,3 +217,8 @@ door phones ──POST taps (+ join key)──▶ Bun server ──SSE: snapshot
 
 The full spec, with the reasoning behind each decision, is in
 [.scratch/count-dracula/spec.md](.scratch/count-dracula/spec.md).
+
+## Licence
+
+[MIT](LICENSE). The sounds and the vendored libraries and fonts keep their own licences: see
+[public/sounds](public/sounds/README.md) and [public/vendor](public/vendor/README.md).
