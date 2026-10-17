@@ -161,7 +161,7 @@ export function nightScreen(e, ctx) {
 function settingsForm(e, ctx) {
   const past = e.state === 'past'
   const input = (props) => h('input', { disabled: past, ...props })
-  const name = input({ id: 's-name', value: e.name })
+  const name = input({ id: 's-name', value: e.name, maxLength: 40 })
   const race = h('select', { id: 's-race', disabled: past },
     option('', 'None', e.raceAgainstId == null),
     raceChoices(ctx.events, e).map((r) => option(r.id, r.name, r.id === e.raceAgainstId)))
@@ -205,7 +205,7 @@ function costumes(e, ctx) {
       : h('p', { className: 'muted', textContent: 'No costumes.' })
   }
   const emoji = h('input', { className: 'emoji', placeholder: '🎃', autocomplete: 'off', ariaLabel: 'New costume emoji' })
-  const name = h('input', { className: 'grow', placeholder: 'New costume name', autocomplete: 'off', ariaLabel: 'New costume name' })
+  const name = h('input', { className: 'grow', maxLength: 40, placeholder: 'New costume name', autocomplete: 'off', ariaLabel: 'New costume name' })
   const add = h('form', { className: 'item tag-row' }, emoji, name, h('button', { type: 'submit', textContent: 'Add' }))
   add.addEventListener('submit', (ev) => {
     ev.preventDefault()
@@ -216,7 +216,7 @@ function costumes(e, ctx) {
 
 function tagRow(tag, ctx) {
   const emoji = h('input', { className: 'emoji', value: tag.emoji ?? '', ariaLabel: 'Emoji' })
-  const name = h('input', { className: 'grow', value: tag.name, ariaLabel: 'Name' })
+  const name = h('input', { className: 'grow', maxLength: 40, value: tag.name, ariaLabel: 'Name' })
   const order = h('input', { className: 'order', type: 'number', min: 1, value: tag.order, ariaLabel: 'Order' })
   return h('div', { className: 'item tag-row' }, emoji, name, order,
     h('button', { textContent: 'Save', onclick: () => ctx.act.saveTag(tag, { name: name.value, emoji: emoji.value || null, order: Number(order.value) }) }),

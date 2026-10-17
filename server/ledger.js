@@ -573,7 +573,7 @@ export function openLedger(db, config) {
         $eventId: event.id,
         $number: liveCount.get(event.id).n + 1,
         $tagId: tagId != null && tagInEvent.get(tagId, event.id) ? tagId : null, // a tag deleted while the tap queued
-        $phoneName: phoneName ?? null,
+        $phoneName: typeof phoneName === 'string' ? phoneName.slice(0, MAX_NAME) : null, // cut, never refused: a refused tap would jam the phone's outbox
         $tappedAt: tappedAt,
         $receivedAt: receivedAt,
         $late: batchId != null || receivedAt - tappedAt > LATE_AFTER_MS ? 1 : 0, // backfilled kids are always late
@@ -674,12 +674,13 @@ export function openLedger(db, config) {
         const name = costumeName(tag?.name)
         if (!Number.isInteger(n) || n < 0) throw new BadCommand('Catch-up needs a whole number of kids')
         if (kidExists.get(kid?.id)) return [] // a retry: the door kid already landed, so all of it did
-        const tagRow = insertTag.get({ $eventId: event.id, $name: name, $emoji: tag.emoji ?? null })
+        const emoji = costumeEmoji(tag.emoji)
+        const tagRow = insertTag.get({ $eventId: event.id, $name: name, $emoji: emoji })
         const kidIds = mostRecentUntagged.all(event.id, n).map((r) => r.id)
         for (const id of kidIds) setTag.run(tagRow.id, id)
         const added = addKid(event, { ...kid, tagId: tagRow.id })
         // A costume spotted live gets the TV's banner, "×(N+1)" including the kid at the door (Must #6).
-        const newCostume = switches.newTrendAlert ? { name, emoji: tag.emoji ?? null, count: kidIds.length + 1 } : undefined
+        const newCostume = switches.newTrendAlert ? { name, emoji, count: kidIds.length + 1 } : undefined
         return [
           { type: 'tag.added', eventId: event.id, tag: toTag(tagRow), ...(newCostume && { newCostume }) },
           ...(kidIds.length ? [{ type: 'kid.retagged', eventId: event.id, kidIds, tagId: tagRow.id }] : []),
@@ -817,7 +818,7 @@ export function openLedger(db, config) {
         const raceAgainst = switches.estimatedGhost ? (estimatedEvent()?.id ?? null) : null
         const row = db
           .query('INSERT INTO events (household_id, name, visit_window_ms, golden_count, race_against_id) VALUES (?, ?, ?, 5, ?) RETURNING *')
-          .get(householdId, requireName(name, 'An event'), source?.visit_window_ms ?? 15_000, raceAgainst)
+          .get(householdId, eventName(name), source?.visit_window_ms ?? 15_000, raceAgainst)
         if (source) {
           db.query(`
             INSERT INTO tags (event_id, name, emoji, sort_order, sound)
@@ -887,7 +888,7 @@ export function openLedger(db, config) {
       settings({ eventId, ...changes }) {
         const event = writableEvent(eventId)
         const columns = {
-          name: ['name', (v) => requireName(v, 'An event')],
+          name: ['name', eventName],
           // Only a night there's something to race (Ended, Past, imported or estimated), never itself. The pointer
           // it already has passes unchanged (Setup's form sends it back), so one at a reset Event is kept.
           raceAgainstId: ['race_against_id', (v) => {
@@ -924,7 +925,7 @@ export function openLedger(db, config) {
       // ---- Costume presets. Deltas only for an open event: nobody is watching the others.
       createTag({ eventId, name, emoji }) {
         const event = writableEvent(eventId)
-        const row = insertTag.get({ $eventId: event.id, $name: costumeName(name), $emoji: emoji ?? null })
+        const row = insertTag.get({ $eventId: event.id, $name: costumeName(name), $emoji: costumeEmoji(emoji) })
         return isOpen(event) ? [{ type: 'tag.added', eventId: event.id, tag: toTag(row) }] : []
       },
 
@@ -934,9 +935,9 @@ export function openLedger(db, config) {
           .query('UPDATE tags SET name = ?, emoji = ?, sort_order = ?, sound = ? WHERE id = ? RETURNING *')
           .get(
             name === undefined ? tag.name : costumeName(name),
-            emoji === undefined ? tag.emoji : emoji,
+            emoji === undefined ? tag.emoji : costumeEmoji(emoji),
             order === undefined ? tag.sort_order : wholeNumber(order, 'Order', 1),
-            sound === undefined ? tag.sound : sound,
+            sound === undefined ? tag.sound : costumeSound(sound),
             tag.id,
           )
         return isOpen(event) ? [{ type: 'tag.updated', eventId: event.id, tag: toTag(row) }] : []
@@ -1410,10 +1411,20 @@ function toKid(row) {
   }
 }
 
+// The longest name a household, a night, a costume or a phone may have: every one fits the TV and the phone.
+const MAX_NAME = 40
+
 export function displayNameOf(displayName) {
   const name = requireName(displayName, 'A household')
-  if (name.length > 40) throw new BadCommand('A household name is at most 40 characters')
+  if (name.length > MAX_NAME) throw new BadCommand(`A household name is at most ${MAX_NAME} characters`)
   return decentName(name)
+}
+
+// A night's name reaches the TV link's viewers and the share page, like a household's.
+function eventName(name) {
+  const trimmed = requireName(name, 'An event')
+  if (trimmed.length > MAX_NAME) throw new BadCommand(`A night's name is at most ${MAX_NAME} characters`)
+  return decentName(trimmed)
 }
 
 // Names that reach shared screens pass the blocklist (spec §15): refused outright, never starred out.
@@ -1423,7 +1434,25 @@ function decentName(name) {
 }
 
 function costumeName(name) {
-  return decentName(requireName(name, 'A costume'))
+  const trimmed = requireName(name, 'A costume')
+  if (trimmed.length > MAX_NAME) throw new BadCommand(`A costume name is at most ${MAX_NAME} characters`)
+  return decentName(trimmed)
+}
+
+// A costume's emoji: one or two emoji and nothing else, since a top costume's reaches other houses' screens. Empty
+// is none.
+const EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20e3/u
+function costumeEmoji(emoji) {
+  if (emoji == null || emoji === '') return emoji ?? null
+  const marks = typeof emoji === 'string' && emoji.length <= 16 ? [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(emoji)] : []
+  if (!marks.length || marks.length > 2 || !marks.every(({ segment }) => EMOJI.test(segment))) throw new BadCommand('A costume emoji is one or two emoji')
+  return emoji
+}
+
+// A costume's sound: a sound file's name, or none.
+function costumeSound(sound) {
+  if (sound != null && (typeof sound !== 'string' || sound.length > 100)) throw new BadCommand('A costume sound is a file name')
+  return sound
 }
 
 // The total spread over 2025's shape; the rounding remainder goes to the biggest bucket, so it adds up exactly.

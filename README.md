@@ -130,7 +130,7 @@ HTTPS, and the session cookie is HTTPS-only.
    | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | From step 1 |
    | `OPERATOR_EMAILS` | Your sign-in email: it also opens `/operator`, the whole-site dashboard |
    | `OPERATOR_CONTACT` | The contact address on `/privacy` and "Help: email us" |
-   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | Optional *Continue with email*: a mail service such as Resend (TLS on port 465 or STARTTLS on 587, with its login), or a relay on your network on port 25 with no TLS or login. Leave `SMTP_HOST` empty to hide it |
+   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | Optional *Continue with email*: a mail service such as Resend (TLS on port 465 or STARTTLS on 587, with its login), or a relay on your network on port 25 with no TLS or login. It stays off without `PUBLIC_HOST`, the host its emailed links open. Leave `SMTP_HOST` empty to hide it |
 
 3. **Start it**, one of two ways:
    - **With the bundled Caddy for HTTPS.** Point the host's DNS at this machine and open ports 80 and 443; Caddy
@@ -144,6 +144,9 @@ HTTPS, and the session cookie is HTTPS-only.
      `CF-Connecting-IP` header to the visitor's address (rate limits use it), and don't buffer responses: the TV
      and phones keep a live stream open. For nginx: `proxy_set_header CF-Connecting-IP $remote_addr;
      proxy_buffering off; proxy_read_timeout 1h;`. A proxy on another machine: set `COUNT_DRACULA_BIND=0.0.0.0`.
+     The app believes `CF-Connecting-IP` only from a proxy on this machine or a private network (10.x, 172.16–31.x,
+     192.168.x, 100.64.x, IPv6 ULA); a proxy that reaches it from a public address needs `TRUSTED_PROXIES` (its
+     addresses or CIDR ranges, comma-separated), or every visitor shares the proxy's rate limits.
 
      ```bash
      docker compose up -d
@@ -178,7 +181,8 @@ bun test
 - **Phone**: `http://<host>:3131/door?key=<join key>` (the server prints it), or enter the code on the homepage.
 - **TV**: `http://<host>:3131/tv`. Click **Start the night** once to turn the sound on. `/tv?border`
   checks for overscan.
-- **Setup**: `http://<host>:3131/setup`. Google sign-in needs HTTPS and its environment (see `docker/.env.example`).
+- **Setup**: `http://<host>:3131/setup`. Google sign-in needs HTTPS and its environment (see `docker/.env.example`);
+  Continue with email also needs `PUBLIC_HOST`.
 
 `config/config.json` holds the port, the database path, the six soundboard slots and a switch for each fun feature (milestones,
 golden tickets, leaderboard, new-costume alert, soundboard, pumpkin patch, recap, rush meter).

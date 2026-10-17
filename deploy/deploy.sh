@@ -12,8 +12,9 @@ cd "$(dirname "$0")/.."
 if [[ -f deploy/local.env ]]; then source deploy/local.env; fi
 ENV_KEYS=(PUBLIC_HOST GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET OPERATOR_EMAILS OPERATOR_CONTACT)
 # Passed on when set: Continue with email stays hidden until SMTP_HOST and EMAIL_FROM are (SMTP_PORT defaults to 25;
-# SMTP_USER and SMTP_PASS log in to a mail service over TLS).
-OPTIONAL_ENV_KEYS=(SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS EMAIL_FROM)
+# SMTP_USER and SMTP_PASS log in to a mail service over TLS), with PUBLIC_HOST above. TRUSTED_PROXIES is only for
+# a proxy on a public address: the shared Caddy is on the LAN, which the app trusts already.
+OPTIONAL_ENV_KEYS=(SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS EMAIL_FROM TRUSTED_PROXIES)
 
 PVE=${PVE:-proxmox}
 VMID=${VMID:-118}

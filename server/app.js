@@ -18,6 +18,7 @@ import { isBlocked } from './blocklist.js'
 import { toCsv } from './export.js'
 import { isMailAddress, sendMail } from './mail.js'
 import { maskEmail, signInEmail } from './email-sign-in.js'
+import { clientIpOf, trustedProxies } from './client-ip.js'
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
@@ -43,12 +44,16 @@ const DEVICE_ID = /^[0-9a-f]{32}$/ // what live.js makes: 16 random bytes, hex
 const SESSION_COOKIE = 'cd_session'
 const sessionCookie = (token, maxAge = 90 * 86_400) => `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`
 
+// The largest request body read, as the Caddy in front allows (64 KB); a bigger one is refused before it's read.
+const MAX_BODY_BYTES = 64 * 1024
+
 // env: PUBLIC_HOST, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPERATOR_EMAILS, OPERATOR_CONTACT, SMTP_HOST, SMTP_PORT,
-// SMTP_USER, SMTP_PASS, EMAIL_FROM (deploy/local.env). google, mailer, now, canSignUp, tickMs, limits and log are seams for the tests.
+// SMTP_USER, SMTP_PASS, EMAIL_FROM, TRUSTED_PROXIES (deploy/local.env). google, mailer, now, canSignUp, tickMs, limits and log are seams for the tests.
 export function startServer({ configPath, port, heartbeatMs, env = process.env, google, mailer, now = Date.now, canSignUp, tickMs = 60_000, limits = LIMITS, log = console.log }) {
   const config = loadConfig(configPath)
   const guard = createGuard({ now, limits, log })
   const contact = env.OPERATOR_CONTACT || DEFAULT_CONTACT // the one contact address (spec §5)
+  const trusted = trustedProxies(env.TRUSTED_PROXIES) // who may say the visitor's address (server/client-ip.js)
   const startedAt = now()
   // /operator's Errors tile: 5xx answers and uncaught exceptions since start. Only the error's type and the
   // route are kept, never its message, which could carry something from a request.
@@ -81,14 +86,17 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   const hub = createHub({ heartbeatMs })
   const pairing = createPairing({ now })
   // Continue with email (spec v2.1 §11): a relay with plain SMTP, or a mail service over TLS with SMTP_USER and
-  // SMTP_PASS (implicit TLS on port 465, STARTTLS on any other). Hidden, and its routes refused, until SMTP_HOST
-  // and EMAIL_FROM are both set. mailer.send({ to, subject, text, html }) resolves once the server has it.
-  const mail =
-    mailer !== undefined
+  // SMTP_PASS (implicit TLS on port 465, STARTTLS on any other). Hidden, and its routes refused, until SMTP_HOST,
+  // EMAIL_FROM and PUBLIC_HOST are all set: the emailed link names PUBLIC_HOST, never the request's Host header,
+  // which whoever asks for the link can set. mailer.send({ to, subject, text, html }) resolves once the server has it.
+  const mail = !env.PUBLIC_HOST
+    ? null
+    : mailer !== undefined
       ? mailer
       : env.SMTP_HOST && env.EMAIL_FROM
         ? { send: (message) => sendMail({ host: env.SMTP_HOST, port: Number(env.SMTP_PORT) || 25, user: env.SMTP_USER || null, pass: env.SMTP_PASS, from: env.EMAIL_FROM, ...message }) }
         : null
+  if (env.SMTP_HOST && !env.PUBLIC_HOST) log('Continue with email is off: set PUBLIC_HOST, the host name its emailed links open')
 
   // The minute tick (spec §7): nights go live and end by themselves. The first runs at start, catching up on
   // anything missed while the server was down.
@@ -384,7 +392,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       if (invite && why !== 'ok') return REFUSALS.invite({ why })
       if (guard.take('emailLink', hashOf(email.toLowerCase()))) {
         const { token, code, householdId } = accounts.beginEmailSignIn({ email, timeZone: form.get('timeZone'), pair: form.get('pair'), invite })
-        const message = signInEmail({ link: `${publicOrigin(req)}/auth/email?token=${token}`, code, to: email, ip, at: now(), timeZone: form.get('timeZone') })
+        const message = signInEmail({ link: `https://${env.PUBLIC_HOST}/auth/email?token=${token}`, code, to: email, ip, at: now(), timeZone: form.get('timeZone') })
         Promise.resolve()
           .then(() => mail.send({ to: email, ...message }))
           .then(
@@ -768,8 +776,14 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
     return `${publicOrigin(req)}/invite?key=${token}`
   }
 
+  // Behind a proxy, the visitor's address (server/client-ip.js).
+  function clientIp(req, server) {
+    return clientIpOf(req.headers.get('CF-Connecting-IP'), server?.requestIP(req)?.address, trusted)
+  }
+
   function route(req, server) {
     const { pathname } = new URL(req.url)
+    if (req.method !== 'GET' && req.method !== 'HEAD' && crossSite(req, env.PUBLIC_HOST)) return new Response('Refused: this came from another site', { status: 403 })
     const handler = routes[`${req.method} ${pathname}`]
     if (handler) return handler(req, server)
     // The TV link's page: the same TV page; it reads its token from the address.
@@ -780,6 +794,7 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
 
   const server = Bun.serve({
     port: port ?? config.port,
+    maxRequestBodySize: MAX_BODY_BYTES,
     async fetch(req, server) {
       let res
       try {
@@ -877,9 +892,17 @@ function tokenOf(req) {
   return cookies.split(/;\s*/).find((c) => c.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1) ?? null
 }
 
-// Behind Cloudflare, the visitor's address is in CF-Connecting-IP (spec §15).
-function clientIp(req, server) {
-  return req.headers.get('CF-Connecting-IP') ?? server?.requestIP(req)?.address ?? null
+// A browser's write from another site, sibling subdomains included: they're the same site to SameSite=Lax, so the
+// session cookie goes along (the check Go's CrossOriginProtection makes). Sec-Fetch-Site says so; a browser too old
+// to send it is judged by its Origin against this host. A request with neither isn't a browser's, so it carries
+// nobody's cookie by accident.
+function crossSite(req, publicHost) {
+  const site = req.headers.get('Sec-Fetch-Site')
+  if (site) return site !== 'same-origin' && site !== 'none'
+  const origin = req.headers.get('Origin')
+  if (origin == null) return false
+  const host = URL.canParse(origin) ? new URL(origin).host : null
+  return !host || (host !== req.headers.get('Host') && host !== publicHost)
 }
 
 // The same browser security headers on every response (spec §15): no inline script, nothing from elsewhere

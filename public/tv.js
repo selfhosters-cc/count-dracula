@@ -461,10 +461,16 @@ function renderRace(state) {
   race.update(state, until)
   $('pace').textContent = paceText(state)
   renderRush(state)
-  $('legend').innerHTML = state.ghost
-    ? `<span><i style="border-top: 6px solid var(--pumpkin)"></i>Tonight</span>` +
-      `<span><i style="border-top: 4px dashed #c9d2ff"></i>${state.ghost.label}</span>`
-    : ''
+  // The ghost's label is a night's name, which a Manager types: text, never markup.
+  $('legend').replaceChildren(...(state.ghost ? [legendItem('6px solid var(--pumpkin)', 'Tonight'), legendItem('4px dashed #c9d2ff', state.ghost.label)] : []))
+}
+
+function legendItem(line, text) {
+  const span = document.createElement('span')
+  const swatch = document.createElement('i')
+  swatch.style.borderTop = line
+  span.append(swatch, text)
+  return span
 }
 
 // ---- the idle teaser: silent, gone on any tap, paused while ended or disconnected

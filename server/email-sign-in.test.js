@@ -71,8 +71,9 @@ async function emailSignIn(server, email, options) {
 }
 
 describe('switched off', () => {
-  test('until SMTP_HOST and EMAIL_FROM are both set, the homepage hides it and every route refuses', async () => {
-    for (const env of [{}, { SMTP_HOST: '192.0.2.25' }, { EMAIL_FROM: 'a@example.com' }]) {
+  test('until SMTP_HOST, EMAIL_FROM and PUBLIC_HOST are all set, the homepage hides it and every route refuses', async () => {
+    const { PUBLIC_HOST, ...noHost } = EMAIL_ENV
+    for (const env of [{}, { SMTP_HOST: '192.0.2.25' }, { EMAIL_FROM: 'a@example.com' }, noHost]) {
       const { app } = start({ env, mailer: 'env' })
 
       expect((await (await fetch(`${app.url}/api/home`)).json()).emailSignIn).toBe(false)
@@ -84,6 +85,13 @@ describe('switched off', () => {
     }
   })
 
+  test('without PUBLIC_HOST, the log says why it is off', async () => {
+    const { PUBLIC_HOST, ...noHost } = EMAIL_ENV
+    const { logs } = start({ env: noHost, mailer: 'env' })
+
+    expect(logs).toContain('Continue with email is off: set PUBLIC_HOST, the host name its emailed links open')
+  })
+
   test('set, the homepage shows it', async () => {
     const { app } = start()
 
@@ -92,6 +100,17 @@ describe('switched off', () => {
 })
 
 describe('asking for a link', () => {
+  test("the link always opens PUBLIC_HOST, whatever Host and X-Forwarded-Proto the asker sent", async () => {
+    const { app, sent } = start()
+
+    const body = new URLSearchParams({ email: 'victim@example.com', timeZone: 'UTC' })
+    await fetch(`${app.url}/auth/email/start`, { method: 'POST', body, headers: { Host: 'evil.example', 'X-Forwarded-Proto': 'http' } })
+    await settle()
+
+    expect(new URL(linkIn(sent[0])).origin).toBe('https://count-dracula.example.com')
+    expect(sent[0].html).not.toContain('evil.example')
+  })
+
   test('"Check your email", the same for an address with an account and one without', async () => {
     const server = start()
     await emailSignIn(server, 'known@example.com')
