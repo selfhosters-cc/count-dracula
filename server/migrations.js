@@ -223,6 +223,22 @@ const MIGRATIONS = [
   (db) => {
     db.exec("ALTER TABLE households ADD COLUMN checklist TEXT NOT NULL DEFAULT '{}'")
   },
+
+  // 19 → 20: the devices that joined each night, for /operator's Stats: a phone or TV screen once per Event,
+  // by a hash of the Event and the device's own random id, so one device can't be followed across Events.
+  // Nights that had already gone live count none, and show "—" (devices_counted 0) until a Reset.
+  (db) => {
+    db.exec(`
+      CREATE TABLE event_devices (
+        event_id INTEGER NOT NULL REFERENCES events(id),
+        kind TEXT NOT NULL,
+        device TEXT NOT NULL,
+        PRIMARY KEY (event_id, kind, device)
+      );
+      ALTER TABLE events ADD COLUMN devices_counted INTEGER NOT NULL DEFAULT 1;
+      UPDATE events SET devices_counted = 0 WHERE went_live_at IS NOT NULL OR counts_only = 1;
+    `)
+  },
 ]
 
 // A long secret for a URL: 32 random bytes, base64url.

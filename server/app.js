@@ -12,7 +12,7 @@ import { createPairing } from './pairing.js'
 import { tvCodeFrom } from '../shared/codes.js'
 import { LIMITS, createGuard } from './guard.js'
 import { createBackups } from './backups.js'
-import { STATUSES, healthTiles, householdStatus } from './operator.js'
+import { STATUSES, healthTiles, householdStatus, siteStats } from './operator.js'
 import { createNearby } from './nearby.js'
 import { isBlocked } from './blocklist.js'
 import { toCsv } from './export.js'
@@ -37,6 +37,7 @@ const JOIN_QR_MS = 2 * 60_000 // how long the helper QR stays on the TV
 const SIGN_IN = '/#sign-in'
 const DEFAULT_CONTACT = 'privacy@count-dracula.example.com'
 const OPERATOR_ACTIONS = new Set(['rename', 'timeZone', 'suspend', 'unsuspend', 'invite', 'dismissReport'])
+const DEVICE_ID = /^[0-9a-f]{32}$/ // what live.js makes: 16 random bytes, hex
 
 // The sign-in cookie (spec §3): 90 days, renewed with use; the session itself lives server-side.
 const SESSION_COOKIE = 'cd_session'
@@ -204,6 +205,9 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const refusal = guard.admitStream({ kind, total: counts.total, fromIp: hub.streamsFrom(ip), household: counts.households[house.id] ?? { phone: 0, paired: 0, tvLink: 0 } })
       // A full TV gets 503, which the TV page shows as "This TV is full, try again soon" and retries.
       if (refusal) return new Response(refusal === 'tvFull' ? 'This TV is full, try again soon' : 'Too many connections', { status: refusal === 'tvFull' ? 503 : 429 })
+      // The browser's own random id (live.js), so /operator can count the devices that joined each night.
+      const deviceId = new URL(req.url).searchParams.get('deviceId')
+      if (DEVICE_ID.test(deviceId ?? '')) ledger.countDevice(house.id, deviceId, kind === 'phone' ? 'phone' : 'tv')
       return kind === 'phone'
         ? hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(phoneSnapshot(house), house) })
         : hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => tvSnapshotFor(house, kind), shape: tvDelta })
@@ -305,7 +309,13 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
         suspendedSince: h.suspendedSince,
         managers: accounts.managerEmails(id),
         reports: ledger.reports(id),
+        nights: ledger.nights(id),
       })
+    }),
+    // The Stats section: sign-ups, nights and devices across the site, from what's stored (no names, no emails).
+    'GET /api/operator/stats': operator(() => {
+      const at = now()
+      return Response.json({ now: at, ...siteStats({ households: ledger.households(), nights: ledger.nights(), pairedTvs: ledger.pairedTvs() }, at) })
     }),
     'POST /api/operator/action': operator(async (req, session) => {
       const { householdId, action, value } = await req.json()

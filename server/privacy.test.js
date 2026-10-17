@@ -29,7 +29,7 @@ describe('/privacy', () => {
     for (const heading of ['What we keep', 'Who else sees it', "What's public", 'How long', 'Deleting', 'Contact', 'House rules']) {
       expect(configured).toContain(heading)
     }
-    expect(configured).toContain('Updated Oct 2026')
+    expect(configured).toContain('Updated Oct 17, 2026')
   })
 
   test('promises no reply time', async () => {

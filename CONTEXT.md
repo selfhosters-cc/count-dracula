@@ -43,11 +43,15 @@ _Avoid_: Event key, password, TV link (that's read-only)
 
 **Operator**:
 Whoever runs the deployment itself, across all Households (today, us). A Manager whose email is on the operator list in `deploy/local.env`.
-_Avoid_: Admin, superuser, site admin
+_Avoid_: Admin, superuser, super admin, site admin
 
 **TV link**:
 The one secret link that lets a device watch a Household's open Events read-only, one Event at a time: the open Event that went live most recently, on the same TV page the porch shows, switching by itself. With none open it shows a "No night on right now" screen. The porch TV and every remote viewer use the same link. It never expires; rotating it cuts off every device holding the old one, the Household's own porch TV included.
 _Avoid_: Share link (that's the Night summary's), watch link, viewer key, join key (that's for Helpers' writes)
+
+**Device**:
+A phone or TV screen that joined one of a Household's Events, known only within that Event by a random id it keeps. The Operator counts Devices per Event, phones and TV screens apart: a reload is the same Device, the same TV on two nights is two, and a cleared browser is a new one. It's never a person.
+_Avoid_: Viewer, counter, user, connection (that's one open stream)
 
 **TV pairing code**:
 A short code shown on a TV that has no TV link yet. A Manager enters or scans it to give that TV their Household's TV link. It expires after a few minutes and does nothing without a Manager.

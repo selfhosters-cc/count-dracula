@@ -80,3 +80,29 @@ function relative(ms, suffix = ' ago') {
   const h = Math.floor(minutes / 60)
   return `${h ? `${h} h ` : ''}${minutes % 60} min${suffix}`
 }
+
+const DAY = 24 * 60 * MINUTE
+const NIGHT_STATES = ['upcoming', 'live', 'ended', 'past']
+
+// /operator's Stats: the site's sign-ups, nights and devices, from every Household and every night (the Ledger's
+// nights()). A Test night only counts toward "tried the Test night", never as a night. A device is known only
+// within one night, so devices are added up night by night, over the nights that counted them.
+export function siteStats({ households, nights, pairedTvs }, now) {
+  const real = nights.filter((n) => !n.testNight)
+  const counted = real.filter((n) => n.kids > 0)
+  const withDevices = real.filter((n) => n.state !== 'upcoming' && n.phones != null)
+  const sum = (rows, key) => rows.reduce((total, n) => total + n[key], 0)
+  const countedBy = new Set(counted.map((n) => n.householdId))
+  return {
+    households: {
+      total: households.length,
+      lastWeek: households.filter((h) => now - h.signedUpAt < 7 * DAY).length,
+      withLocation: households.filter((h) => h.location).length,
+      suspended: households.filter((h) => h.suspendedSince != null).length,
+      triedTestNight: new Set(nights.filter((n) => n.testNight && n.kids > 0).map((n) => n.householdId)).size,
+      noNightYet: households.filter((h) => !countedBy.has(h.id)).length,
+    },
+    nights: { ...Object.fromEntries(NIGHT_STATES.map((s) => [s, real.filter((n) => n.state === s).length])), counted: counted.length, kids: sum(real, 'kids') },
+    devices: { phones: sum(withDevices, 'phones'), tvScreens: sum(withDevices, 'tvScreens'), nights: withDevices.length, pairedTvs },
+  }
+}

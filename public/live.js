@@ -16,7 +16,23 @@ const STALE_MS = 35_000 // the server pings every 15 s: two missed means the lin
 const REFUSED = new Set([401, 403, 404])
 const MAX_BACKOFF_MS = 60_000
 
+// A random id this browser keeps, sent with every stream it opens so /operator can count the phones and TVs
+// that joined each night (the server keeps only a hash of it per night). A browser that can't keep it makes a
+// new one each time the page opens.
+const DEVICE_ID = 'cd.deviceId'
+function deviceId() {
+  const made = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
+  try {
+    let id = localStorage.getItem(DEVICE_ID)
+    if (!id) localStorage.setItem(DEVICE_ID, (id = made()))
+    return id
+  } catch {
+    return made()
+  }
+}
+
 export function connectLive(url = '/api/stream') {
+  url += `${url.includes('?') ? '&' : '?'}deviceId=${deviceId()}`
   const listeners = new Set()
   const refusedListeners = new Set()
   const busyListeners = new Set()

@@ -272,7 +272,7 @@ export function openLedger(db, config) {
     deleteHousehold(id) {
       db.transaction(() => {
         const events = 'SELECT id FROM events WHERE household_id = ?'
-        for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches']) {
+        for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches', 'event_devices']) {
           db.query(`DELETE FROM ${table} WHERE event_id IN (${events})`).run(id)
         }
         db.query('DELETE FROM events WHERE household_id = ?').run(id)
@@ -339,6 +339,38 @@ export function openLedger(db, config) {
     // When the last kid was counted anywhere, for /operator's Last tap tile.
     lastTapAt() {
       return db.query('SELECT MAX(received_at) AS at FROM kids WHERE deleted_at IS NULL').get().at
+    },
+
+    // A phone or TV screen that opened a stream joins its Household's door's Event, once per Event and kind
+    // (/operator's Stats). Only a hash of the Event and its id is kept, never the id itself.
+    countDevice(householdId, deviceId, kind) {
+      const door = db.query(`SELECT e.id FROM events e WHERE e.household_id = ? AND ${DOOR_ROW}`).get(householdId)
+      if (!door) return
+      const device = new Bun.CryptoHasher('sha256').update(`${door.id}:${deviceId}`).digest('base64url')
+      db.query('INSERT OR IGNORE INTO event_devices (event_id, kind, device) VALUES (?, ?, ?)').run(door.id, kind, device)
+    },
+
+    // Every Event that went live (or is Upcoming), for /operator's Stats, or one Household's: [{ id, householdId,
+    // name, state, wentLiveAt, testNight, kids, phones, tvScreens }]. Imported and estimated counts aren't nights;
+    // phones and tvScreens are null on a night that went live before devices were counted.
+    nights(householdId = null) {
+      return db
+        .query(`
+          SELECT e.id, e.household_id AS householdId, e.name, e.state, e.went_live_at AS wentLiveAt,
+            e.id IS h.test_night_event_id AS testNight,
+            (SELECT COUNT(*) FROM kids k WHERE k.event_id = e.id AND k.deleted_at IS NULL) AS kids,
+            CASE WHEN e.devices_counted THEN (SELECT COUNT(*) FROM event_devices d WHERE d.event_id = e.id AND d.kind = 'phone') END AS phones,
+            CASE WHEN e.devices_counted THEN (SELECT COUNT(*) FROM event_devices d WHERE d.event_id = e.id AND d.kind = 'tv') END AS tvScreens
+          FROM events e JOIN households h ON h.id = e.household_id
+          WHERE e.counts_only = 0 AND (?1 IS NULL OR e.household_id = ?1) ORDER BY e.id
+        `)
+        .all(householdId)
+        .map((n) => ({ ...n, testNight: n.testNight === 1 }))
+    },
+
+    // TVs paired by code, across the site.
+    pairedTvs() {
+      return db.query('SELECT COUNT(*) AS n FROM paired_devices').get().n
     },
 
     // A Night summary share link's night: { householdId, eventId, hideName }, or null.
@@ -839,9 +871,9 @@ export function openLedger(db, config) {
         if (!event) throw new BadCommand('No such event')
         if (!isOpen(event)) throw new BadCommand('Only a live or ended night can be reset')
         if (liveCount.get(event.id).n > RESET_CONFIRM_ABOVE && confirm !== event.name) throw new BadCommand(`Type "${event.name}" to reset it`)
-        for (const table of ['kids', 'backfill_batches', 'fired_moments', 'golden_tickets', 'share_links']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
+        for (const table of ['kids', 'backfill_batches', 'fired_moments', 'golden_tickets', 'share_links', 'event_devices']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
         db.query(`
-          UPDATE events SET state = 'upcoming', went_live_at = NULL, ended_automatically = 0, summary_nearby = NULL,
+          UPDATE events SET state = 'upcoming', went_live_at = NULL, ended_automatically = 0, summary_nearby = NULL, devices_counted = 1,
             tick_note = NULL, tick_note_at = NULL, tick_note_for = NULL,
             goes_live_at = CASE WHEN goes_live_at > ? THEN goes_live_at END
           WHERE id = ?
@@ -1039,7 +1071,7 @@ export function openLedger(db, config) {
     // An event and everything it holds; anything racing it goes to None.
     function removeEvent(id) {
       db.query('UPDATE events SET race_against_id = NULL WHERE race_against_id = ?').run(id)
-      for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches', 'share_links', 'reports']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(id)
+      for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches', 'share_links', 'reports', 'event_devices']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(id)
       db.query('UPDATE households SET test_night_event_id = NULL WHERE test_night_event_id = ?').run(id)
       db.query('DELETE FROM events WHERE id = ?').run(id)
     }
