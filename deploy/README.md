@@ -46,8 +46,24 @@ An LXC made before v2 has 1 core / 512 MB. Raise it once:
 ssh proxmox pct set 118 --cores 2 --memory 1024
 ```
 
-The public host on the shared Caddy (a subdomain under an existing wildcard, with its own masked access log)
-is v2 ticket 35.
+The public host on the shared Caddy, with its own masked access log, is v2 ticket 35: `deploy/caddy-add-site.sh`
+puts `deploy/caddy-site.caddy` in as its own site, before the wildcard it falls under or at the end for a domain
+of its own. Each name in `REDIRECT_HOSTS` (www, a host the site moved from) gets a site that 301s to
+`PUBLIC_HOST` with the path and query kept, and no access log.
+
+## Moving to a new host name
+
+Phones keep their join key in the browser and sign-ins are cookies, both per host: after a move every helper phone
+joins again and everyone signs in again. Paired TVs follow the redirect (their token is in the URL). Avoid it close
+to Oct 31. In order:
+
+1. Cloudflare: the new name's DNS record (proxied), SSL/TLS **Full (strict)**, and the zone added to the DNS-edit
+   token the shared Caddy uses for its certificates.
+2. Google Cloud console: add `https://<new host>/auth/google/callback` to the client's redirect URIs.
+3. `deploy/local.env`: the new `PUBLIC_HOST` (and `EMAIL_FROM`); `REDIRECT_HOSTS` with only www for now.
+   `deploy/caddy-add-site.sh`, then check the new host from outside the LAN.
+4. `deploy/deploy.sh`: every new link (invites, share links, sign-in) now uses the new name.
+5. Add the old host to `REDIRECT_HOSTS` and run `deploy/caddy-add-site.sh` again.
 
 ## Every time: deploy
 
