@@ -23,7 +23,8 @@ export const LIMITS = {
   invite: { count: 20, perMs: DAY }, // per Household
   taps: { count: 30, perMs: 3 * SECOND }, // per Household: bursts of 30, then 10 a second
   report: { count: 5, perMs: DAY }, // per IP
-  joinQr: { count: 10, perMs: MINUTE }, // per Household: showing the helper QR on the TV
+  joinQr: { count: 10, perMs: MINUTE }, // per Household: showing the helper or watch QR on the TV
+  code: { count: 30, perMs: HOUR }, // per IP: codes typed under Got a code?
 }
 
 const MAX_BUCKETS = 50_000 // past this, full (idle) buckets are dropped

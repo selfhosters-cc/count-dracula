@@ -131,6 +131,7 @@
     <p class="muted">Signed in to <b id="house-name"></b>.</p>
     <a class="button primary" href="/setup">Go to Setup ›</a>
     <button type="button" id="count-here">📱 Count on this device</button>
+    <button type="button" id="watch-here">📺 Watch on this device</button>
     <div class="muted after">Not you? <form method="post" action="/auth/signout"><button class="link-button" type="submit">Sign out</button></form></div>
   </section>
 
@@ -192,16 +193,16 @@
     </div>
   </section>
 
-  <!-- The one code box (spec v2.1 §11): a TV's pairing code or a host's join code; the page tells them apart. -->
+  <!-- The one code box (spec v2.1 §11): a TV's pairing code, or a host's join or watch code; the page tells them apart. -->
   <section id="code">
     <h2>Got a code?</h2>
-    <p class="muted">A code on a TV's screen, or one a host gave you to help at their door. Type it here: we'll work
-      out which it is. A link you were sent works pasted in too.</p>
+    <p class="muted">A code on a TV's screen, or one a host gave you to help at their door or watch along. Type it
+      here: we'll work out which it is. A link you were sent works pasted in too.</p>
     <form id="code-form" autocomplete="off">
       <label for="code-input">Code</label>
       <input id="code-input" name="code" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="K7Q-M4X or Ab3dEf7hJk">
       <button type="submit">Continue</button>
-      <p class="error" id="code-error" role="alert" hidden>That isn't a code we know. A TV shows 6 characters, like K7Q-M4X; a host's helper code is 10 letters and numbers.</p>
+      <p class="error" id="code-error" role="alert" hidden>That isn't a code we know. A TV shows 6 characters, like K7Q-M4X; a host's join or watch code is 10 letters and numbers.</p>
     </form>
   </section>
 

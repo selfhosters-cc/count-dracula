@@ -1,7 +1,7 @@
 // The door phone on /door (v1 spec §4–5, v2.1 §4): counting, the ☰ door menu, the soundboard.
 import { connectLive } from '/live.js'
 import { createOutbox, uuid } from '/outbox.js'
-import { doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, joinCodeLine, quietNudge, refusedKey, tvQrButton, tvQrSays } from '/door-view.js'
+import { doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, joinCodeLine, quietNudge, refusedKey, tvQrButton, tvQrSays, watchLink, watchQrButton, watchQrSays } from '/door-view.js'
 import { noNightLines } from '/no-night.js'
 import { phoneNearby } from '/nearby-text.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
@@ -298,10 +298,12 @@ function start(phoneName) {
     $('night-head').hidden = !open && $('go-live-now').hidden
     const ended = !!live.state?.event?.ended
     $('end-night').textContent = ended ? '☀️ Resume the night' : '🌙 End the night'
-    for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release, #end-night')) c.disabled = !joined
+    for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release, #end-night, #watch-tv, #watch-send, #join-send')) c.disabled = !joined
+    $('join-code').textContent = joinKey
   }
   $('menu-open').addEventListener('click', () => {
     renderMenu()
+    loadWatch()
     renderGoLiveNow()
     $('helper-qr').hidden = true
     $('helper-tv').hidden = true
@@ -529,6 +531,47 @@ function start(phoneName) {
     $('tv-qr-says').textContent = tvQrSays(await res.json())
     renderTvQr()
   })
+
+  // ---- Watchers: the watch code and link, read each time ☰ opens (a Rotate TV link in /setup shows at once), and
+  // the watch QR on every screen watching for 2 minutes. Both links go out by the phone's own share sheet.
+  let watch = null // { code, tvToken }
+  async function loadWatch() {
+    const res = await fetch('/api/watch', { headers: { 'X-Join-Key': joinKey } }).catch(() => null)
+    watch = res?.ok ? await res.json() : null
+    $('watch-code').textContent = watch?.code ?? '—'
+  }
+  async function shareLink(url, title) {
+    if (navigator.share) return navigator.share({ title, url }).catch(() => {})
+    await navigator.clipboard?.writeText(url).catch(() => {})
+    toast('Link copied')
+  }
+  $('watch-send').addEventListener('click', () => watch && shareLink(watchLink(location.origin, watch.tvToken), `Watch our trick-or-treat count`))
+  $('join-send').addEventListener('click', () => shareLink(helperLink(location.origin, joinKey), `Help count trick-or-treaters at ${live.state?.household || 'our door'}`))
+  const watchQrLeft = () => Math.max(0, (live.state?.watchQr?.until ?? 0) - Date.now())
+  function renderWatchQr() {
+    const { showing, label } = watchQrButton(watchQrLeft())
+    $('watch-tv').textContent = label
+    $('watch-tv').setAttribute('aria-pressed', String(showing))
+  }
+  live.on(({ cause }) => {
+    if (cause === 'watchQr' || cause === 'snapshot') renderWatchQr()
+  })
+  let watchSaidAt = 0
+  setInterval(() => {
+    if (Date.now() - watchSaidAt > 10_000) $('watch-says').textContent = ''
+    renderWatchQr()
+  }, 1_000)
+  $('watch-tv').addEventListener('click', async () => {
+    const res = await post('/api/tv/watch-qr', { show: !watchQrButton(watchQrLeft()).showing }).catch(() => null)
+    watchSaidAt = Date.now()
+    if (!res?.ok) {
+      $('watch-says').textContent = res?.status === 429 ? 'Too many tries: wait a minute' : res?.status === 403 ? 'Wrong join key: scan a helper code' : "Couldn't reach the TV"
+      return
+    }
+    $('watch-says').textContent = watchQrSays(await res.json())
+    renderWatchQr()
+  })
+  if (joinKey) loadWatch()
 
   // ---- "+ New" costume with Catch-up. Online only: one direct POST, safe to retry with the same kid id.
   let sheetOpen = false

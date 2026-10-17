@@ -53,6 +53,10 @@ _Avoid_: Share link (that's the Night summary's), watch link, viewer key, join k
 A phone or TV screen that joined one of a Household's Events, known only within that Event by a random id it keeps. The Operator counts Devices per Event, phones and TV screens apart: a reload is the same Device, the same TV on two nights is two, and a cleared browser is a new one. It's never a person.
 _Avoid_: Viewer, counter, user, connection (that's one open stream)
 
+**Watch code**:
+The TV link's short form: a code a Manager or a door phone gives out, typed into the homepage's "Got a code?" box to watch along read-only. The watch QR carries it, with the link, onto every screen watching for 2 minutes, for someone at the porch to scan. Rotating the TV link changes it too.
+_Avoid_: Viewer code, TV code (that's the TV pairing code), join code (that's for Helpers)
+
 **TV pairing code**:
 A short code shown on a TV that has no TV link yet. A Manager enters or scans it to give that TV their Household's TV link. It expires after a few minutes and does nothing without a Manager.
 _Avoid_: TV code, share code, join code

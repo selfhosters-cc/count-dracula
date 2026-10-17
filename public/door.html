@@ -111,8 +111,11 @@
     #helper-qr p { color: #333; font-size: 12px; word-break: break-all; margin: 8px 0 0; }
     #helper-qr p.says { color: #111; font-size: 15px; font-weight: 700; word-break: normal; }
     #tv-qr[aria-pressed=true] { background: var(--orange); color: #1a0d00; }
-    #tv-qr-says { color: var(--dim); font-size: 14px; margin: 8px 2px 0; }
-    #tv-qr-says:empty { display: none; }
+    #tv-qr-says, .says-line { color: var(--dim); font-size: 14px; margin: 8px 2px 0; }
+    #tv-qr-says:empty, .says-line:empty { display: none; }
+    /* The two codes, always in sight, to read out or type in: "Got a code?" on the homepage takes either. */
+    #menu .code-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 14px 2px 8px; font-weight: 700; }
+    #menu .code-row b { font-size: 22px; letter-spacing: .08em; user-select: all; overflow-wrap: anywhere; }
     .unjoined { color: var(--amber); font-weight: 700; margin: 12px 0 0; }
 
     #recent { position: absolute; inset: 0; z-index: 20; background: #000a; display: none; align-items: flex-end; }
@@ -226,7 +229,13 @@
           <button class="wide" id="end-anyway">🌙 End anyway</button>
           <button class="wide" id="end-cancel">Cancel</button>
         </div>
-        <h4>Helpers</h4>
+        <h4>Watchers &amp; helpers</h4>
+        <div class="code-row"><span>👀 Watch code</span><b id="watch-code"></b></div>
+        <button class="wide" id="watch-tv">📺 Show the watch QR on the TV</button>
+        <p class="says-line" id="watch-says" aria-live="polite"></p>
+        <button class="wide" id="watch-send">💬 Send the watch link</button>
+        <div class="code-row"><span>📱 Join code</span><b id="join-code"></b></div>
+        <button class="wide" id="join-send">💬 Send the join link</button>
         <button class="wide" id="helper-show">📱 Add a helper</button>
         <div id="helper-qr" hidden></div>
         <div id="helper-tv" hidden>

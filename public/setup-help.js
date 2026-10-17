@@ -42,7 +42,7 @@ export const HELP = {
   helpers: {
     title: 'Helpers',
     p: [
-      'Count on this device turns this phone into a door phone.',
+      'Count on this device turns this phone into a door phone. The join code is for a helper who can\'t scan: they enter it under "Got a code?" on the homepage and count at your door.',
       'Add a helper shows a QR code a helper scans with their camera, or Share join link sends it. It works on every night, so a phone set up for a test still works on Halloween. Show on the TV puts the same QR on your porch TV for 2 minutes, so a helper can scan it there. It only shows on a TV you paired with its code, never on a TV link.',
     ],
   },
@@ -50,8 +50,8 @@ export const HELP = {
   watch: {
     title: 'Watch',
     p: [
-      'Watch on this device opens the TV screen right here, the same one your porch TV shows: handy on a tablet indoors, or to check the TV from your phone.',
-      "Send the TV link lets family watch from anywhere. Anyone with it sees tonight's count and costumes, never your phones' names. Rotate TV link in Household cuts everyone off, your porch TV too.",
+      'Watch on this device opens the TV screen right here, as your porch TV shows it. Send the TV link, or give out the watch code (entered under "Got a code?" on the homepage), so family can watch from anywhere.',
+      "Show the watch QR on the TV puts a QR on your TV for 2 minutes, for someone at the porch to scan. Watchers see tonight's count and costumes, never your phones' names, and can't count. Rotate TV link in Household changes the link and the code, and cuts everyone off, your porch TV too.",
     ],
   },
 

@@ -95,6 +95,11 @@ export function helperLink(origin, key) {
   return `${origin}/door?key=${encodeURIComponent(key)}`
 }
 
+// Watch along: the TV link, the same one the porch TV holds; its watch code is the short form.
+export function watchLink(origin, tvToken) {
+  return `${origin}/tv/k/${tvToken}`
+}
+
 // Under a helper's QR: the code spelled out, for a phone that can't scan. Every code goes in the same box on the
 // homepage (spec v2.1 §11), so it's worded like the TV's.
 export function joinCodeLine(key, origin) {
@@ -118,6 +123,19 @@ export function tvQrSays({ shown, tvs }) {
   if (!tvs) return 'No paired TV is on right now. Pair your porch TV with the code on its screen to show the QR there.'
   if (!shown) return 'Taken off the TV'
   return `📺 On ${tvs === 1 ? 'the TV' : `${tvs} TVs`} for 2 minutes`
+}
+
+// "📺 Show the watch QR on the TV": the same button, its own words.
+export function watchQrButton(msLeft) {
+  const button = tvQrButton(msLeft)
+  return button.showing ? button : { showing: false, label: '📺 Show the watch QR on the TV' }
+}
+
+// After a press: the answer counts every screen watching, a paired TV or anyone on the TV link.
+export function watchQrSays({ shown, tvs }) {
+  if (!tvs) return 'No TV is on right now. Put your TV link on the TV first.'
+  if (!shown) return 'Taken off the TV'
+  return `📺 On ${tvs === 1 ? 'the TV' : `${tvs} screens`} for 2 minutes`
 }
 
 export function helperWording(householdName) {

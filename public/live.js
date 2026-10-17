@@ -72,6 +72,7 @@ export function connectLive(url = '/api/stream') {
       lastHeard = Date.now()
       live.state = JSON.parse(e.data)
       if (live.state.joinQr) live.state.joinQr = untilFrom(live.state.joinQr)
+      if (live.state.watchQr) live.state.watchQr = untilFrom(live.state.watchQr)
       live.connected = true
       busyTries = 0
       emit('snapshot')
@@ -91,6 +92,14 @@ export function connectLive(url = '/api/stream') {
       if (!live.state) return
       live.state = { ...live.state, joinQr: untilFrom(JSON.parse(e.data)) }
       emit('joinQr')
+    })
+
+    // The watch QR on the TV (the TV link and its watch code), the same way: on with the time left, or null. No seq.
+    source.addEventListener('watchQr', (e) => {
+      lastHeard = Date.now()
+      if (!live.state) return
+      live.state = { ...live.state, watchQr: untilFrom(JSON.parse(e.data)) }
+      emit('watchQr')
     })
 
     source.addEventListener('delta', (e) => {

@@ -70,6 +70,12 @@ $('count-here').addEventListener('click', async () => {
   location.href = '/door'
 })
 
+// Watch on this device: the Household's TV link, as in /setup.
+$('watch-here').addEventListener('click', async () => {
+  const house = await getJson('/api/household')
+  location.href = house?.tvToken ? `/tv/k/${house.tvToken}` : '/setup'
+})
+
 // A TV's scan-to-pair QR on a signed-out phone lands here with ?pair=: every way in carries the code on to /setup.
 const waitingTv = tvCodeFrom(new URLSearchParams(location.search).get('pair'))
 if (waitingTv) {
@@ -78,21 +84,25 @@ if (waitingTv) {
   $('pair-note').hidden = false
 }
 
-// Got a code?: a TV's code pairs that TV (through sign-in if need be), a join code opens the door phone.
-// A join code is checked first, so a mistyped one says so here instead of on the door phone.
+// Got a code?: a TV's code pairs that TV (through sign-in if need be), a join code opens the door phone, and a
+// watch code the TV view. Join and watch codes look alike, so the server says which; a mistyped one says so here.
 $('code-form').addEventListener('submit', async (e) => {
   e.preventDefault()
   const say = (text) => {
     $('code-error').textContent = text
     $('code-error').hidden = !text
   }
+  const tvLink = $('code-input').value.match(/\/tv\/k\/[A-Za-z0-9_-]+/)?.[0] // a watch link pasted in
+  if (tvLink) return (location.href = tvLink)
   const code = readCode($('code-input').value)
-  if (!code) return say("That isn't a code we know. A TV shows 6 characters, like K7Q-M4X; a host's helper code is 10 letters and numbers.")
+  if (!code) return say("That isn't a code we know. A TV shows 6 characters, like K7Q-M4X; a host's join or watch code is 10 letters and numbers.")
   if (code.tv) return (location.href = `/setup?pair=${code.tv}`)
-  const res = await fetch(`/api/snapshot?key=${encodeURIComponent(code.join)}`).catch(() => null)
-  if (res && (res.status === 401 || res.status === 403)) return say("No door has that code. Check it with your host: it's under the QR on their phone.")
+  const res = await fetch(`/api/code?code=${encodeURIComponent(code.join)}`).catch(() => null)
+  if (res?.status === 404) return say('No door or TV has that code. Check it with your host: their phone shows both.')
+  if (res?.status === 429) return say('Too many tries: wait a while and try again.')
+  const found = res?.ok ? await res.json() : null
   say('')
-  location.href = `/door?key=${encodeURIComponent(code.join)}`
+  location.href = found?.watch ?? `/door?key=${encodeURIComponent(code.join)}`
 })
 
 // Just signed out (POST /auth/signout): say so, then tidy the address bar.

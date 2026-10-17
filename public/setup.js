@@ -2,7 +2,7 @@
 // and a screen per night. setup-view.js decides what shows; setup-night.js and setup-household.js draw it.
 import { zonedTime, clockTime as zoneClock } from '../shared/night-maths.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
-import { helperLink, helperWording, joinCodeLine, tvQrButton, tvQrSays } from './door-view.js'
+import { helperLink, helperWording, joinCodeLine, tvQrButton, tvQrSays, watchQrButton, watchQrSays } from './door-view.js'
 import { $, h, option } from './setup-dom.js'
 import {
   checklist, closeConfirm, deleteConfirm, doorEvent, endConfirm, goLiveConfirm, goLiveOffer, nightGroups, nightsTabLabel,
@@ -18,7 +18,7 @@ let shares = [] // the nights shared by a public link: [{ eventId, url, hideName
 let batches = [] // the shown night's Add missed kids batches
 let screen = screenFrom(location.search) // { tab: 'tonight' | 'nights' | 'household', event: id or null }
 // What's open on screen: End's choices (an Event id), Add missed kids (an Event id), a helper's QR (by place).
-const ui = { ending: null, missed: null, helper: { tonight: false, house: false, checklist: false }, tvQr: { until: 0, says: '', saidAt: 0 } }
+const ui = { ending: null, missed: null, helper: { tonight: false, house: false, checklist: false }, tvQr: { until: 0, says: '', saidAt: 0 }, watchQr: { until: 0, says: '', saidAt: 0 } }
 const timeZone = () => house.timeZone // the Household's: every time of night in Setup reads in it
 
 let sayTimer
@@ -41,6 +41,7 @@ async function get(path) {
 async function load() {
   house = await get('/api/household')
   ui.tvQr.until = Date.now() + house.joinQrMsLeft
+  ui.watchQr.until = Date.now() + house.watchQrMsLeft
   ;[events, shares] = await Promise.all([get('/api/events'), get('/api/shares')])
   const shown = shownNight()
   batches = shown?.open ? await get(`/api/batches?event=${shown.id}`) : []
@@ -261,6 +262,7 @@ function helperBox(place) {
     return box
   }
   return [
+    place === 'checklist' ? null : codeRow('📱 Join code', house.joinKey),
     h('div', { className: 'row' },
       h('button', { className: 'primary', textContent: '📱 Count on this device', onclick: countHere }),
       h('button', { textContent: '➕ Add a helper', ariaExpanded: String(open), onclick: () => {
@@ -304,6 +306,7 @@ async function toggleTvQr() {
   } else {
     const answer = await res.json()
     ui.tvQr.until = Date.now() + answer.msLeft
+    if (answer.shown) ui.watchQr.until = 0 // the TV shows one card at a time
     ui.tvQr.says = tvQrSays(answer)
   }
   ui.tvQr.saidAt = Date.now()
@@ -360,14 +363,55 @@ function renderTonight(ctx) {
       others.length ? alsoOpen(others, ctx) : null,
       waits.length ? waiting(waits, ctx) : null,
       h('section', { data: { help: 'helpers' } }, h('h2', {}, '📱 Helpers'), helperBox('tonight')),
-      h('section', { data: { help: 'watch' } }, h('h2', {}, '📺 Watch'), watchBox())))
+      h('section', { data: { help: 'watch' } }, h('h2', {}, '📺 Watch'), ...watchBox())))
 }
 
-// Watching from anywhere: this device, or someone else's by the TV link, the same one the porch TV holds.
+// A code to read out or type in, always in sight: "Got a code?" on the homepage takes either.
+const codeRow = (label, code) => h('div', { className: 'code-row' }, h('span', { textContent: label }), h('b', { textContent: code }))
+
+// Watching from anywhere: this device, someone else's by the TV link (the same one the porch TV holds) or its watch
+// code, or the watch QR on the TV for someone at the porch to scan.
 function watchBox() {
-  return h('div', { className: 'row' },
-    h('button', { className: 'primary', textContent: '📺 Watch on this device', onclick: () => (location.href = household.tvUrl()) }),
-    h('button', { textContent: 'Send the TV link', onclick: () => share(household.tvUrl(), 'Our trick-or-treat TV') }))
+  return [
+    codeRow('👀 Watch code', house.watchCode),
+    h('div', { className: 'row' },
+      h('button', { className: 'primary', textContent: '📺 Watch on this device', onclick: () => (location.href = household.tvUrl()) }),
+      h('button', { textContent: 'Send the TV link', onclick: () => share(household.tvUrl(), 'Watch our trick-or-treat count') }),
+      h('button', { data: { watchQr: '' }, textContent: watchQrButton(watchQrLeft()).label, onclick: toggleWatchQr })),
+    h('p', { className: 'muted', data: { watchQrSays: '' }, textContent: ui.watchQr.says, hidden: !ui.watchQr.says }),
+  ]
+}
+const watchQrLeft = () => Math.max(0, ui.watchQr.until - Date.now())
+function renderWatchQr() {
+  if (ui.watchQr.says && Date.now() - ui.watchQr.saidAt > SAYS_MS) ui.watchQr.says = ''
+  const { showing, label } = watchQrButton(watchQrLeft())
+  for (const b of document.querySelectorAll('[data-watch-qr]')) {
+    b.textContent = label
+    b.setAttribute('aria-pressed', String(showing))
+  }
+  for (const p of document.querySelectorAll('[data-watch-qr-says]')) {
+    p.textContent = ui.watchQr.says
+    p.hidden = !ui.watchQr.says
+  }
+}
+setInterval(renderWatchQr, 1_000)
+async function toggleWatchQr() {
+  const res = await fetch('/api/tv/watch-qr', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Join-Key': house.joinKey },
+    body: JSON.stringify({ show: !watchQrButton(watchQrLeft()).showing }),
+  }).catch(() => null)
+  if (!res?.ok) {
+    ui.watchQr.says = res?.status === 429 ? 'Too many tries: wait a minute' : res ? await res.text() : "Couldn't reach the server"
+  } else {
+    const answer = await res.json()
+    ui.watchQr.until = Date.now() + answer.msLeft
+    if (answer.shown) ui.tvQr.until = 0 // the TV shows one card at a time
+    ui.watchQr.says = watchQrSays(answer)
+  }
+  ui.watchQr.saidAt = Date.now()
+  renderWatchQr()
+  renderTvQr()
 }
 
 function renderNights(ctx) {

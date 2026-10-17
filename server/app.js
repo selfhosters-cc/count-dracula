@@ -141,7 +141,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   }
   // A phone's (or a Manager's) read also names the Household, for Add a helper's wording. A TV's never does:
   // the TV link is watched by remote viewers.
-  const phoneSnapshot = (house) => ({ ...doorSnapshot(house), household: house.displayName(), joinQr: joinQrFor(house, 'phone') })
+  const phoneSnapshot = (house) => ({ ...doorSnapshot(house), household: house.displayName(), joinQr: joinQrFor(house, 'phone'), watchQr: watchQrFor(house, 'phone') })
 
   // The helper join QR on the porch TV (spec v2.1 §4): a door phone or /setup shows it for 2 minutes, or until
   // either hides it. Kept in memory per Household (a restart drops it). The join key goes to paired TVs only:
@@ -156,10 +156,22 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     return kind === 'paired' ? { key: house.joinKey(), household: house.displayName(), msLeft } : { msLeft }
   }
   const tvSnapshotFor = (house, kind) => {
-    const snap = withNearby(tvSnapshot(doorSnapshot(house)), house)
+    const snap = { ...withNearby(tvSnapshot(doorSnapshot(house)), house), watchQr: watchQrFor(house, kind) }
     return kind === 'paired' ? { ...snap, joinQr: joinQrFor(house, kind) } : snap
   }
   const publishJoinQr = (house) => hub.sendByKind(house.id, 'joinQr', (kind) => joinQrFor(house, kind))
+
+  // The watch QR: the TV link as a QR, with its watch code, so someone at the porch can watch along on their own
+  // phone. Shown for 2 minutes like the helper QR, but on every screen: a TV-link viewer holds the link already.
+  // The TV shows one card at a time, so showing either takes the other down.
+  const watchQrUntil = new Map() // household id → ms
+  const watchQrLeft = (house) => Math.max(0, (watchQrUntil.get(house.id) ?? 0) - now())
+  function watchQrFor(house, kind) {
+    const msLeft = watchQrLeft(house)
+    if (!msLeft) return null
+    return kind === 'phone' ? { msLeft } : { token: house.tvToken(), code: house.watchCode(), msLeft }
+  }
+  const publishWatchQr = (house) => hub.sendByKind(house.id, 'watchQr', (kind) => watchQrFor(house, kind))
 
   // The first tick runs now, with nearby ready for any night it ends.
   tick()
@@ -189,6 +201,16 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // What the homepage can't know from the page alone: whether sign-ups are paused (shown before anyone goes to
     // Google), whether Continue with email is on, and a signed-in Manager's Household, for the Welcome back card.
     // Never more than its name.
+    // Got a code? on the homepage: a join code (count at the door) or a watch code (watch along on the TV link).
+    // Per IP, so codes can't be tried by the thousand.
+    'GET /api/code': (req, server) => {
+      if (!guard.take('code', clientIp(req, server))) return tooMany()
+      const code = new URL(req.url).searchParams.get('code')
+      const household = ledger.householdByJoinKey(code)
+      if (household != null && !ledger.isSuspended(household)) return Response.json({ join: true })
+      const tvToken = ledger.tvTokenByWatchCode(code)
+      return tvToken ? Response.json({ watch: `/tv/k/${tvToken}` }) : new Response('No such code', { status: 404 })
+    },
     'GET /api/home': (req) => {
       const session = accounts.session(tokenOf(req))
       const household = session ? (ledger.households().find((h) => h.id === session.householdId)?.displayName ?? null) : null
@@ -495,7 +517,7 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
       const checklist = { tvWatching: (streams?.tvLink ?? 0) + (streams?.paired ?? 0) > 0, anyKids, named: displayName !== NEW_HOUSEHOLD_NAME, ...house.checklistMarks() }
       // The door's Event is what the TV shows: first-run's tick names it (spec v2.1 §8).
       const door = house.doorEvent()
-      return Response.json({ id: house.id, displayName, timeZone, location, checklist, testNightEventId: house.testNightId(), door: door && { id: door.id, name: door.name }, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), joinKey: house.joinKey(), joinQrMsLeft: joinQrLeft(house), tvToken: house.tvToken(), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
+      return Response.json({ id: house.id, displayName, timeZone, location, checklist, testNightEventId: house.testNightId(), door: door && { id: door.id, name: door.name }, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), joinKey: house.joinKey(), joinQrMsLeft: joinQrLeft(house), tvToken: house.tvToken(), watchCode: house.watchCode(), watchQrMsLeft: watchQrLeft(house), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
     }),
     // Delete my Household: typed name to confirm; everything goes at once, and its streams close.
     'POST /api/household/delete': manager(async (req, house) => {
@@ -503,6 +525,7 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
       accounts.deleteHousehold(house.id, confirm)
       hub.close({ householdId: house.id })
       joinQrUntil.delete(house.id)
+      watchQrUntil.delete(house.id)
       log(`household deleted household=${house.id}`) // with the deletions table, what a restore re-deletes
       return new Response('Deleted', { headers: { 'Set-Cookie': sessionCookie('', 0) } })
     }),
@@ -571,7 +594,10 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
         // A QR on the TV now shows a dead key: take it down.
         if (joinQrUntil.delete(house.id)) publishJoinQr(house)
       }
-      if (house.tvToken() !== oldTv) hub.close({ householdId: house.id, credential: oldTv })
+      if (house.tvToken() !== oldTv) {
+        hub.close({ householdId: house.id, credential: oldTv })
+        if (watchQrUntil.delete(house.id)) publishWatchQr(house) // its QR and code are dead now
+      }
       return Response.json({ deltas, joinKey: house.joinKey() })
     }),
     // ☰ "🌙 End the night" / "Resume the night": any phone with the join key. Every night write names its
@@ -607,11 +633,30 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
       if (show && !guard.take('joinQr', house.id)) return tooMany()
       const tvs = hub.counts().households[house.id]?.paired ?? 0
       // With no paired TV on, nothing is held: the phone says so rather than offer to hide it from no TV.
-      if (show && tvs) joinQrUntil.set(house.id, now() + JOIN_QR_MS)
-      else joinQrUntil.delete(house.id)
+      if (show && tvs) {
+        joinQrUntil.set(house.id, now() + JOIN_QR_MS)
+        if (watchQrUntil.delete(house.id)) publishWatchQr(house)
+      } else joinQrUntil.delete(house.id)
       publishJoinQr(house)
       return Response.json({ shown: joinQrLeft(house) > 0, msLeft: joinQrLeft(house), tvs })
     }),
+    // ☰ "📺 Show the watch QR on the TV", and /setup's: the watch QR on every screen watching for 2 minutes, or
+    // { show: false } to take it down. The answer counts the screens on now (paired TVs and TV-link viewers).
+    'POST /api/tv/watch-qr': write(async (req, house) => {
+      const { show } = await req.json()
+      if (show && !guard.take('joinQr', house.id)) return tooMany()
+      const streams = hub.counts().households[house.id]
+      const tvs = (streams?.paired ?? 0) + (streams?.tvLink ?? 0)
+      if (show && tvs) {
+        watchQrUntil.set(house.id, now() + JOIN_QR_MS)
+        if (joinQrUntil.delete(house.id)) publishJoinQr(house)
+      } else watchQrUntil.delete(house.id)
+      publishWatchQr(house)
+      return Response.json({ shown: watchQrLeft(house) > 0, msLeft: watchQrLeft(house), tvs })
+    }),
+    // The ☰ menu's codes: the watch code and the TV link it stands for, read when the menu opens, so a Rotate TV
+    // link in /setup shows at once. A door phone may hand them on: a counter can already see more.
+    'GET /api/watch': write((req, house) => Response.json({ code: house.watchCode(), tvToken: house.tvToken() })),
     'POST /api/catch-up': write(async (req, house) => {
       if (!guard.take('taps', house.id)) return tooMany()
       const { tag, n, kid, eventId, stamp } = await req.json()

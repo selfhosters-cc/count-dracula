@@ -239,7 +239,22 @@ const MIGRATIONS = [
       UPDATE events SET devices_counted = 0 WHERE went_live_at IS NOT NULL OR counts_only = 1;
     `)
   },
+
+  // 20 → 21: the watch code, the TV link's short form, typed under "Got a code?" to watch along.
+  (db) => {
+    db.exec('ALTER TABLE households ADD COLUMN watch_code TEXT')
+    for (const { id } of db.query('SELECT id FROM households').all()) db.query('UPDATE households SET watch_code = ? WHERE id = ?').run(randomKey(), id)
+    db.exec('CREATE UNIQUE INDEX households_by_watch_code ON households (watch_code)')
+  },
 ]
+
+// A code a person types: a join key or a watch code. 10 characters with no lookalikes.
+const KEY_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+
+export function randomKey(length = 10) {
+  const bytes = crypto.getRandomValues(new Uint8Array(length))
+  return Array.from(bytes, (b) => KEY_ALPHABET[b % KEY_ALPHABET.length]).join('')
+}
 
 // A long secret for a URL: 32 random bytes, base64url.
 export function randomToken() {
