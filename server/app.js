@@ -931,7 +931,7 @@ function emailForm(hidden = '') {
 
 function page(title, bodyHtml, status) {
   return new Response(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><link rel="icon" href="/favicon.ico" sizes="any"><link rel="apple-touch-icon" href="/icon.png">
 <style>body{margin:0;padding:24px 16px;background:#14101c;color:#f5efe6;font:17px/1.5 system-ui,sans-serif;max-width:560px;margin-inline:auto}a{color:#ff7a1a}
 .google{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;max-width:400px;font:inherit;font-weight:600;padding:12px 16px;border-radius:10px;cursor:pointer;background:#fff;color:#1f1f1f;border:1px solid #747775}.google img{width:20px;height:20px}.google:focus-visible{outline:3px solid #ff7a1a;outline-offset:2px}
 form{max-width:400px}label{display:block;color:#a99cbc;font-size:13px;margin:0 0 4px}input{box-sizing:border-box;width:100%;font:inherit;color:inherit;padding:12px;border-radius:10px;border:1px solid #ffffff30;background:#14101c}

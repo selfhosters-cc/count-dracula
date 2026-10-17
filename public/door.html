@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>Count Dracula</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="/icon.png">
   <style>
     :root {
       --bg: #14101c; --panel: #221a2e; --panel2: #2d2340; --text: #f5efe6; --dim: #a99cbc;
@@ -40,6 +42,8 @@
     #flash.gold { color: #ffd23f; font-size: 44px; text-align: center; padding: 0 16px; }
     .head { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px 6px; }
     .head b { font-size: 28px; font-variant-numeric: tabular-nums; }
+    .head .brand { display: inline-flex; align-items: baseline; gap: 10px; }
+    .head .logo { align-self: center; width: 32px; height: 32px; flex: none; } /* centred, so the text keeps the baseline */
     .dim { font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
 
     .grid { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
@@ -153,7 +157,6 @@
     .no-night h1 { margin: 8px 0 4px; font-size: 26px; }
     .no-night p { margin: 0; color: var(--dim); font-size: 18px; }
     .no-night .countdown { color: var(--orange); font-weight: 800; font-variant-numeric: tabular-nums; }
-    #app.idle .head { justify-content: flex-end; }
     #app.idle #grid, #app.idle .util, #app.idle .plus, #app.idle #count-line, #app.idle #untagged, #app.idle #sounds-tab { display: none; }
     /* A refused key: forgotten, and the one way on is the homepage. */
     #gone { position: absolute; inset: 0; z-index: 70; background: var(--bg); display: flex; flex-direction: column;
@@ -175,7 +178,7 @@
   <div id="app">
     <div id="pill"></div>
     <div id="problem"></div>
-    <div class="head"><span id="count-line"><b id="total">–</b> kids tonight</span>
+    <div class="head"><span class="brand"><img class="logo" src="/logo.png" alt=""><span id="count-line"><b id="total">–</b> kids tonight</span></span>
       <span><span class="dim" id="untagged"></span><button class="menu" id="menu-open" aria-label="Menu">☰</button></span></div>
     <div class="nearby-line" id="nearby" hidden></div>
     <div class="golden" id="golden" hidden>⭐ NEXT KID IS GOLDEN — get the prize ready</div>
