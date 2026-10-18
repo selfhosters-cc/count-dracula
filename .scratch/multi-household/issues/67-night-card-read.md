@@ -1,7 +1,7 @@
 # The night-card read
 
 Type: build (AFK)
-Status: open
+Status: done
 Blocked by: —
 
 ## What to build
@@ -15,11 +15,11 @@ One batched Ledger read for a page that shows many nights at once. See [v2.2 §7
 
 ## Acceptance criteria
 
-- [ ] For an Ended night, `kids`, `topCostume` and `peak` equal `nightFacts(summary(id))`'s, including a night past midnight and one in another time zone
-- [ ] `date` is the go-live date in the Household's zone: a night that went live at 11:30 pm Oct 31 in Vancouver is `2026-10-31`
-- [ ] `vsLast` is the gap to a counts-only, estimated or real Race against; null racing None
-- [ ] `eligible` is false with each `why`: Upcoming and Live (`not-over`), imported and estimated counts (`counts-only`), no kids (`no-kids`), no Location (`no-location`)
-- [ ] Changing the name, Location or time zone, or Suspending, shows on the next call
-- [ ] A card never carries the 5-character cell
-- [ ] 500 Events in one call stays under 100 ms (a timing test with a generous bound)
-- [ ] `bun test` passes
+- [x] For an Ended night, `kids`, `topCostume` and `peak` equal `nightFacts(summary(id))`'s, including a night past midnight and one in another time zone
+- [x] `date` is the go-live date in the Household's zone: a night that went live at 11:30 pm Oct 31 in Vancouver is `2026-10-31`
+- [x] `vsLast` is the gap to a counts-only, estimated or real Race against; null racing None
+- [x] `eligible` is false with each `why`: Upcoming and Live (`not-over`), imported and estimated counts (`counts-only`), no kids (`no-kids`), no Location (`no-location`)
+- [x] Changing the name, Location or time zone, or Suspending, shows on the next call
+- [x] A card never carries the 5-character cell
+- [x] 500 Events in one call stays under 100 ms (a timing test with a generous bound)
+- [x] `bun test` passes
