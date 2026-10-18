@@ -1,5 +1,6 @@
 // The Ledger: every write goes through apply(), every read through snapshot(), each on one Household.
 // See .scratch/count-dracula/modules.md §1 and .scratch/multi-household/spec.md §4.
+import { Database } from 'bun:sqlite'
 import { costumeOfTheNight, nextWallTime, peakHalfHour, stamp as wallStamp, toBuckets, zonedTime } from '../shared/night-maths.js'
 import { deleteOwned, freshCode, migrate, randomKey, randomToken } from './migrations.js'
 import { isCell } from '../shared/geohash.js'
@@ -109,6 +110,8 @@ const MAX_OPEN = 3
 // Reset (spec v2.1 §6): above this many kids, the Event's name is typed to confirm.
 const RESET_CONFIRM_ABOVE = 20
 const isOpen = (event) => event.state === 'live' || event.state === 'ended'
+// A night that's over, Ended or Past: only then do its numbers leave the Ledger (recap, summary, night cards).
+const isOver = (event) => event.state === 'ended' || event.state === 'past'
 // An events row `e` that is its Household's door's Event: open, with the latest go-live stamp.
 const DOOR_ROW = `e.state IN ('live', 'ended') AND e.id = (
   SELECT d.id FROM events d WHERE d.household_id = e.household_id AND d.state IN ('live', 'ended')
@@ -158,6 +161,19 @@ const MAX_LAST_YEAR = 100_000
 
 // The ready checklist's marks (sign-in-simplify 06), kept on the Household.
 const CHECKLIST_MARKS = ['kid', 'night', 'hidden']
+
+// The core's own tables and indexes by name, as a new database gets them (worked out once, in memory): no
+// Extension may be named for one's first part, as its steps may touch whatever is <name>_… (v2.2 §5).
+let coreSchema
+export function coreSchemaNames() {
+  if (!coreSchema) {
+    const db = new Database(':memory:')
+    openLedger(db, {})
+    coreSchema = db.query('SELECT name FROM sqlite_master').all().map((row) => row.name)
+    db.close()
+  }
+  return coreSchema
+}
 
 export function openLedger(db, config) {
   const switches = { ...DEFAULT_SWITCHES, ...config.switches }
@@ -404,7 +420,7 @@ export function openLedger(db, config) {
           const night = kids.get(e.id) ?? []
           const top = costumeOfTheNight(night, tags.get(e.id) ?? [])
           const peak = peakHalfHour(night, e.clock_shift_ms, e.time_zone)
-          const why = !(e.state === 'ended' || e.state === 'past') ? 'not-over'
+          const why = !isOver(e) ? 'not-over'
             : e.counts_only ? 'counts-only'
             : !night.length ? 'no-kids'
             : e.location_cell == null ? 'no-location'
@@ -532,7 +548,7 @@ export function openLedger(db, config) {
     // The recap's golden card (spec §7 Ended): every number revealed, but only once the night is over —
     // Ended or Past. While the night is on, the numbers never leave the Ledger.
     function recapOf(event) {
-      if (!(event.state === 'ended' || event.state === 'past') || event.counts_only) return null
+      if (!isOver(event) || event.counts_only) return null
       const tickets = db
         .query(`
           SELECT t.number, t.state, k.number AS kidNumber
@@ -1365,7 +1381,7 @@ export function openLedger(db, config) {
       // the night is still running, for a counts-only night, or for another Household's.
       summary(eventId) {
         const event = eventById(eventId)
-        if (!event || event.counts_only || !(event.state === 'ended' || event.state === 'past')) return null
+        if (!event || event.counts_only || !isOver(event)) return null
         const { event: e, tags, kids, ghost, recap, settings } = this.snapshot(event.id)
         const h = household()
         return {

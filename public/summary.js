@@ -3,7 +3,6 @@
 // in the Household's zone. Names are set as text, never as HTML.
 import { nightFacts } from '/shared/summary.js'
 import { eventNow, ghost as ghostCurve, minuteOfDay, raceWindow } from '/shared/night-maths.js'
-import { slot } from '/extensions.js'
 
 const $ = (id) => document.getElementById(id)
 const fmt = (n) => n.toLocaleString('en-US')
@@ -205,9 +204,10 @@ if (location.pathname === '/summary') {
   if (res.status === 401) location.href = '/#sign-in'
   else if (!res.ok) $('message').textContent = "There's no summary for this night yet: it appears once the night has ended."
   else {
-    const summary = await res.json()
+    // An Extension's summary.closing comes after Share (v2.2 §8), with or without it. Its slots.js is loaded here
+    // alone, so no Extension's code ever runs on a public share page.
+    const [summary, { slot }] = await Promise.all([res.json(), import('/extensions.js')])
     await document.fonts.ready
-    // An Extension's summary.closing comes after Share (v2.2 §8), with or without it; never on a share page.
     const share = summary.switches.shareLinks === false ? [] : [shareControls(Number(eventId), summary.displayName)]
     showSlides(summary, { closing: [...share, ...slot('summary.closing', { eventId: Number(eventId) })] })
   }

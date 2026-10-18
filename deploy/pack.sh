@@ -2,11 +2,11 @@
 # Run from the repo root, with deploy/local.env already sourced.
 
 APP=/opt/count-dracula # where the server unpacks the tarball
-ENV_KEYS=(PUBLIC_HOST GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET OPERATOR_EMAILS OPERATOR_CONTACT)
-# Passed on when set: Continue with email stays hidden until SMTP_HOST and EMAIL_FROM are (SMTP_PORT defaults to 25;
-# SMTP_USER and SMTP_PASS log in to a mail service over TLS), with PUBLIC_HOST above. TRUSTED_PROXIES is only for
-# a proxy on a public address: the shared Caddy is on the LAN, which the app trusts already.
-OPTIONAL_ENV_KEYS=(SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS EMAIL_FROM TRUSTED_PROXIES)
+# The core's env keys, from its one list (server/env-keys.js): ENV_KEYS a deploy needs, OPTIONAL_ENV_KEYS passed on
+# when set, and CORE_ENV_KEYS, every key the core reads. With local.env's own (deploy.sh's alone), no Extension may
+# be named for one's first part: its <NAME>_* keys would take them.
+{ read -ra ENV_KEYS; read -ra OPTIONAL_ENV_KEYS; read -ra CORE_ENV_KEYS; } < <(bun server/env-keys.js)
+LOCAL_ENV_KEYS=(LXC_IP LXC_GATEWAY CADDY_IP REDIRECT_HOSTS)
 
 # EXTENSION_REPOS (optional, v2.2 §11): private checkouts, separated by spaces. Unset, a deploy ships the core alone.
 read -ra EXTENSION_CHECKOUTS <<<"${EXTENSION_REPOS:-}"
@@ -22,7 +22,7 @@ extensions_in() {
 # Refuses (prints why, and fails) unless each checkout is a clean git checkout of at least one Extension, each
 # named as the core's loader allows and in only one checkout: what ships is exactly a commit.
 check_extension_repos() {
-  local repo name names
+  local repo name names key
   local -A seen=()
   for repo in "${EXTENSION_CHECKOUTS[@]}"; do
     if ! [[ $(git -C "$repo" rev-parse --show-toplevel 2>/dev/null) -ef $repo ]]; then
@@ -43,6 +43,12 @@ check_extension_repos() {
         echo "!! EXTENSION_REPOS: $repo/$name: an Extension's name is lower-case letters and digits" >&2
         return 1
       fi
+      for key in "${CORE_ENV_KEYS[@]}" "${LOCAL_ENV_KEYS[@]}"; do
+        if [[ $key == "${name^^}_"* ]]; then
+          echo "!! EXTENSION_REPOS: $repo/$name: the name is taken: the core's env key $key is ${name^^}_…" >&2
+          return 1
+        fi
+      done
       if [[ -n ${seen[$name]:-} ]]; then
         echo "!! EXTENSION_REPOS: $name is in two checkouts, ${seen[$name]} and $repo" >&2
         return 1
