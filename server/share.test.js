@@ -111,7 +111,7 @@ describe('share links', () => {
 })
 
 describe('Reports', () => {
-  test('show on /operator, flagged; Dismiss removes the Report and its reason', async () => {
+  test('show on /operator, flagged and naming their night; Dismiss removes the Report and its reason', async () => {
     const { app, op, info, share, post, db } = await setUp()
     const url = await share()
     const key = new URL(url).searchParams.get('key')
@@ -121,10 +121,24 @@ describe('Reports', () => {
     const row = (await (await fetch(`${app.url}/api/operator`, { headers: { Cookie: op } })).json()).households.find((h) => h.id === info.id)
     expect(row.reports).toBe(1)
     const detail = await (await fetch(`${app.url}/api/operator/household?id=${info.id}`, { headers: { Cookie: op } })).json()
-    expect(detail.reports).toMatchObject([{ reason: '<img src=x onerror=alert(1)>' }])
+    expect(detail.reports).toMatchObject([{ reason: '<img src=x onerror=alert(1)>', eventName: 'Halloween 2026' }])
 
     await post('/api/operator/action', { householdId: info.id, action: 'dismissReport', value: detail.reports[0].id }, op)
 
+    expect(db().query('SELECT COUNT(*) AS n FROM reports').get().n).toBe(0)
+  })
+
+  test("one whose night is gone says so, and can still be dismissed", async () => {
+    const { app, op, info, house, post, db } = await setUp()
+    // A Report kept against a night since deleted (an Extension's page can store one the core never saw).
+    const [{ event }] = house.apply({ type: 'createEvent', name: 'Spare' })
+    house.apply({ type: 'deleteEvent', eventId: event.id, confirm: 'Spare' })
+    app.ledger.addReport({ householdId: info.id, eventId: event.id, reason: 'rude' })
+
+    const detail = await (await fetch(`${app.url}/api/operator/household?id=${info.id}`, { headers: { Cookie: op } })).json()
+    expect(detail.reports).toMatchObject([{ reason: 'rude', eventName: null }])
+
+    expect((await post('/api/operator/action', { householdId: info.id, action: 'dismissReport', value: detail.reports[0].id }, op)).status).toBe(200)
     expect(db().query('SELECT COUNT(*) AS n FROM reports').get().n).toBe(0)
   })
 

@@ -441,14 +441,17 @@ export function openLedger(db, config) {
       return row ? { householdId: row.household_id, eventId: row.event_id, hideName: row.hide_name === 1 } : null
     },
 
-    // ---- Reports (spec §15): a stranger's flag on a share page, with an optional short reason.
+    // ---- Reports (spec §15): a stranger's flag on a public page that shows a night, with an optional short reason.
     addReport({ householdId, eventId, reason }) {
       const text = typeof reason === 'string' ? reason.trim().slice(0, 200) : ''
       db.query('INSERT INTO reports (household_id, event_id, created_at, reason) VALUES (?, ?, ?, ?)').run(householdId, eventId, now(), text || null)
     },
 
+    // Each names its night (v2.2 §9): eventName is null once that Event is gone.
     reports(householdId) {
-      return db.query('SELECT id, event_id AS eventId, created_at AS at, reason FROM reports WHERE household_id = ? ORDER BY id').all(householdId)
+      return db
+        .query('SELECT r.id, r.event_id AS eventId, e.name AS eventName, r.created_at AS at, r.reason FROM reports r LEFT JOIN events e ON e.id = r.event_id WHERE r.household_id = ? ORDER BY r.id')
+        .all(householdId)
     },
 
     // Dismissing deletes the Report, its reason with it.
