@@ -2,7 +2,7 @@
 // publish the deltas. Every read and write carries a credential (v2 spec §3): a phone's join key, or a
 // Manager's session. There's no Household in any URL: the credential carries it.
 import { Database } from 'bun:sqlite'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import { loadConfig } from './config.js'
 import { BadCommand, DEFAULT_SWITCHES, openLedger } from './ledger.js'
@@ -45,6 +45,7 @@ const OPERATOR_ACTIONS = new Set(['rename', 'timeZone', 'suspend', 'unsuspend', 
 const DEVICE_ID = /^[0-9a-f]{32}$/ // what live.js makes: 16 random bytes, hex
 const NAME_CLAIM_MS = 24 * 60 * 60_000 // a phone name another phone chose stays taken this long
 const BACKFILL_PHONE = 'Add missed kids' // the Ledger's name on kids added from Setup: never a phone's
+const EXTENSION_NAME = /^[a-z][a-z0-9]*$/
 
 // The sign-in cookie (spec §3): 90 days, renewed with use; the session itself lives server-side.
 const SESSION_COOKIE = 'cd_session'
@@ -55,7 +56,8 @@ const MAX_BODY_BYTES = 64 * 1024
 
 // env: PUBLIC_HOST, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPERATOR_EMAILS, OPERATOR_CONTACT, SMTP_HOST, SMTP_PORT,
 // SMTP_USER, SMTP_PASS, EMAIL_FROM, TRUSTED_PROXIES (deploy/local.env). google, mailer, now, canSignUp, tickMs, limits and log are seams for the tests.
-export function startServer({ configPath, port, heartbeatMs, env = process.env, google, mailer, now = Date.now, canSignUp, tickMs = 60_000, limits = LIMITS, log = console.log }) {
+// extensions: the entry modules server/main.js imports from EXTENSIONS (v2.2 §3), or a test's own.
+export function startServer({ configPath, port, heartbeatMs, env = process.env, google, mailer, now = Date.now, canSignUp, tickMs = 60_000, limits = LIMITS, log = console.log, extensions = [] }) {
   const config = loadConfig(configPath)
   const guard = createGuard({ now, limits, log })
   const contact = env.OPERATOR_CONTACT || DEFAULT_CONTACT // the one contact address (spec §5)
@@ -889,12 +891,92 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
   function route(req, server) {
     const { pathname } = new URL(req.url)
     if (req.method !== 'GET' && req.method !== 'HEAD' && crossSite(req, env.PUBLIC_HOST)) return new Response('Refused: this came from another site', { status: 403 })
+    const extension = extensionAt(pathname)
+    if (extension) return extensionRoute(extension, req, new URL(req.url))
     const handler = routes[`${req.method} ${pathname}`]
     if (handler) return handler(req, server)
     // The TV link's page: the same TV page; it reads its token from the address.
     if (req.method === 'GET' && pathname.startsWith('/tv/k/')) return serveStatic('/tv', req, contact, 'watch')
     if (req.method === 'GET') return serveStatic(pathname, req, contact)
     return notFound()
+  }
+
+  // Extensions (v2.2 §3, ADR 0001), in list order, once the core's migrations have run and before the server
+  // listens. A throw here (a bad name, a taken one, a throw in start) stops the server, so /healthz never answers
+  // and the deploy rolls back. An entry module: { name, dir, owns, migrations, start(core) → { handle(req, url),
+  // stop() } }, where dir is its own folder (import.meta.dir), whose public/ is served at /<name>/.
+  const loaded = [] // { name, publicDir, handle, stop }
+  try {
+    const taken = coreNames(routes)
+    for (const ext of extensions) {
+      if (!EXTENSION_NAME.test(ext.name ?? '')) throw new Error(`An Extension's name is lower-case letters and digits, not ${JSON.stringify(ext.name)}`)
+      if (taken.has(ext.name)) throw new Error(`The Extension name ${ext.name} is taken`)
+      taken.add(ext.name)
+      // Ticket 66 records its owns and runs its migrations here, before start (v2.2 §5–6).
+      const publicDir = ext.dir ? resolve(ext.dir, 'public') : null
+      const { handle, stop } = ext.start(coreFor(ext.name, publicDir))
+      if (typeof handle !== 'function') throw new Error(`The Extension ${ext.name} started with no handle`)
+      loaded.push({ name: ext.name, publicDir, handle, stop })
+    }
+  } catch (err) {
+    stopCore()
+    for (const ext of loaded) ext.stop?.()
+    throw err
+  }
+
+  // What an Extension's start gets (v2.2 §3), and nothing more: its own env keys and site switches, the core's
+  // guards as they are (bound to this server, since handle has none), and its public/ folder templated like ours.
+  function coreFor(name, publicDir) {
+    const envPrefix = `${name.toUpperCase()}_`
+    const own = (key) => {
+      if (!String(key).startsWith(`${name}.`)) throw new Error(`The Extension ${name} has only the site switches under ${name}., not ${key}`)
+      return key
+    }
+    return Object.freeze({
+      db,
+      ledger,
+      guard: Object.freeze({
+        read: (handler) => (req) => read(handler)(req, server),
+        manager: (handler) => (req) => manager(handler)(req, server),
+        operator: (handler) => (req) => operator(handler)(req, server),
+        take: (rule, key) => guard.take(rule, key),
+      }),
+      clientIp: (req) => clientIp(req, server),
+      serve: (req, path) => (publicDir ? serveFile(publicDir, `/${path}`, req, contact) : notFound()),
+      now,
+      log,
+      env: Object.freeze(Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith(envPrefix)))),
+      switches: Object.freeze({ ...switches }),
+      siteSwitch: (key) => ledger.siteSwitch(own(key)),
+      setSiteSwitch: (key, on) => ledger.setSiteSwitch(own(key), on),
+    })
+  }
+
+  // The Extension whose name starts this address: /<name>, /<name>/…, /api/<name> or /api/<name>/….
+  function extensionAt(pathname) {
+    const [, first, second] = pathname.split('/')
+    const api = first === 'api'
+    const ext = loaded.find((e) => e.name === (api ? second : first))
+    return ext ? { ext, api } : null
+  }
+
+  // Its handle's answer, or else its public/ folder at /<name>/… (/<name> is its index.html).
+  async function extensionRoute({ ext, api }, req, url) {
+    const res = await ext.handle(req, url)
+    if (res) return res
+    if (api || req.method !== 'GET' || !ext.publicDir) return notFound()
+    const rest = url.pathname.slice(ext.name.length + 1)
+    return serveFile(ext.publicDir, rest === '' || rest === '/' ? '/index.html' : rest, req, contact)
+  }
+
+  // The core's own timers and streams: stopped before any Extension's, and if an Extension fails to start.
+  function stopCore() {
+    clearInterval(nearbyTimer)
+    process.off('uncaughtException', onUncaught)
+    process.off('unhandledRejection', onUncaught)
+    clearInterval(ticker)
+    stopBackups()
+    hub.shutdown()
   }
 
   const server = Bun.serve({
@@ -932,12 +1014,8 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
     refreshNearby,
     tick,
     stop() {
-      clearInterval(nearbyTimer)
-      process.off('uncaughtException', onUncaught)
-      process.off('unhandledRejection', onUncaught)
-      clearInterval(ticker)
-      stopBackups()
-      hub.shutdown()
+      stopCore()
+      for (const ext of loaded) ext.stop?.()
       server.stop(true)
     },
   }
@@ -964,6 +1042,12 @@ async function serveStatic(pathname, req, contact = DEFAULT_CONTACT, preview = p
     : pathname.startsWith('/kiosk/')
       ? [KIOSK_DIR, pathname.slice('/kiosk'.length)]
       : [PUBLIC_DIR, PAGES[pathname] ?? pathname]
+  return serveFile(dir, rest, req, contact, preview)
+}
+
+// One file of a folder the core serves (public/, shared/, kiosk/ or an Extension's public/): `rest` is its path
+// in the folder, still URL-encoded. Nothing outside the folder, and never a test file.
+async function serveFile(dir, rest, req, contact = DEFAULT_CONTACT, preview) {
   let path
   try {
     path = resolve(dir, '.' + decodeURIComponent(rest))
@@ -1006,6 +1090,19 @@ const stampImports = (js) =>
 // which never change under the same name in practice, keep a day.
 function cacheControlOf(path) {
   return /\.(png|jpe?g|gif|webp|ico|woff2?|ttf|otf|mp3|ogg|wav|m4a)$/i.test(path) ? 'public, max-age=86400' : 'no-cache'
+}
+
+// The names no Extension can take (v2.2 §3): the first part of every core address, the second of every /api/ one,
+// and public/'s folders.
+function coreNames(routes) {
+  const names = new Set(['shared', 'kiosk'])
+  for (const path of [...Object.keys(routes).map((key) => key.split(' ')[1]), ...Object.keys(PAGES)]) {
+    const [, first, second] = path.split('/')
+    names.add(first)
+    if (first === 'api' && second) names.add(second)
+  }
+  for (const entry of readdirSync(PUBLIC_DIR, { withFileTypes: true })) if (entry.isDirectory()) names.add(entry.name)
+  return names
 }
 
 function originOf(req) {
