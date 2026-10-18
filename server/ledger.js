@@ -1,7 +1,7 @@
 // The Ledger: every write goes through apply(), every read through snapshot(), each on one Household.
 // See .scratch/count-dracula/modules.md §1 and .scratch/multi-household/spec.md §4.
 import { nextWallTime, toBuckets, zonedTime } from '../shared/night-maths.js'
-import { freshCode, migrate, randomKey, randomToken } from './migrations.js'
+import { deleteOwned, freshCode, migrate, randomKey, randomToken } from './migrations.js'
 import { isCell } from '../shared/geohash.js'
 import { isBlocked } from './blocklist.js'
 import { canRace } from '../shared/race-against.js'
@@ -267,10 +267,11 @@ export function openLedger(db, config) {
       return db.query('SELECT id FROM households WHERE join_key = ?').get(key)?.id ?? null
     },
 
-    // Delete my Household (spec §3): every event and everything they hold, then the Household itself.
-    // The Accounts module deletes its own rows in the same transaction.
+    // Delete my Household (spec §3): every event and everything they hold, then the Household itself, and every
+    // Extension's rows for it (v2.2 §6). The Accounts module deletes its own rows in the same transaction.
     deleteHousehold(id) {
       db.transaction(() => {
+        deleteOwned(db, { household: id })
         const events = 'SELECT id FROM events WHERE household_id = ?'
         for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches', 'event_devices']) {
           db.query(`DELETE FROM ${table} WHERE event_id IN (${events})`).run(id)
@@ -893,6 +894,7 @@ export function openLedger(db, config) {
         if (!isOpen(event)) throw new BadCommand('Only a live or ended night can be reset')
         if (liveCount.get(event.id).n > RESET_CONFIRM_ABOVE && confirm !== event.name) throw new BadCommand(`Type "${event.name}" to reset it`)
         for (const table of ['kids', 'backfill_batches', 'fired_moments', 'golden_tickets', 'share_links', 'event_devices']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
+        deleteOwned(db, { event: event.id })
         db.query(`
           UPDATE events SET state = 'upcoming', went_live_at = NULL, ended_automatically = 0, summary_nearby = NULL, devices_counted = 1,
             tick_note = NULL, tick_note_at = NULL, tick_note_for = NULL,
@@ -1090,10 +1092,11 @@ export function openLedger(db, config) {
       return door ? [{ type: 'event.updated', eventId: door.id }] : []
     }
 
-    // An event and everything it holds; anything racing it goes to None.
+    // An event and everything it holds, every Extension's rows for it too (v2.2 §6); anything racing it goes to None.
     function removeEvent(id) {
       db.query('UPDATE events SET race_against_id = NULL WHERE race_against_id = ?').run(id)
       for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches', 'share_links', 'reports', 'event_devices']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(id)
+      deleteOwned(db, { event: id })
       db.query('UPDATE households SET test_night_event_id = NULL WHERE test_night_event_id = ?').run(id)
       db.query('DELETE FROM events WHERE id = ?').run(id)
     }
