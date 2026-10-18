@@ -54,9 +54,9 @@ export function wireHousehold(core) {
 
   // ---- the join key: one per Household, on every night (spec v2.1 §4)
   $('change-key').addEventListener('click', async () => {
-    if (!confirm('Change the join key? Every phone using the old key stops counting until it rejoins.')) return
+    if (!confirm('Change the join code? Every phone using the old one stops counting until it rejoins with the new one.')) return
     const old = house().joinKey
-    const done = await admin({ type: 'changeKey' }, 'Join key changed')
+    const done = await admin({ type: 'changeKey' }, 'Join code changed')
     // This device counts on with the new key if it had the old one; everyone else rejoins.
     if (done && localStorage.getItem('cd.joinKey') === old) localStorage.setItem('cd.joinKey', done.joinKey)
   })
@@ -145,7 +145,6 @@ export function wireHousehold(core) {
     render() {
       const hs = house()
       if (document.activeElement !== $('h-name')) $('h-name').value = hs.displayName
-      $('join-key').textContent = hs.joinKey
       $('house-helpers').replaceChildren(...core.helperBox('house').flat().filter(Boolean))
       $('tv-link').textContent = tvUrl()
       $('last-year').hidden = !hs.canEstimateLastYear

@@ -66,7 +66,7 @@ export function healthTiles(s, now) {
     {
       key: 'server',
       label: 'Server',
-      value: `up ${relative(now - s.startedAt, '')} · ${Math.round(s.rssBytes / 1024 / 1024)} MB of ${RSS_LIMIT / 1024 / 1024}`,
+      value: `${s.version ? `v${s.version} · ` : ''}up ${relative(now - s.startedAt, '')} · ${Math.round(s.rssBytes / 1024 / 1024)} MB of ${RSS_LIMIT / 1024 / 1024}`,
       detail: `switches: ${Object.entries(s.switches).map(([name, on]) => `${name} ${on ? 'on' : 'off'}`).join(', ')}`,
       level: s.rssBytes > RSS_AMBER ? 'amber' : 'ok',
     },

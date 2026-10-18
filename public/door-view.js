@@ -113,13 +113,15 @@ export function tvQrCodeLine(key, origin) {
 
 // "📺 Show on the TV" under a helper's QR (spec v2.1 §4), or, while the TV shows it, Hide with the time left.
 export function tvQrButton(msLeft) {
-  if (!(msLeft > 0)) return { showing: false, label: '📺 Show on the TV' }
+  if (!(msLeft > 0)) return { showing: false, label: '📺 Show the helper QR on the TV' }
   const s = Math.ceil(msLeft / 1000)
   return { showing: true, label: `Hide from the TV (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} left)` }
 }
 
-// What the phone or /setup says after a press: the answer counts the paired TVs on now (never TV-link viewers).
-export function tvQrSays({ shown, tvs }) {
+// What the phone or /setup says after a press: the answer counts the paired TVs on now, and the TV-link screens,
+// which never get the helper QR (it lets whoever scans it count).
+export function tvQrSays({ shown, tvs, viewers = 0 }) {
+  if (!tvs && viewers) return "Your TV is on the TV link, so it can't show the helper QR: anyone watching could scan it and count. Give the helper the join code instead, or pair the TV with the code on its screen."
   if (!tvs) return 'No paired TV is on right now. Pair your porch TV with the code on its screen to show the QR there.'
   if (!shown) return 'Taken off the TV'
   return `📺 On ${tvs === 1 ? 'the TV' : `${tvs} TVs`} for 2 minutes`

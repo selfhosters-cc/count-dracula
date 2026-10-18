@@ -95,14 +95,15 @@ $('code-form').addEventListener('submit', async (e) => {
   const tvLink = $('code-input').value.match(/\/tv\/k\/[A-Za-z0-9_-]+/)?.[0] // a watch link pasted in
   if (tvLink) return (location.href = tvLink)
   const code = readCode($('code-input').value)
-  if (!code) return say("That isn't a code we know. A TV shows 6 characters, like K7Q-M4X; a host's join or watch code is 10 letters and numbers.")
+  if (!code) return say("That isn't a code we know. Codes are 6 letters and numbers, like K7Q-M4X.")
   if (code.tv) return (location.href = `/setup?pair=${code.tv}`)
-  const res = await fetch(`/api/code?code=${encodeURIComponent(code.join)}`).catch(() => null)
+  const res = await fetch(`/api/code?code=${encodeURIComponent(code.code ?? code.join)}`).catch(() => null)
   if (res?.status === 404) return say('No door or TV has that code. Check it with your host: their phone shows both.')
   if (res?.status === 429) return say('Too many tries: wait a while and try again.')
   const found = res?.ok ? await res.json() : null
   say('')
-  location.href = found?.watch ?? `/door?key=${encodeURIComponent(code.join)}`
+  if (found?.pair) return (location.href = `/setup?pair=${found.pair}`)
+  location.href = found?.watch ?? `/door?key=${encodeURIComponent(found?.join ?? code.join)}`
 })
 
 // Just signed out (POST /auth/signout): say so, then tidy the address bar.

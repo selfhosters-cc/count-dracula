@@ -1,5 +1,6 @@
 // /setup (spec v2.1 §9): a signed-in Manager runs their Household. Three tabs, Tonight · Nights · Household,
 // and a screen per night. setup-view.js decides what shows; setup-night.js and setup-household.js draw it.
+import { formatCode } from '../shared/codes.js'
 import { zonedTime, clockTime as zoneClock } from '../shared/night-maths.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
 import { helperLink, helperWording, joinCodeLine, tvQrButton, tvQrSays, watchQrButton, watchQrSays } from './door-view.js'
@@ -262,7 +263,7 @@ function helperBox(place) {
     return box
   }
   return [
-    place === 'checklist' ? null : codeRow('📱 Join code', house.joinKey),
+    place === 'checklist' ? null : codeRow('📱 Join code', formatCode(house.joinCode)),
     h('div', { className: 'row' },
       h('button', { className: 'primary', textContent: '📱 Count on this device', onclick: countHere }),
       h('button', { textContent: '➕ Add a helper', ariaExpanded: String(open), onclick: () => {
@@ -270,7 +271,7 @@ function helperBox(place) {
         render()
       } })),
     open ? [qr(), h('p', { className: 'muted', textContent: helperWording(house.displayName) }),
-      h('p', { className: 'muted', textContent: joinCodeLine(house.joinKey, location.origin) }),
+      h('p', { className: 'muted', textContent: joinCodeLine(formatCode(house.joinCode), location.origin) }),
       h('div', { className: 'row' },
         h('button', { className: 'primary', textContent: 'Share join link', onclick: () => share(joinUrl(), `Help count trick-or-treaters at ${house.displayName}`) }),
         h('button', { data: { tvQr: '' }, textContent: tvQrButton(tvQrLeft()).label, onclick: toggleTvQr })),
@@ -373,7 +374,7 @@ const codeRow = (label, code) => h('div', { className: 'code-row' }, h('span', {
 // code, or the watch QR on the TV for someone at the porch to scan.
 function watchBox() {
   return [
-    codeRow('👀 Watch code', house.watchCode),
+    codeRow('👀 Watch code', formatCode(house.watchCode)),
     h('div', { className: 'row' },
       h('button', { className: 'primary', textContent: '📺 Watch on this device', onclick: () => (location.href = household.tvUrl()) }),
       h('button', { textContent: 'Send the TV link', onclick: () => share(household.tvUrl(), 'Watch our trick-or-treat count') }),

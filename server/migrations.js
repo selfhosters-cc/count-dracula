@@ -1,6 +1,8 @@
 // The database's versioned steps (v2 spec §4), run in order from PRAGMA user_version at startup, each in
 // one transaction, on top of v1's tables (the Ledger's SCHEMA). Once sign-up has opened, a step only
 // ever adds.
+import { randomCode } from '../shared/codes.js'
+
 const MIGRATIONS = [
   // 0 → 1: Households. A v1 database's nights, taps and TV mix become Household #1; a fresh one gets none.
   (db, { now }) => {
@@ -246,9 +248,27 @@ const MIGRATIONS = [
     for (const { id } of db.query('SELECT id FROM households').all()) db.query('UPDATE households SET watch_code = ? WHERE id = ?').run(randomKey(), id)
     db.exec('CREATE UNIQUE INDEX households_by_watch_code ON households (watch_code)')
   },
+
+  // 21 → 22: codes a person can type, 6 characters like a TV's pairing code (K7Q-M4X): a join code for each
+  // Household (the join key stays what phones keep and write with), and the watch code made as short.
+  (db) => {
+    db.exec('ALTER TABLE households ADD COLUMN join_code TEXT')
+    for (const { id } of db.query('SELECT id FROM households').all()) {
+      db.query('UPDATE households SET join_code = ?, watch_code = ? WHERE id = ?').run(freshCode(db), freshCode(db), id)
+    }
+    db.exec('CREATE UNIQUE INDEX households_by_join_code ON households (join_code)')
+  },
 ]
 
-// A code a person types: a join key or a watch code. 10 characters with no lookalikes.
+// A 6-character code no Household has yet, as its join code or its watch code.
+export function freshCode(db) {
+  let code
+  do code = randomCode()
+  while (db.query('SELECT 1 FROM households WHERE join_code = ?1 OR watch_code = ?1').get(code))
+  return code
+}
+
+// A join key: 10 characters with no lookalikes. Kept by phones and links; people type the join code.
 const KEY_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
 
 export function randomKey(length = 10) {

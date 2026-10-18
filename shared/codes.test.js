@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { readCode, tvCodeFrom } from './codes.js'
 
 describe('the one code box (spec v2.1 §11)', () => {
-  test("a TV's pairing code, however it's typed", () => {
-    for (const typed of ['K7QM4X', 'K7Q-M4X', 'k7q-m4x', ' K7Q M4X ']) expect(readCode(typed)).toEqual({ tv: 'K7QM4X' })
+  test("a 6-character code, however it's typed: the server says which", () => {
+    for (const typed of ['K7QM4X', 'K7Q-M4X', 'k7q-m4x', ' K7Q M4X ']) expect(readCode(typed)).toEqual({ code: 'K7QM4X' })
   })
 
-  test('a join code, as typed or out of a pasted join link', () => {
+  test('an old join key, as typed or out of a pasted join link', () => {
     expect(readCode('Ab3dEf7hJk')).toEqual({ join: 'Ab3dEf7hJk' })
     expect(readCode(' Ab3dE f7hJk ')).toEqual({ join: 'Ab3dEf7hJk' })
     expect(readCode('https://count-dracula.example.com/door?key=Ab3dEf7hJk')).toEqual({ join: 'Ab3dEf7hJk' })

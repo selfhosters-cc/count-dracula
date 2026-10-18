@@ -33,4 +33,4 @@ export function startPairing({ show, onPaired }) {
 }
 
 // "K7Q-M4X": the code as the TV shows it and a person types it.
-export const formatCode = (code) => `${code.slice(0, 3)}-${code.slice(3)}`
+export { formatCode } from '../shared/codes.js'

@@ -576,7 +576,7 @@ function renderQrCard() {
   const drawing = watch ? `watch|${q.token}` : `join|${q.key}|${q.household}`
   if (qrDrawnFor !== drawing) {
     qrDrawnFor = drawing
-    const code = watch ? q.code : q.key
+    const code = formatCode(q.code)
     const qr = qrcode(0, 'M')
     qr.addData(watch ? watchLink(location.origin, q.token) : helperLink(location.origin, q.key))
     qr.make()

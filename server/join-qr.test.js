@@ -134,8 +134,9 @@ describe('the join QR on the TV', () => {
   test('the answer counts the paired TVs on now: 0 without one, and TV-link viewers never count', async () => {
     const { app, cookie, info } = await household()
     await (await stream(app, `key=${info.tvToken}`)).next()
-    // With none on, nothing is held: the phone says so instead of showing a Hide button for no TV.
-    expect(await (await showQr(app, info.joinKey)).json()).toEqual({ shown: false, msLeft: 0, tvs: 0 })
+    // With none on, nothing is held: the phone says so instead of showing a Hide button for no TV, and why, when
+    // the only screen is on the TV link.
+    expect(await (await showQr(app, info.joinKey)).json()).toEqual({ shown: false, msLeft: 0, tvs: 0, viewers: 1 })
 
     const device = await pairedDevice(app, cookie)
     await (await stream(app, `key=${info.tvToken}&device=${device}`)).next()

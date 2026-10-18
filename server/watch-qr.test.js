@@ -53,11 +53,13 @@ describe('the watch code', () => {
   test('Got a code? tells a join code from a watch code, which opens the TV link', async () => {
     const { app, info } = await household()
 
-    expect(info.watchCode).toMatch(/^[A-Za-z0-9]{10}$/)
-    expect(info.watchCode).not.toBe(info.joinKey)
-    expect(await (await code(app, info.joinKey)).json()).toEqual({ join: true })
-    expect(await (await code(app, info.watchCode)).json()).toEqual({ watch: `/tv/k/${info.tvToken}` })
-    expect((await code(app, 'NoSuchCode')).status).toBe(404)
+    for (const short of [info.joinCode, info.watchCode]) expect(short).toMatch(/^[ACDEFHJKMNPQRTUVWXY34679]{6}$/)
+    expect(info.watchCode).not.toBe(info.joinCode)
+    const typed = (c) => `${c.slice(0, 3).toLowerCase()}-${c.slice(3)}` // as a person types it
+    expect(await (await code(app, typed(info.joinCode))).json()).toEqual({ join: info.joinKey })
+    expect(await (await code(app, typed(info.watchCode))).json()).toEqual({ watch: `/tv/k/${info.tvToken}` })
+    expect(await (await code(app, info.joinKey)).json()).toEqual({ join: info.joinKey }) // an old 10-character one
+    expect((await code(app, 'XXX-XXX')).status).toBe(404)
   })
 
   test('Rotate TV link changes the watch code too: the old one opens nothing', async () => {
@@ -71,11 +73,28 @@ describe('the watch code', () => {
     expect(await (await code(app, after.watchCode)).json()).toEqual({ watch: `/tv/k/${after.tvToken}` })
   })
 
-  test('a door phone reads the watch code and link with its join key, and nothing else does', async () => {
+  test('a door phone reads both codes and the TV link with its join key, and nothing else does', async () => {
     const { app, info } = await household()
 
-    expect(await (await fetch(`${app.url}/api/watch`, { headers: { 'X-Join-Key': info.joinKey } })).json()).toEqual({ code: info.watchCode, tvToken: info.tvToken })
-    expect((await fetch(`${app.url}/api/watch`, { headers: { 'X-Join-Key': info.tvToken } })).status).toBe(403)
+    expect(await (await fetch(`${app.url}/api/codes`, { headers: { 'X-Join-Key': info.joinKey } })).json()).toEqual({ joinCode: info.joinCode, watchCode: info.watchCode, tvToken: info.tvToken })
+    expect((await fetch(`${app.url}/api/codes`, { headers: { 'X-Join-Key': info.tvToken } })).status).toBe(403)
+  })
+
+  test('Change join key changes the join code too', async () => {
+    const { app, cookie, info } = await household()
+
+    await fetch(`${app.url}/api/admin`, { method: 'POST', headers: { Cookie: cookie }, body: JSON.stringify({ type: 'changeKey' }) })
+    const after = await (await fetch(`${app.url}/api/household`, { headers: { Cookie: cookie } })).json()
+
+    expect(after.joinCode).not.toBe(info.joinCode)
+    expect((await code(app, info.joinCode)).status).toBe(404)
+    expect(await (await code(app, after.joinCode)).json()).toEqual({ join: after.joinKey })
+  })
+
+  test("a TV's pairing code typed in the same box says so", async () => {
+    const { app } = await household()
+    const { code: tv } = await (await fetch(`${app.url}/api/pair/code`, { method: 'POST', headers: { 'CF-Connecting-IP': anotherIp() } })).json()
+    expect(await (await code(app, tv)).json()).toEqual({ pair: tv })
   })
 
   test('codes are tried at most 30 times an hour from one address', async () => {

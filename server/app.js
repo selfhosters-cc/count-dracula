@@ -2,6 +2,7 @@
 // publish the deltas. Every read and write carries a credential (v2 spec §3): a phone's join key, or a
 // Manager's session. There's no Household in any URL: the credential carries it.
 import { Database } from 'bun:sqlite'
+import { readFileSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import { loadConfig } from './config.js'
 import { BadCommand, DEFAULT_SWITCHES, openLedger } from './ledger.js'
@@ -20,6 +21,8 @@ import { isMailAddress, sendMail } from './mail.js'
 import { maskEmail, signInEmail } from './email-sign-in.js'
 import { clientIpOf, trustedProxies } from './client-ip.js'
 
+// The release, from package.json: on every page (__VERSION__) and /operator, so a reload shows an update arrived.
+export const VERSION = JSON.parse(readFileSync(resolve(import.meta.dir, '../package.json'), 'utf8')).version
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
@@ -84,7 +87,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       (canSignUp ?? (({ ip }) => guard.take('householdsPerIp', ip) && guard.take('householdsSite', 'site')))(ctx),
   })
   const hub = createHub({ heartbeatMs })
-  const pairing = createPairing({ now })
+  const pairing = createPairing({ now, taken: (code) => ledger.isHouseholdCode(code) })
   // Continue with email (spec v2.1 §11): a relay with plain SMTP, or a mail service over TLS with SMTP_USER and
   // SMTP_PASS (implicit TLS on port 465, STARTTLS on any other). Hidden, and its routes refused, until SMTP_HOST,
   // EMAIL_FROM and PUBLIC_HOST are all set: the emailed link names PUBLIC_HOST, never the request's Host header,
@@ -153,7 +156,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     if (kind === 'tvLink') return undefined
     const msLeft = joinQrLeft(house)
     if (!msLeft) return null
-    return kind === 'paired' ? { key: house.joinKey(), household: house.displayName(), msLeft } : { msLeft }
+    return kind === 'paired' ? { key: house.joinKey(), code: house.joinCode(), household: house.displayName(), msLeft } : { msLeft }
   }
   const tvSnapshotFor = (house, kind) => {
     const snap = { ...withNearby(tvSnapshot(doorSnapshot(house)), house), watchQr: watchQrFor(house, kind) }
@@ -201,15 +204,19 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // What the homepage can't know from the page alone: whether sign-ups are paused (shown before anyone goes to
     // Google), whether Continue with email is on, and a signed-in Manager's Household, for the Welcome back card.
     // Never more than its name.
-    // Got a code? on the homepage: a join code (count at the door) or a watch code (watch along on the TV link).
-    // Per IP, so codes can't be tried by the thousand.
+    // Got a code? on the homepage, 6 characters: a join code (→ { join: the join key }, to count at the door), a
+    // watch code (→ { watch: the TV link }), or a TV waiting to be paired (→ { pair }). An old 10-character join key
+    // still answers { join }. Per IP, so codes can't be tried by the thousand: the only place a short code is taken.
     'GET /api/code': (req, server) => {
       if (!guard.take('code', clientIp(req, server))) return tooMany()
-      const code = new URL(req.url).searchParams.get('code')
-      const household = ledger.householdByJoinKey(code)
-      if (household != null && !ledger.isSuspended(household)) return Response.json({ join: true })
-      const tvToken = ledger.tvTokenByWatchCode(code)
-      return tvToken ? Response.json({ watch: `/tv/k/${tvToken}` }) : new Response('No such code', { status: 404 })
+      const typed = new URL(req.url).searchParams.get('code')
+      const code = tvCodeFrom(typed)
+      const household = code ? ledger.householdByJoinCode(code) : ledger.householdByJoinKey(typed)
+      if (household != null && !ledger.isSuspended(household)) return Response.json({ join: ledger.household(household).joinKey() })
+      const tvToken = code && ledger.tvTokenByWatchCode(code)
+      if (tvToken) return Response.json({ watch: `/tv/k/${tvToken}` })
+      if (code && pairing.isWaiting(code)) return Response.json({ pair: code })
+      return new Response('No such code', { status: 404 })
     },
     'GET /api/home': (req) => {
       const session = accounts.session(tokenOf(req))
@@ -318,6 +325,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
           backupAt: backups?.lastAt() ?? null,
           rssBytes: process.memoryUsage().rss,
           startedAt,
+          version: VERSION,
           switches: { ...DEFAULT_SWITCHES, ...config.switches }, // as the Ledger runs them
         },
         at,
@@ -517,7 +525,7 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
       const checklist = { tvWatching: (streams?.tvLink ?? 0) + (streams?.paired ?? 0) > 0, anyKids, named: displayName !== NEW_HOUSEHOLD_NAME, ...house.checklistMarks() }
       // The door's Event is what the TV shows: first-run's tick names it (spec v2.1 §8).
       const door = house.doorEvent()
-      return Response.json({ id: house.id, displayName, timeZone, location, checklist, testNightEventId: house.testNightId(), door: door && { id: door.id, name: door.name }, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), joinKey: house.joinKey(), joinQrMsLeft: joinQrLeft(house), tvToken: house.tvToken(), watchCode: house.watchCode(), watchQrMsLeft: watchQrLeft(house), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
+      return Response.json({ id: house.id, displayName, timeZone, location, checklist, testNightEventId: house.testNightId(), door: door && { id: door.id, name: door.name }, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), joinKey: house.joinKey(), joinCode: house.joinCode(), joinQrMsLeft: joinQrLeft(house), tvToken: house.tvToken(), watchCode: house.watchCode(), watchQrMsLeft: watchQrLeft(house), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
     }),
     // Delete my Household: typed name to confirm; everything goes at once, and its streams close.
     'POST /api/household/delete': manager(async (req, house) => {
@@ -638,7 +646,8 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
         if (watchQrUntil.delete(house.id)) publishWatchQr(house)
       } else joinQrUntil.delete(house.id)
       publishJoinQr(house)
-      return Response.json({ shown: joinQrLeft(house) > 0, msLeft: joinQrLeft(house), tvs })
+      const viewers = hub.counts().households[house.id]?.tvLink ?? 0 // screens on the TV link, which never get it
+      return Response.json({ shown: joinQrLeft(house) > 0, msLeft: joinQrLeft(house), tvs, viewers })
     }),
     // ☰ "📺 Show the watch QR on the TV", and /setup's: the watch QR on every screen watching for 2 minutes, or
     // { show: false } to take it down. The answer counts the screens on now (paired TVs and TV-link viewers).
@@ -654,9 +663,10 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
       publishWatchQr(house)
       return Response.json({ shown: watchQrLeft(house) > 0, msLeft: watchQrLeft(house), tvs })
     }),
-    // The ☰ menu's codes: the watch code and the TV link it stands for, read when the menu opens, so a Rotate TV
-    // link in /setup shows at once. A door phone may hand them on: a counter can already see more.
-    'GET /api/watch': write((req, house) => Response.json({ code: house.watchCode(), tvToken: house.tvToken() })),
+    // The ☰ menu's codes: the join code, the watch code and the TV link it stands for, read when the menu opens, so
+    // a Change join key or Rotate TV link in /setup shows at once. A door phone may hand them on: a counter can
+    // already see more.
+    'GET /api/codes': write((req, house) => Response.json({ joinCode: house.joinCode(), watchCode: house.watchCode(), tvToken: house.tvToken() })),
     'POST /api/catch-up': write(async (req, house) => {
       if (!guard.take('taps', house.id)) return tooMany()
       const { tag, n, kid, eventId, stamp } = await req.json()
@@ -903,7 +913,7 @@ async function serveStatic(pathname, req, contact = DEFAULT_CONTACT) {
   if (dir === KIOSK_DIR) return new Response((await file.text()).replaceAll('__ORIGIN__', originOf(req)), { headers: { 'Content-Type': file.type, ...cache } })
   // Pages that offer help or the privacy contact say __CONTACT__: filled in with OPERATOR_CONTACT, never committed.
   // __ORIGIN__ is this site's address, for the share page's link-preview tags, which want absolute URLs.
-  if (path.endsWith('.html')) return new Response(stampScripts((await file.text()).replaceAll('__CONTACT__', esc(contact)).replaceAll('__ORIGIN__', esc(originOf(req)))), { headers: { 'Content-Type': file.type, ...cache } })
+  if (path.endsWith('.html')) return new Response(stampScripts((await file.text()).replaceAll('__CONTACT__', esc(contact)).replaceAll('__ORIGIN__', esc(originOf(req))).replaceAll('__VERSION__', VERSION)), { headers: { 'Content-Type': file.type, ...cache } })
   if (path.endsWith('.js')) return new Response(stampImports(await file.text()), { headers: { 'Content-Type': file.type, ...cache } })
   // Plain files revalidate cheaply: Last-Modified, and a 304 when the browser's copy is current.
   const modified = new Date(Math.floor(file.lastModified / 1000) * 1000)

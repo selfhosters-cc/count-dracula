@@ -137,10 +137,10 @@ export const HELP = {
 
   // ---- Household
   join: {
-    title: 'Helpers and the join key',
+    title: 'Helpers and the join code',
     p: [
-      'The join key lets a phone count at your door, on every night, test or real. Anyone holding it can add kids, so share it with your helpers only.',
-      "Change join key cuts off every other phone that has it: they'll need the new QR or link. This phone keeps counting. Show on the TV (under Add a helper) puts the join QR on your paired porch TV for 2 minutes; a TV link never gets the key, so family watching from afar never sees it.",
+      'The join code, its QR and its link let a phone count at your door, on every night, test or real. Anyone holding one can add kids, so share them with your helpers only.',
+      "Change join code cuts off every other phone that joined: they'll need the new code, QR or link. This phone keeps counting. Show the helper QR on the TV (under Add a helper) puts the QR on your paired porch TV for 2 minutes; a TV link never gets it, so family watching from afar can't count.",
     ],
   },
   tv: {

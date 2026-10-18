@@ -356,13 +356,13 @@ describe('Go live now (a signed-in Manager)', () => {
 
 describe("a helper's code under the QR", () => {
   test("spells the code out for a phone that can't scan, worded like the TV's", () => {
-    expect(joinCodeLine('Ab3dEf7hJk', 'https://count-dracula.example.com')).toBe('No camera? On their phone, go to count-dracula.example.com and enter Ab3dEf7hJk')
+    expect(joinCodeLine('K7Q-M4X', 'https://count-dracula.example.com')).toBe('No camera? On their phone, go to count-dracula.example.com and enter K7Q-M4X')
   })
 })
 
 describe('the helper QR on the TV', () => {
   test("the button shows it, or hides it with the time it has left", () => {
-    expect(tvQrButton(0)).toEqual({ showing: false, label: '📺 Show on the TV' })
+    expect(tvQrButton(0)).toEqual({ showing: false, label: '📺 Show the helper QR on the TV' })
     expect(tvQrButton(119_200)).toEqual({ showing: true, label: 'Hide from the TV (2:00 left)' })
     expect(tvQrButton(61_000)).toEqual({ showing: true, label: 'Hide from the TV (1:01 left)' })
     expect(tvQrButton(4_000)).toEqual({ showing: true, label: 'Hide from the TV (0:04 left)' })
@@ -373,9 +373,11 @@ describe('the helper QR on the TV', () => {
     expect(tvQrSays({ shown: true, tvs: 2 })).toBe('📺 On 2 TVs for 2 minutes')
     expect(tvQrSays({ shown: false, tvs: 1 })).toBe('Taken off the TV')
     expect(tvQrSays({ shown: false, tvs: 0 })).toBe('No paired TV is on right now. Pair your porch TV with the code on its screen to show the QR there.')
+    // Only a TV-link screen on: it never gets the helper QR, and the answer says why, and what to do instead.
+    expect(tvQrSays({ shown: false, tvs: 0, viewers: 1 })).toMatch(/^Your TV is on the TV link, so it can't show the helper QR/)
   })
 
   test("the TV card spells the code out too", () => {
-    expect(tvQrCodeLine('Ab3dEf7hJk', 'https://count-dracula.example.com')).toBe('No camera? Go to count-dracula.example.com and enter Ab3dEf7hJk')
+    expect(tvQrCodeLine('K7Q-M4X', 'https://count-dracula.example.com')).toBe('No camera? Go to count-dracula.example.com and enter K7Q-M4X')
   })
 })

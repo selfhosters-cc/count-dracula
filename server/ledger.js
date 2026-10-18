@@ -1,7 +1,7 @@
 // The Ledger: every write goes through apply(), every read through snapshot(), each on one Household.
 // See .scratch/count-dracula/modules.md §1 and .scratch/multi-household/spec.md §4.
 import { nextWallTime, toBuckets, zonedTime } from '../shared/night-maths.js'
-import { migrate, randomKey, randomToken } from './migrations.js'
+import { freshCode, migrate, randomKey, randomToken } from './migrations.js'
 import { isCell } from '../shared/geohash.js'
 import { isBlocked } from './blocklist.js'
 import { canRace } from '../shared/race-against.js'
@@ -193,8 +193,8 @@ export function openLedger(db, config) {
       const halloween = at < halloweenOver
       return db.transaction(() => {
         const { id } = db
-          .query('INSERT INTO households (display_name, time_zone, join_key, tv_token, watch_code, signed_up_at, last_stamp) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id')
-          .get(name, timeZone, randomKey(), randomToken(), randomKey(), at, at) // the Event it makes live is stamped `at`
+          .query('INSERT INTO households (display_name, time_zone, join_key, join_code, tv_token, watch_code, signed_up_at, last_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id')
+          .get(name, timeZone, randomKey(), freshCode(db), randomToken(), freshCode(db), at, at) // the Event it makes live is stamped `at`
         const insertEvent = db.query(`
           INSERT INTO events (household_id, name, state, golden_count, goes_live_at, went_live_at)
           VALUES (?, ?, ?, ?, ?, ?) RETURNING id
@@ -400,6 +400,17 @@ export function openLedger(db, config) {
     isPairedDevice(householdId, token) {
       if (typeof token !== 'string' || token === '') return false
       return !!db.query('SELECT 1 FROM paired_devices WHERE token = ? AND household_id = ?').get(token, householdId)
+    },
+
+    // The Household a join code belongs to, or null.
+    householdByJoinCode(code) {
+      if (typeof code !== 'string' || code === '') return null
+      return db.query('SELECT id FROM households WHERE join_code = ?').get(code)?.id ?? null
+    },
+
+    // Whether a 6-character code is already a Household's, for a new TV pairing code to steer clear of.
+    isHouseholdCode(code) {
+      return !!db.query('SELECT 1 FROM households WHERE join_code = ?1 OR watch_code = ?1').get(code)
     },
 
     // The TV link a watch code stands for (its token), or null.
@@ -1025,14 +1036,14 @@ export function openLedger(db, config) {
       // Rotate TV link (spec §9): a new secret; the HTTP layer closes every stream on the old one.
       // The watch code is the TV link's short form: it changes with it.
       rotateTvLink() {
-        db.query('UPDATE households SET tv_token = ?, watch_code = ? WHERE id = ?').run(randomToken(), randomKey(), householdId)
+        db.query('UPDATE households SET tv_token = ?, watch_code = ? WHERE id = ?').run(randomToken(), freshCode(db), householdId)
         db.query('DELETE FROM paired_devices WHERE household_id = ?').run(householdId) // they pair again
         return []
       },
 
       // Cuts off phones that joined with the old key; the HTTP layer hands the new one back.
       changeKey() {
-        db.query('UPDATE households SET join_key = ? WHERE id = ?').run(randomKey(), householdId)
+        db.query('UPDATE households SET join_key = ?, join_code = ? WHERE id = ?').run(randomKey(), freshCode(db), householdId)
         return []
       },
 
@@ -1152,6 +1163,10 @@ export function openLedger(db, config) {
 
       watchCode() {
         return household().watch_code
+      },
+
+      joinCode() {
+        return household().join_code
       },
 
       canEstimateLastYear,

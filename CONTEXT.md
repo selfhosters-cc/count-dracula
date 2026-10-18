@@ -38,7 +38,7 @@ _Avoid_: User, volunteer, member
 
 **Join key**:
 The one secret a door phone holds to write to a Household: it writes to any of the Household's Live or Ended Events, and every write names its Event. It's kept across Events, so a phone set up for a test night works on the real one; Change join key cuts off every phone holding the old one.
-People see it as the **join code**, typed into the homepage's "Got a code?" box when they can't scan the QR.
+People never type it: they type its **join code**, a short code that stands for it in the homepage's "Got a code?" box when they can't scan the QR. Change join key changes both.
 _Avoid_: Event key, password, TV link (that's read-only)
 
 **Operator**:
@@ -54,7 +54,7 @@ A phone or TV screen that joined one of a Household's Events, known only within 
 _Avoid_: Viewer, counter, user, connection (that's one open stream)
 
 **Watch code**:
-The TV link's short form: a code a Manager or a door phone gives out, typed into the homepage's "Got a code?" box to watch along read-only. The watch QR carries it, with the link, onto every screen watching for 2 minutes, for someone at the porch to scan. Rotating the TV link changes it too.
+The TV link's short form, shaped like every code a person types: a code a Manager or a door phone gives out, typed into the homepage's "Got a code?" box to watch along read-only. The watch QR carries it, with the link, onto every screen watching for 2 minutes, for someone at the porch to scan. Rotating the TV link changes it too.
 _Avoid_: Viewer code, TV code (that's the TV pairing code), join code (that's for Helpers)
 
 **TV pairing code**:

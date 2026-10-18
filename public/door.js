@@ -6,6 +6,7 @@ import { noNightLines } from '/no-night.js'
 import { phoneNearby } from '/nearby-text.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
 import { clockTime, eventNow, releaseOpen } from '/shared/night-maths.js'
+import { formatCode } from '/shared/codes.js'
 
 const $ = (id) => document.getElementById(id)
 const EMOJIS = ['🧙', '🧛', '🧟', '👻', '🎃', '🦸', '🕷️', '👑', '🦖', '🐶', '🐱', '🦄', '🤖', '🦇', '🧚', '🏴‍☠️', '🐉', '🤡', '❓']
@@ -299,11 +300,10 @@ function start(phoneName) {
     const ended = !!live.state?.event?.ended
     $('end-night').textContent = ended ? '☀️ Resume the night' : '🌙 End the night'
     for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release, #end-night, #watch-tv, #watch-send, #join-send')) c.disabled = !joined
-    $('join-code').textContent = joinKey
   }
   $('menu-open').addEventListener('click', () => {
     renderMenu()
-    loadWatch()
+    loadCodes()
     renderGoLiveNow()
     $('helper-qr').hidden = true
     $('helper-tv').hidden = true
@@ -483,6 +483,8 @@ function start(phoneName) {
     toast(res?.ok ? `🎫 Released: the next ${left} kid${left === 1 ? '' : 's'} win` : "Couldn't release: check the connection")
   })
 
+  let codes = null // { joinCode, watchCode, tvToken }, from /api/codes
+
   // A phone that scans this joins without typing anything. Only ever drawn here, never on the TV. It names the
   // Household, never an Event, so it's right on every night (spec v2.1 §4).
   $('helper-show').addEventListener('click', () => {
@@ -493,7 +495,7 @@ function start(phoneName) {
     $('helper-qr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true })
     $('helper-qr').append(
       Object.assign(document.createElement('p'), { className: 'says', textContent: helperWording(live.state?.household) }),
-      Object.assign(document.createElement('p'), { textContent: joinCodeLine(joinKey, location.origin) }),
+      ...(codes ? [Object.assign(document.createElement('p'), { textContent: joinCodeLine(formatCode(codes.joinCode), location.origin) })] : []),
       Object.assign(document.createElement('p'), { textContent: url }),
     )
     $('helper-qr').hidden = false
@@ -532,20 +534,21 @@ function start(phoneName) {
     renderTvQr()
   })
 
-  // ---- Watchers: the watch code and link, read each time ☰ opens (a Rotate TV link in /setup shows at once), and
-  // the watch QR on every screen watching for 2 minutes. Both links go out by the phone's own share sheet.
-  let watch = null // { code, tvToken }
-  async function loadWatch() {
-    const res = await fetch('/api/watch', { headers: { 'X-Join-Key': joinKey } }).catch(() => null)
-    watch = res?.ok ? await res.json() : null
-    $('watch-code').textContent = watch?.code ?? '—'
+  // ---- Watchers and helpers: the two codes, read each time ☰ opens (a Change join key or Rotate TV link in /setup
+  // shows at once), and the watch QR on every screen watching for 2 minutes. Both links go out by the phone's own
+  // share sheet.
+  async function loadCodes() {
+    const res = await fetch('/api/codes', { headers: { 'X-Join-Key': joinKey } }).catch(() => null)
+    codes = res?.ok ? await res.json() : null
+    $('watch-code').textContent = codes ? formatCode(codes.watchCode) : '—'
+    $('join-code').textContent = codes ? formatCode(codes.joinCode) : '—'
   }
   async function shareLink(url, title) {
     if (navigator.share) return navigator.share({ title, url }).catch(() => {})
     await navigator.clipboard?.writeText(url).catch(() => {})
     toast('Link copied')
   }
-  $('watch-send').addEventListener('click', () => watch && shareLink(watchLink(location.origin, watch.tvToken), `Watch our trick-or-treat count`))
+  $('watch-send').addEventListener('click', () => codes && shareLink(watchLink(location.origin, codes.tvToken), `Watch our trick-or-treat count`))
   $('join-send').addEventListener('click', () => shareLink(helperLink(location.origin, joinKey), `Help count trick-or-treaters at ${live.state?.household || 'our door'}`))
   const watchQrLeft = () => Math.max(0, (live.state?.watchQr?.until ?? 0) - Date.now())
   function renderWatchQr() {
@@ -571,7 +574,7 @@ function start(phoneName) {
     $('watch-says').textContent = watchQrSays(await res.json())
     renderWatchQr()
   })
-  if (joinKey) loadWatch()
+  if (joinKey) loadCodes()
 
   // ---- "+ New" costume with Catch-up. Online only: one direct POST, safe to retry with the same kid id.
   let sheetOpen = false
