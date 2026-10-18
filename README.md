@@ -7,6 +7,10 @@ phones. A TV facing the porch celebrates every kid live and races tonight's coun
 its TV and phones straight away. Or host it yourself: one small [Bun](https://bun.sh) server with no other
 dependencies, [with Docker Compose](#install-with-docker-compose) or [from source](#running-it-from-source).
 
+countdracula.cc runs a few hosted-only features as Extensions: private code started with the core. The seam
+they use is described in [ADR 0001](docs/adr/0001-extensions.md). It's documented but unsupported, with no
+promise of stability, and a self-hosted install runs none and loses nothing.
+
 ![A night in progress, the door phone and the porch TV side by side: a helper taps costume tiles on the phone, and the TV counts each kid with a pop and confetti, the race against last year's ghost and the costume leaderboard moving. Kid #100 brings the giant headstone takeover, the phone warns that the next kid is golden, and kid #104 wins a golden ticket](docs/demo/demo.gif)
 
 [▶ Watch in full quality (WebM)](docs/demo/demo.webm)

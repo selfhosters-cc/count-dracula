@@ -6,20 +6,19 @@
 # Refuses to ship if the tests fail. Copies the database first, every time. Keeps the database untouched;
 # writes /etc/count-dracula/config.json on the first deploy, and on a v1 server removes its dead keys once.
 # The private settings (deploy/local.env, git-ignored) go to /etc/count-dracula/env for the service.
+# With EXTENSION_REPOS in local.env, each private checkout's Extensions ship with the core (v2.2 §11): its tests
+# run too, and it must be committed. One version per deploy, the core's, even for a private-only change.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 # Private settings stay out of the repo: deploy/local.env (git-ignored); deploy/local.env.example lists them.
 if [[ -f deploy/local.env ]]; then source deploy/local.env; fi
-ENV_KEYS=(PUBLIC_HOST GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET OPERATOR_EMAILS OPERATOR_CONTACT)
-# Passed on when set: Continue with email stays hidden until SMTP_HOST and EMAIL_FROM are (SMTP_PORT defaults to 25;
-# SMTP_USER and SMTP_PASS log in to a mail service over TLS), with PUBLIC_HOST above. TRUSTED_PROXIES is only for
-# a proxy on a public address: the shared Caddy is on the LAN, which the app trusts already.
-OPTIONAL_ENV_KEYS=(SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS EMAIL_FROM TRUSTED_PROXIES)
+# The keys the server gets (ENV_KEYS, OPTIONAL_ENV_KEYS), the private checkouts in EXTENSION_REPOS, and the
+# packing of the tarball, REVISION and env: deploy/pack.sh.
+source deploy/pack.sh
 
 PVE=${PVE:-proxmox}
 VMID=${VMID:-118}
-APP=/opt/count-dracula
 DATA=/var/lib/count-dracula
 
 pve() { ssh -o BatchMode=yes "$PVE" "$@"; }
@@ -66,7 +65,8 @@ fi
 if [[ ${1:-} == --rollback ]]; then
   freeze_warning
   echo "==> Rolling back to the previous build"
-  in_lxc "test -d $APP.prev && mv $APP $APP.bad && mv $APP.prev $APP && rm -rf $APP.bad && systemctl restart count-dracula"
+  # The Extensions are inside $APP, so they swap with the core; the env (their EXTENSIONS and keys) swaps with it.
+  in_lxc "test -d $APP.prev && mv $APP $APP.bad && mv $APP.prev $APP && rm -rf $APP.bad && if [ -f /etc/count-dracula/env.prev ]; then mv /etc/count-dracula/env.prev /etc/count-dracula/env; fi && systemctl restart count-dracula"
   health && echo "==> Rolled back, and it answers." || { echo "!! It doesn't answer after the rollback: journalctl -u count-dracula" >&2; exit 1; }
   exit 0
 fi
@@ -79,15 +79,21 @@ if ((${#missing[@]})); then
   echo "!! deploy/local.env is missing: ${missing[*]} (see deploy/local.env.example)" >&2
   exit 1
 fi
+# The private checkouts (EXTENSION_REPOS): each clean, so what ships is exactly its commit.
+check_extension_repos
 
 echo "==> Tests"
-# Every test starts a real server: on a busy machine one can pass Bun's 5 s without anything being wrong, so 20 s
-# keeps a real hang failing without a slow run blocking a deploy.
-if ! tests=$(bun test --timeout 20000 2>&1); then
-  grep -E '^\(fail\)' <<<"$tests" >&2 || true
+if ! tests_pass .; then
   echo "!! Tests fail: not deploying. Run bun test." >&2
   exit 1
 fi
+for repo in "${EXTENSION_CHECKOUTS[@]}"; do
+  echo "==> Tests in $repo"
+  if ! tests_pass "$repo"; then
+    echo "!! $repo's tests fail: not deploying. Run bun test there." >&2
+    exit 1
+  fi
+done
 
 # Every deploy is a release: the patch number goes up, committed and tagged (and pushed, so the repo has what's
 # live), before packing, so the build carries it. A deploy that fails after this just skips a number.
@@ -98,19 +104,12 @@ git push -q origin HEAD "refs/tags/v$version" || echo "!! Couldn't push v$versio
 echo "==> Version $version"
 
 echo "==> Packing $(git rev-parse --short HEAD)$(git diff --quiet || echo ' (+ uncommitted changes)')"
+for repo in "${EXTENSION_CHECKOUTS[@]}"; do echo "    with $(extensions_in "$repo" | paste -sd ' ') from $repo at $(git -C "$repo" rev-parse --short HEAD)"; done
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
-tar -czf "$stage/app.tgz" --exclude='*.test.js' server shared public kiosk package.json deploy/loadtest.js deploy/redelete.js deploy/access-request.js deploy/import-past-counts.js
+pack_app "$stage"
 cp deploy/count-dracula.service deploy/config.production.json deploy/journald-count-dracula.conf deploy/copy-db.js deploy/upgrade-config.js "$stage/"
 cp "$(readlink -f "$(command -v bun)")" "$stage/bun"
-git rev-parse HEAD >"$stage/REVISION"
-# The service's private settings: only these keys, from local.env, never anything else in it.
-for key in "${ENV_KEYS[@]}" "${OPTIONAL_ENV_KEYS[@]}"; do
-  value=${!key:-}
-  [[ -n $value ]] || continue
-  [[ $value != *$'\n'* ]] || { echo "!! $key has a line break" >&2; exit 1; }
-  printf '%s=%s\n' "$key" "$value"
-done >"$stage/env"
 
 echo "==> Copying to LXC $VMID"
 pve "rm -rf /tmp/count-dracula-deploy && mkdir -p /tmp/count-dracula-deploy"
@@ -133,7 +132,8 @@ install_out=$(in_lxc "
   # The app: unpacked beside the old one, then swapped, keeping the old one for --rollback.
   rm -rf $APP.new && mkdir -p $APP.new && tar -xzf /tmp/app.tgz -C $APP.new && cp /tmp/REVISION $APP.new/
   rm -rf $APP.prev && if [ -d $APP ]; then mv $APP $APP.prev; fi && mv $APP.new $APP
-  # The private settings, readable by the service only.
+  # The private settings, readable by the service only. The previous ones are kept for --rollback.
+  if [ -f /etc/count-dracula/env ]; then cp -p /etc/count-dracula/env /etc/count-dracula/env.prev; fi
   install -m 0640 -o root -g countdracula /tmp/env /etc/count-dracula/env
   # The config: written once, never overwritten (it may have been edited on the server). A v1 config is
   # upgraded once: its dead keys go and the backup directory is added.
