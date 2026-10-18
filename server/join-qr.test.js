@@ -144,6 +144,19 @@ describe('the join QR on the TV', () => {
     expect(await (await showQr(app, info.joinKey)).json()).toMatchObject({ shown: true, tvs: 2 })
   })
 
+  test("Use this screen as the TV pairs it: a Manager's own screen gets the helper QR with no code", async () => {
+    const { app, cookie, info } = await household()
+    const res = await fetch(`${app.url}/api/pair/here`, { method: 'POST', headers: { Cookie: cookie } })
+    const { tvToken, deviceToken } = await res.json()
+    expect(tvToken).toBe(info.tvToken)
+
+    const tv = await stream(app, `key=${tvToken}&device=${deviceToken}`)
+    await tv.next()
+    expect(await (await showQr(app, info.joinKey)).json()).toMatchObject({ shown: true, tvs: 1 })
+    expect((await nextFrame(tv)).event).toBe('joinQr')
+    expect((await fetch(`${app.url}/api/pair/here`, { method: 'POST' })).status).toBe(401) // a Manager only
+  })
+
   test('Change join key takes it down: the QR on screen would show a dead key', async () => {
     const { app, cookie, info } = await household()
     const device = await pairedDevice(app, cookie)

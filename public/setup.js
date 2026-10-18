@@ -492,7 +492,7 @@ $('check-pair-form').addEventListener('submit', async (e) => {
   say('Paired: waiting for your TV…')
 })
 $('check-tv-send').addEventListener('click', () => share(household.tvUrl(), 'Our trick-or-treat TV'))
-$('check-tv-here').addEventListener('click', () => (location.href = household.tvUrl()))
+$('check-tv-here').addEventListener('click', () => household.pairHere())
 // Also, when you like: the name here; the Location on Household, where its map lives.
 $('check-name-form').addEventListener('submit', async (e) => {
   e.preventDefault()

@@ -261,6 +261,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       if (!answer.paired) return Response.json({ paired: false })
       return Response.json({ paired: true, tvToken: house.tvToken(), deviceToken: house.pairDevice() })
     },
+    // "Use this screen as the TV" in /setup: a signed-in Manager on the screen itself pairs it, no code needed. It's
+    // then the Household's own TV, like one paired by code, so it can show the helper QR; a TV link never can.
+    'POST /api/pair/here': manager((req, house, session) => {
+      if (!guard.take('redeem', session.manager.id)) return tooMany()
+      return Response.json({ tvToken: house.tvToken(), deviceToken: house.pairDevice() })
+    }),
     'POST /api/pair/redeem': manager(async (req, house, session) => {
       if (!guard.take('redeem', session.manager.id)) return tooMany()
       const { code } = await req.json()

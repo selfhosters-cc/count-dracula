@@ -47,7 +47,18 @@ export function wireHousehold(core) {
     $('qr-full').hidden = false
   })
   $('qr-full').addEventListener('click', () => ($('qr-full').hidden = true))
-  $('tv-here').addEventListener('click', () => (location.href = tvUrl()))
+  // Use this screen as the TV: paired, as if by its code, then the bare /tv, which keeps it like any paired TV.
+  async function pairHere() {
+    const res = await fetch('/api/pair/here', { method: 'POST' }).catch(() => null)
+    if (!res?.ok) return say(res?.status === 429 ? 'Too many tries: wait a few minutes' : "Couldn't pair this screen: check the connection", true)
+    try {
+      localStorage.setItem('cd.tvLink', JSON.stringify(await res.json())) // tv.js's stored link: { tvToken, deviceToken }
+    } catch {
+      return say("This browser won't keep the TV's link: pair it with the code on /tv instead", true)
+    }
+    location.href = '/tv'
+  }
+  $('tv-here').addEventListener('click', pairHere)
   $('tv-rotate').addEventListener('click', () => {
     if (confirm('Rotate the TV link? Every screen watching with the old link stops at once, your porch TV included, until it gets the new one.')) admin({ type: 'rotateTvLink' }, 'TV link rotated')
   })
@@ -142,6 +153,7 @@ export function wireHousehold(core) {
   return {
     redeem,
     tvUrl,
+    pairHere,
     render() {
       const hs = house()
       if (document.activeElement !== $('h-name')) $('h-name').value = hs.displayName

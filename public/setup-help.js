@@ -43,7 +43,7 @@ export const HELP = {
     title: 'Helpers',
     p: [
       'Count on this device turns this phone into a door phone. The join code is for a helper who can\'t scan: they enter it under "Got a code?" on the homepage and count at your door.',
-      'Add a helper shows a QR code a helper scans with their camera, or Share join link sends it. It works on every night, so a phone set up for a test still works on Halloween. Show on the TV puts the same QR on your porch TV for 2 minutes, so a helper can scan it there. It only shows on a TV you paired with its code, never on a TV link.',
+      'Add a helper shows a QR code a helper scans with their camera, or Share join link sends it. It works on every night, so a phone set up for a test still works on Halloween. Show the helper QR on the TV puts the same QR on your porch TV for 2 minutes, so a helper can scan it there. It only shows on a paired TV (by its code, or Use this screen as the TV), never on a TV link.',
     ],
   },
 
@@ -146,7 +146,7 @@ export const HELP = {
   tv: {
     title: 'Your TV',
     p: [
-      'The TV link only watches: it shows whichever night the door is on and switches by itself. Pair a TV with the code on its screen, or send the link to family far away.',
+      'The TV link only watches: it shows whichever night the door is on and switches by itself. Pair your porch TV with the code on its screen, or open Setup on it and tap Use this screen as the TV. A paired TV is yours: it can show the helper QR. Send the link to family far away.',
       'Rotate TV link cuts every screen off, your porch TV included, until it gets the new link.',
     ],
     more: [['TV help: laptops, sound, smart TVs', '/help/tv']],
