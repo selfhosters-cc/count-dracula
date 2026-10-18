@@ -105,8 +105,9 @@ describe('redeeming', () => {
 
     const html = await (await fetch(`${app.url}/tv`)).text()
 
-    expect(html).toContain("<li><b>Scan the QR</b> with your phone's camera</li>")
-    expect(html).toContain('<li>Or on your phone, go to <b id="pair-where"></b> and enter the code under <b>Got a code?</b></li>')
+    expect(html).toContain("<li><b>Scan the QR</b> with the phone of whoever runs your household's Setup (it asks them to sign in if they aren't)</li>")
+    expect(html).toContain('<li>Or, signed in on a phone, go to <b><span id="pair-where"></span>/pair</b> and enter the code</li>')
+    expect((await fetch(`${app.url}/pair`, { redirect: 'manual' })).headers.get('Location')).toBe('/setup#pair-tv')
     expect(html).toContain('<li>Or send the code to whoever runs your Setup: they enter it under <b>📺 Your TV</b></li>')
   })
 

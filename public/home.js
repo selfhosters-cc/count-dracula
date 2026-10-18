@@ -1,7 +1,7 @@
 // The homepage on / (spec v2.1 §11): the pitch, the site-wide line, How it works, and one way in: Continue with
 // Google (or email), which signs in or starts a household.
 import { doorRedirect } from '/door-view.js'
-import { readCode, tvCodeFrom } from '/shared/codes.js'
+import { maskCodeInput, readCode, tvCodeFrom } from '/shared/codes.js'
 import { homeSiteLine } from '/nearby-text.js'
 
 const $ = (id) => document.getElementById(id)
@@ -98,6 +98,7 @@ if (waitingTv) {
 
 // Got a code?: a TV's code pairs that TV (through sign-in if need be), a join code opens the door phone, and a
 // watch code the TV view. Join and watch codes look alike, so the server says which; a mistyped one says so here.
+maskCodeInput($('code-input'))
 $('code-form').addEventListener('submit', async (e) => {
   e.preventDefault()
   const say = (text) => {

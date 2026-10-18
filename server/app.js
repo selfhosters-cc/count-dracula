@@ -200,6 +200,9 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       if (searchParams.get('key')) return new Response(null, { status: 302, headers: { Location: `/door${search}` } })
       return serveStatic('/', req, contact)
     },
+    // The TV's pairing screen's short address to type on a phone: Setup's Tonight, with the Your TV box (through
+    // sign-in if need be). Not the homepage: a phone that counts goes from there to its door.
+    'GET /pair': () => new Response(null, { status: 302, headers: { Location: '/setup#pair-tv' } }),
     // The sign-up page folded into the homepage.
     'GET /signup': () => new Response(null, { status: 302, headers: { Location: '/' } }),
     // What the homepage can't know from the page alone: whether sign-ups are paused (shown before anyone goes to

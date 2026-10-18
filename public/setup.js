@@ -1,6 +1,6 @@
 // /setup (spec v2.1 §9): a signed-in Manager runs their Household. Three tabs, Tonight · Nights · Household,
 // and a screen per night. setup-view.js decides what shows; setup-night.js and setup-household.js draw it.
-import { formatCode } from '../shared/codes.js'
+import { formatCode, maskCodeInput } from '../shared/codes.js'
 import { zonedTime, clockTime as zoneClock } from '../shared/night-maths.js'
 import qrcode from '/vendor/qrcode/qrcode.js'
 import { helperLink, helperWording, joinCodeLine, tvQrButton, tvQrSays, watchQrButton, watchQrSays } from './door-view.js'
@@ -372,6 +372,7 @@ function renderTonight(ctx) {
 // /tv shows, and Use this screen as the TV. Made once, so a half-typed code survives a redraw; the 3 s poll
 // keeps the line under the heading current.
 const pairInput = h('input', { placeholder: 'K7Q-M4X', ariaLabel: 'The code on the TV', autocomplete: 'off', autocapitalize: 'characters', spellcheck: false })
+for (const input of [pairInput, $('pair-code'), $('check-pair-code')]) maskCodeInput(input)
 const tvStatus = h('p', { className: 'muted' })
 const tvNodes = [
   tvStatus,
@@ -387,6 +388,14 @@ const tvNodes = [
 ]
 function tvBox() {
   renderTvStatus()
+  // Arrived from the TV's pairing screen (/pair → /setup#pair-tv): straight to the box, ready to type, once.
+  if (location.hash === '#pair-tv') {
+    history.replaceState(history.state, '', `${location.pathname}${location.search}`)
+    setTimeout(() => {
+      pairInput.scrollIntoView({ block: 'center' })
+      pairInput.focus()
+    })
+  }
   return tvNodes
 }
 function renderTvStatus() {

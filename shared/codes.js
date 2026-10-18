@@ -13,6 +13,27 @@ const JOIN_CODE = /^[A-Za-z0-9]{8,40}$/
 // "K7Q-M4X": a code as it's shown and typed.
 export const formatCode = (code) => `${code.slice(0, 3)}-${code.slice(3)}`
 
+// A code box's mask, as someone types: capitals, and the dash put in after the third character ("k7qm" →
+// "K7Q-M"). What can't be a 6-character code is left exactly as it is: a pasted link, or an old 10-character
+// join key (mixed case, so it must not be touched).
+export function maskCode(text) {
+  const raw = String(text ?? '')
+  if (/[^A-Za-z0-9\s-]/.test(raw)) return raw
+  const chars = raw.replace(/[\s-]+/g, '')
+  if (chars.length > TV_CODE_LENGTH) return raw
+  const upper = chars.toUpperCase()
+  return upper.length > 3 ? `${upper.slice(0, 3)}-${upper.slice(3)}` : upper
+}
+
+// Wires a code box to the mask. Deleting the dash itself takes the character before it too, so it never sticks.
+export function maskCodeInput(input) {
+  input.addEventListener('input', (e) => {
+    const wasDash = e.inputType === 'deleteContentBackward' && /^[A-Za-z0-9]{3}$/.test(input.value)
+    const next = maskCode(wasDash ? input.value.slice(0, 2) : input.value)
+    if (next !== input.value) input.value = next
+  })
+}
+
 // A new code: 6 characters from the alphabet, at random.
 export function randomCode() {
   return Array.from(crypto.getRandomValues(new Uint8Array(TV_CODE_LENGTH)), (b) => TV_CODE_ALPHABET[b % TV_CODE_ALPHABET.length]).join('')
