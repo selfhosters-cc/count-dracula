@@ -98,7 +98,7 @@ A Household the Operator has switched off without deleting anything: its Manager
 _Avoid_: Banned, disabled, blocked, deleted
 
 **Report**:
-A stranger's flag on a public Night summary share page ("Report this page"), stored with the Household, the page, the time and an optional short reason. The Operator sees open Reports per Household on `/operator` and dismisses them; acting on one means Rename or Suspend.
+A stranger's flag on a public page that shows a night ("Report this page"): a Night summary share page, or an Extension's page. It's stored with the Household, the night, the time and an optional short reason, never which page it came from, since the night is the same on each. The Operator sees open Reports per Household on `/operator`, each naming its night, and dismisses them; acting on one means Rename or Suspend, or whatever the Extension that showed the night offers.
 _Avoid_: Complaint, flag, ticket
 
 **Pause sign-ups**:
