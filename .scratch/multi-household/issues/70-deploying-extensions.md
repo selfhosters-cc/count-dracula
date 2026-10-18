@@ -1,7 +1,7 @@
 # Deploying Extensions
 
 Type: build (AFK)
-Status: open
+Status: done
 Blocked by: 65
 
 ## What to build
@@ -18,7 +18,7 @@ Blocked by: 65
 
 ## Acceptance criteria
 
-- [ ] With `EXTENSION_REPOS` unset, the tarball and `/etc/count-dracula/env` are as before (a dry run, or a test of the packaging step)
-- [ ] With a checkout of the fixture: its tests run, a failing one stops the deploy, the tarball holds `extensions/fixture/` with no `*.test.js`, `EXTENSIONS` and `FIXTURE_*` reach the env file, and `REVISION` has both commits
-- [ ] No real path, hostname or LAN address is committed
-- [ ] `bun test` passes
+- [x] With `EXTENSION_REPOS` unset, the tarball and `/etc/count-dracula/env` are as before (a dry run, or a test of the packaging step)
+- [x] With a checkout of the fixture: its tests run, a failing one stops the deploy, the tarball holds `extensions/fixture/` with no `*.test.js`, `EXTENSIONS` and `FIXTURE_*` reach the env file, and `REVISION` has both commits
+- [x] No real path, hostname or LAN address is committed
+- [x] `bun test` passes
