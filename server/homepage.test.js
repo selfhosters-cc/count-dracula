@@ -206,10 +206,13 @@ describe('every "go sign in" points at /', () => {
   test('/setup, /tally, /summary and /operator without a session go to the Sign in form', async () => {
     const { app } = boot()
 
-    for (const path of ['/setup', '/tally', '/summary', '/operator']) {
+    for (const path of ['/setup', '/tally', '/summary']) {
       const res = await get(app, path)
       expect({ path, status: res.status, to: res.headers.get('Location') }).toEqual({ path, status: 303, to: '/#sign-in' })
     }
+    // /operator notes where to come back to, for /setup to send an Operator on once signed in
+    const operator = await get(app, '/operator')
+    expect({ status: operator.status, to: operator.headers.get('Location') }).toEqual({ status: 303, to: '/?next=operator#sign-in' })
   })
 
   test("sign-out ends only our session and lands on the homepage, told so (not bounced to a phone's door)", async () => {
