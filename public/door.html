@@ -185,6 +185,8 @@
       align-items: center; justify-content: center; gap: 1rem; padding: 16px; }
     #who button, #who input { font-size: 1.5rem; padding: 0.8rem 1.5rem; border-radius: 0.6rem; width: 14rem; max-width: 100%; }
     #who button { background: var(--panel2); }
+    #who .who-intro { color: var(--dim); font-size: 1.05rem; line-height: 1.4; text-align: center; max-width: 20rem; margin: 0; }
+    #who .who-intro b { color: var(--text); }
     #who input { border: 1px solid #ffffff30; background: var(--panel); color: var(--text); }
   </style>
 </head>
@@ -245,6 +247,7 @@
         <button class="wide" id="watch-tv">📺 Show the watch QR on the TV</button>
         <p class="says-line" id="watch-says" aria-live="polite"></p>
         <button class="wide" id="watch-send">💬 Send the watch link</button>
+        <button class="wide" id="watch-here">📺 Watch on this phone</button>
         <div class="code-row"><span>📱 Join code</span><b id="join-code"></b></div>
         <button class="wide" id="join-send">💬 Send the join link</button>
         <button class="wide" id="helper-show">📱 Add a helper</button>
@@ -305,6 +308,8 @@
     </div>
 
     <form id="who">
+      <!-- A helper's first screen, from a QR, a join link or the join code: what this is, and whose door. -->
+      <p class="who-intro" id="who-intro">You're counting trick-or-treaters at the door: one tap per kid. First, who's holding this phone?</p>
       <h1>Who's tapping?</h1>
       <button type="button" data-name="Dad">Dad</button>
       <button type="button" data-name="Mom">Mom</button>

@@ -70,6 +70,15 @@ $('count-here').addEventListener('click', async () => {
   location.href = '/door'
 })
 
+// A screen that watched by a TV link (tv.js remembers it): the way back, since a watcher has no other.
+try {
+  const was = localStorage.getItem('cd.watching')
+  if (was) {
+    $('watch-back').href = `/tv/k/${was}`
+    $('watch-line').hidden = false
+  }
+} catch {}
+
 // Watch on this device: the Household's TV link, as in /setup.
 $('watch-here').addEventListener('click', async () => {
   const house = await getJson('/api/household')

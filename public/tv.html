@@ -4,13 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Count Dracula — TV</title>
-  <!-- The link preview (WhatsApp, iMessage, …): says what the link is for. Never the Household's name. -->
-  <meta name="description" content="See every trick-or-treater as our porch TV counts them: the total, the costumes and the race against last year. Just watching: no app and no sign-in.">
+  <!-- The link preview (WhatsApp, iMessage, …), filled in by the server: a TV link's (watch along) or a bare
+       /tv's (make this the porch TV). Never the Household's name. -->
+  <meta name="description" content="__PREVIEW_TEXT__">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Count Dracula">
-  <meta property="og:title" content="Watch our trick-or-treat count, live">
-  <meta property="og:description" content="See every trick-or-treater as our porch TV counts them: the total, the costumes and the race against last year. Just watching: no app and no sign-in.">
-  <meta property="og:image" content="__ORIGIN__/og-watch.png">
+  <meta property="og:title" content="__PREVIEW_TITLE__">
+  <meta property="og:description" content="__PREVIEW_TEXT__">
+  <meta property="og:image" content="__ORIGIN__/__PREVIEW_IMAGE__">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
@@ -206,6 +207,8 @@
     #pairing li + li { margin-top: 1.4vh; }
     #pairing p.small { font-size: clamp(12px, 1.3vw, 24px); color: var(--ink-dim); margin: 0; }
     #pairing b { color: var(--ink); }
+    #pairing a { color: var(--pumpkin); }
+    #pairing p.small + p.small { margin-top: 1.5vh; }
     .pair-code { font-size: clamp(48px, 8vw, 180px); white-space: nowrap; color: var(--pumpkin); letter-spacing: .06em; font-weight: 700; }
     #pair-qr { background: #fff; border-radius: 2vw; padding: 2vw; }
     #pair-qr svg { width: 100%; height: auto; display: block; }
@@ -300,6 +303,7 @@
         <li>Or send the code to whoever runs your Setup: they enter it under <b>📺 Your TV</b></li>
       </ol>
       <p class="small">The code changes by itself every few minutes.</p>
+      <p class="small"><a id="pair-back" hidden>Just watching? Back to the night you were watching ›</a></p>
     </div>
     <div id="pair-qr"></div>
   </section>

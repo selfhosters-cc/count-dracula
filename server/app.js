@@ -853,7 +853,7 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
     const handler = routes[`${req.method} ${pathname}`]
     if (handler) return handler(req, server)
     // The TV link's page: the same TV page; it reads its token from the address.
-    if (req.method === 'GET' && pathname.startsWith('/tv/k/')) return serveStatic('/tv', req)
+    if (req.method === 'GET' && pathname.startsWith('/tv/k/')) return serveStatic('/tv', req, contact, 'watch')
     if (req.method === 'GET') return serveStatic(pathname, req, contact)
     return notFound()
   }
@@ -903,7 +903,22 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
   }
 }
 
-async function serveStatic(pathname, req, contact = DEFAULT_CONTACT) {
+// The link previews a page fills in (__PREVIEW_TITLE__, __PREVIEW_TEXT__, __PREVIEW_IMAGE__) when one file serves
+// two kinds of link: the TV page is a bare /tv (a screen to pair) or a TV link (watch along).
+const PREVIEWS = {
+  '/tv': {
+    title: 'Make this screen your porch TV',
+    text: 'Open this on the computer by your porch TV: it shows a code to pair it with your household, then your count, live.',
+    image: 'og-home.png',
+  },
+  watch: {
+    title: 'Watch our trick-or-treat count, live',
+    text: 'See every trick-or-treater as our porch TV counts them: the total, the costumes and the race against last year. Just watching: no app and no sign-in.',
+    image: 'og-watch.png',
+  },
+}
+
+async function serveStatic(pathname, req, contact = DEFAULT_CONTACT, preview = pathname) {
   const [dir, rest] = pathname.startsWith('/shared/')
     ? [SHARED_DIR, pathname.slice('/shared'.length)]
     : pathname.startsWith('/kiosk/')
@@ -924,7 +939,12 @@ async function serveStatic(pathname, req, contact = DEFAULT_CONTACT) {
   if (dir === KIOSK_DIR) return new Response((await file.text()).replaceAll('__ORIGIN__', originOf(req)), { headers: { 'Content-Type': file.type, ...cache } })
   // Pages that offer help or the privacy contact say __CONTACT__: filled in with OPERATOR_CONTACT, never committed.
   // __ORIGIN__ is this site's address, for the share page's link-preview tags, which want absolute URLs.
-  if (path.endsWith('.html')) return new Response(stampScripts((await file.text()).replaceAll('__CONTACT__', esc(contact)).replaceAll('__ORIGIN__', esc(originOf(req))).replaceAll('__VERSION__', VERSION)), { headers: { 'Content-Type': file.type, ...cache } })
+  if (path.endsWith('.html')) {
+    const card = PREVIEWS[preview]
+    let html = (await file.text()).replaceAll('__CONTACT__', esc(contact)).replaceAll('__ORIGIN__', esc(originOf(req))).replaceAll('__VERSION__', VERSION)
+    if (card) html = html.replaceAll('__PREVIEW_TITLE__', esc(card.title)).replaceAll('__PREVIEW_TEXT__', esc(card.text)).replaceAll('__PREVIEW_IMAGE__', card.image)
+    return new Response(stampScripts(html), { headers: { 'Content-Type': file.type, ...cache } })
+  }
   if (path.endsWith('.js')) return new Response(stampImports(await file.text()), { headers: { 'Content-Type': file.type, ...cache } })
   // Plain files revalidate cheaply: Last-Modified, and a 304 when the browser's copy is current.
   const modified = new Date(Math.floor(file.lastModified / 1000) * 1000)

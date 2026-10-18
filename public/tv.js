@@ -41,6 +41,25 @@ function storedLink() {
   }
 }
 
+// A screen watching by a TV link remembers it apart from a paired TV's link, so the homepage and a bare /tv can
+// offer the way back (a watcher has nothing else to come back with), while a bare /tv still pairs. A link refused
+// later (rotated, or the Household gone) is forgotten.
+const WATCHING = 'cd.watching'
+function rememberWatching(token) {
+  try {
+    if (token) localStorage.setItem(WATCHING, token)
+    else localStorage.removeItem(WATCHING)
+  } catch {}
+}
+function watching() {
+  try {
+    return localStorage.getItem(WATCHING)
+  } catch {
+    return null
+  }
+}
+if (tvToken) rememberWatching(tvToken)
+
 function storeLink(link) {
   try {
     if (link) localStorage.setItem(STORED_LINK, JSON.stringify(link))
@@ -499,6 +518,7 @@ live?.onRefused(() => {
     storeLink(null)
     return location.reload()
   }
+  if (tvToken && watching() === tvToken) rememberWatching(null)
   $('unavailable').hidden = false // a rotated link, or a Household that's gone: nothing to say about which
   $('start').hidden = true
   $('sound-pill').hidden = true
@@ -545,6 +565,8 @@ function cutOff() {
 if (pairingMode) {
   $('pairing').hidden = false
   $('pair-where').textContent = location.host // the homepage's one code box (spec v2.1 §11)
+  const was = watching()
+  if (was) Object.assign($('pair-back'), { href: `/tv/k/${was}`, hidden: false })
   startPairing({
     show({ code }) {
       $('pair-code').textContent = formatCode(code)
@@ -677,15 +699,18 @@ document.addEventListener('visibilitychange', keepAwake) // the lock drops whene
 // ---- the pointer: hidden on the porch TV, back while someone watching on a computer moves their mouse
 const POINTER_IDLE_MS = 3_000
 let pointerTimer
-document.addEventListener('mousemove', () => {
+function pointerShown() {
   document.body.classList.add('pointer')
   clearTimeout(pointerTimer)
   pointerTimer = setTimeout(() => document.body.classList.remove('pointer'), POINTER_IDLE_MS)
-})
+}
+document.addEventListener('mousemove', pointerShown)
+document.addEventListener('touchstart', pointerShown, { passive: true }) // a phone has no mouse: a tap shows the way back
 
-// ---- the way back: a screen opened by Watch on this device (/setup, or the homepage's card) gets "‹ Setup" or
-// "‹ Home" while the mouse moves, and Esc. A sent TV link has no ?from=, so family watching never see it.
-const WAYS_BACK = { setup: ['/setup', '‹ Setup'], home: ['/', '‹ Home'] }
+// ---- the way back: a screen opened by Watch on this device (/setup, the homepage's card, or a door phone's ☰)
+// gets "‹ Setup", "‹ Home" or "‹ Door" while the mouse moves (a tap, on a phone), and Esc. A sent TV link has no
+// ?from=, so family watching never see it.
+const WAYS_BACK = { setup: ['/setup', '‹ Setup'], home: ['/', '‹ Home'], door: ['/door', '‹ Door'] }
 const wayBack = tvToken ? WAYS_BACK[new URLSearchParams(location.search).get('from')] : null
 if (wayBack) {
   Object.assign($('way-back'), { href: wayBack[0], textContent: wayBack[1], hidden: false })

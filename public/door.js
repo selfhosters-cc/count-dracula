@@ -299,7 +299,7 @@ function start(phoneName) {
     $('night-head').hidden = !open && $('go-live-now').hidden
     const ended = !!live.state?.event?.ended
     $('end-night').textContent = ended ? '☀️ Resume the night' : '🌙 End the night'
-    for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release, #end-night, #watch-tv, #watch-send, #join-send')) c.disabled = !joined
+    for (const c of $('menu').querySelectorAll('input, [data-mute], #helper-show, #release, #end-night, #watch-tv, #watch-send, #watch-here, #join-send')) c.disabled = !joined
   }
   $('menu-open').addEventListener('click', () => {
     renderMenu()
@@ -549,6 +549,8 @@ function start(phoneName) {
     toast('Link copied')
   }
   $('watch-send').addEventListener('click', () => codes && shareLink(watchLink(location.origin, codes.tvToken), `Watch our trick-or-treat count`))
+  // The TV's view on this phone, with ‹ Door to come back (tv.js).
+  $('watch-here').addEventListener('click', () => codes && (location.href = `${watchLink(location.origin, codes.tvToken)}?from=door`))
   $('join-send').addEventListener('click', () => shareLink(helperLink(location.origin, joinKey), `Help count trick-or-treaters at ${live.state?.household || 'our door'}`))
   const watchQrLeft = () => Math.max(0, (live.state?.watchQr?.until ?? 0) - Date.now())
   function renderWatchQr() {
@@ -676,6 +678,15 @@ if (savedName) {
   start(savedName)
 } else {
   $('who').style.display = 'flex'
+  // Name the door: the Household's name comes with a phone's snapshot (never a TV's).
+  fetch('/api/snapshot', { headers: { 'X-Join-Key': joinKey } })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((snap) => {
+      if (!snap?.household) return
+      const where = Object.assign(document.createElement('b'), { textContent: snap.household })
+      $('who-intro').replaceChildren("You're counting trick-or-treaters for ", where, ': one tap per kid at the door. First, who\'s holding this phone?')
+    })
+    .catch(() => {})
   const choose = (name) => {
     name = name.trim()
     if (!name) return

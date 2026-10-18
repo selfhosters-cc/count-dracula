@@ -110,7 +110,7 @@ describe('/ is the homepage', () => {
 
     const html = await (await fetch(`${app.url}/`, { headers: { 'X-Forwarded-Proto': 'https', Host: 'count-dracula.example.com' } })).text()
 
-    const pitch = 'Count your trick-or-treaters on your phones, while a TV on the porch cheers every kid.'
+    const pitch = "Count your trick-or-treaters on your phones, while a TV on the porch shows the count and a chart comparing to last year's numbers."
     expect(html).toContain('<title>Count Dracula — count your trick-or-treaters</title>')
     expect(html).toContain(`<meta name="description" content="${pitch}">`)
     expect(html).toContain('<meta property="og:title" content="Count Dracula">')
@@ -126,12 +126,18 @@ describe('/ is the homepage', () => {
 
     const helper = await page('/door?key=Ab3dEf7hJk')
     const watch = await page('/tv/k/some-tv-token')
+    const bareTv = await page('/tv')
 
     expect(helper).toContain('<meta property="og:title" content="Help count trick-or-treaters with us">')
     expect(helper).toContain('<meta property="og:image" content="https://count-dracula.example.com/og-helper.png">')
     expect(watch).toContain('<meta property="og:title" content="Watch our trick-or-treat count, live">')
     expect(watch).toContain('<meta property="og:image" content="https://count-dracula.example.com/og-watch.png">')
-    for (const html of [helper, watch]) expect(html).not.toContain('og:url') // the link's secret isn't repeated
+    expect(bareTv).toContain('<meta property="og:title" content="Make this screen your porch TV">')
+    for (const html of [helper, watch, bareTv]) {
+      expect(html).not.toContain('og:url') // the link's secret isn't repeated
+      expect(html).not.toContain('__PREVIEW')
+    }
+    for (const path of ['/privacy', '/help/tv']) expect(await page(path)).toContain('<meta property="og:title" content="Count Dracula: ')
     for (const image of ['/og-helper.png', '/og-watch.png']) {
       const res = await get(app, image)
       expect([await pngWidth(res.clone()), await pngHeight(res)]).toEqual([1200, 630])

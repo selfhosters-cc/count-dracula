@@ -6,11 +6,11 @@
   <title>Count Dracula — count your trick-or-treaters</title>
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="/icon.png">
-  <meta name="description" content="Count your trick-or-treaters on your phones, while a TV on the porch cheers every kid.">
+  <meta name="description" content="Count your trick-or-treaters on your phones, while a TV on the porch shows the count and a chart comparing to last year's numbers.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="__ORIGIN__/">
   <meta property="og:title" content="Count Dracula">
-  <meta property="og:description" content="Count your trick-or-treaters on your phones, while a TV on the porch cheers every kid.">
+  <meta property="og:description" content="Count your trick-or-treaters on your phones, while a TV on the porch shows the count and a chart comparing to last year's numbers.">
   <meta property="og:image" content="__ORIGIN__/og-home.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -54,6 +54,7 @@
     .sign-in .after { margin: 12px 0 0; }
     .code-line { text-align: center; margin: 0 0 18px; }
     #code-line { margin-bottom: 6px; } /* the porch TV's line sits right under it */
+    #tv-line:has(+ #watch-line:not([hidden])) { margin-bottom: 6px; } /* and the way back to a watched night under that */
     .how { background: none; padding: 0; }
     .how h2 { font-size: 24px; margin-bottom: 4px; }
     .how > p { color: var(--dim); }
@@ -163,6 +164,7 @@
   <!-- The porch TV's way in: the bare /tv shows a code to pair it from a phone, then keeps the board. A signed-in
        Manager gets Use this screen as the porch TV on Welcome back instead, with no code. -->
   <p class="muted code-line" id="tv-line">Is this screen your porch TV? <a href="/tv">Open the TV screen ›</a></p>
+  <p class="muted code-line" id="watch-line" hidden>Watching someone's night? <a id="watch-back">Back to the TV ›</a></p>
   </div>
   <div class="hero-art" aria-hidden="true">
     <img class="hero-tv" src="/tv.png" width="800" height="450" loading="lazy" alt="">
