@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startServer } from './app.js'
+import * as fixture from '../test/fixture-extension/index.js'
 
 const running = []
 afterEach(() => running.splice(0).forEach((app) => app.stop()))
@@ -57,5 +58,52 @@ describe('/privacy', () => {
     expect(await text(app, '/setup.html')).toContain('Help: <a href="mailto:help@count-dracula.example.com"')
     expect(await text(app, '/help/tv')).toContain('Help: <a href="mailto:help@count-dracula.example.com">email us</a>')
     for (const path of ['/tv', '/tv.js']) expect(await text(app, path)).not.toContain('/privacy')
+  })
+})
+
+// An Extension's item in "What's public" (v2.2 §8), from its entry module's privacy: { item, updated }.
+describe("/privacy with an Extension's fragment", () => {
+  const withExtensions = (extensions) => {
+    const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
+    const configPath = join(dir, 'config.json')
+    writeFileSync(configPath, JSON.stringify({ dbPath: join(dir, 'db.sqlite') }))
+    const app = startServer({ configPath, port: 0, env: {}, extensions, log: () => {} })
+    running.push(app)
+    return app
+  }
+  const whatsPublic = (page) => page.match(/<h2>What's public<\/h2>\s*<ul>([\s\S]*?)<\/ul>/)[1]
+
+  test("with none, the core's own items and date, and nothing left to fill", async () => {
+    for (const path of ['/privacy', '/privacy.html']) {
+      const page = await text(withExtensions([]), path)
+
+      expect(page).not.toContain('__EXTENSIONS_PRIVACY__')
+      expect(page).toContain('Updated Oct 18, 2026')
+      expect(whatsPublic(page)).toMatch(/Never a name, an address or a place\.<\/li>\n {6}<li><b>Never public:/)
+      expect(whatsPublic(page).match(/<li>/g)).toHaveLength(4)
+    }
+  })
+
+  test("the fixture's <li> sits just before Never public, and Updated is its later date", async () => {
+    for (const path of ['/privacy', '/privacy.html']) {
+      const page = await text(withExtensions([fixture]), path)
+
+      expect(whatsPublic(page)).toContain(`a place.</li>\n      ${fixture.privacy.item}\n      <li><b>Never public:`)
+      expect(page).toContain('Updated Oct 25, 2026')
+      expect(page).not.toContain('Oct 18, 2026')
+    }
+  })
+
+  test("a fragment dated before the core's keeps the core's date; two Extensions' items go in list order", async () => {
+    const older = { ...fixture, name: 'older', dir: undefined, owns: {}, migrations: [], privacy: { item: '<li>The older one.</li>', updated: '2026-03-01' } }
+    const plain = { ...fixture, name: 'plain', dir: undefined, owns: {}, migrations: [], privacy: undefined }
+
+    const alone = await text(withExtensions([older, plain]), '/privacy')
+    const both = await text(withExtensions([fixture, older]), '/privacy')
+
+    expect(alone).toContain('Updated Oct 18, 2026')
+    expect(whatsPublic(alone)).toContain('a place.</li>\n      <li>The older one.</li>\n      <li><b>Never public:')
+    expect(whatsPublic(both)).toContain(`a place.</li>\n      ${fixture.privacy.item}\n      <li>The older one.</li>\n      <li><b>Never public:`)
+    expect(both).toContain('Updated Oct 25, 2026')
   })
 })

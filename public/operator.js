@@ -2,6 +2,8 @@
 // Household by status, and a detail view to Rename, fix the time zone, make an Invite link or Suspend. Above
 // the table, the Stats section: sign-ups, nights and the devices that joined them; each Household's nights in its detail.
 // Polled every 30 s. Every name is set with textContent, never as HTML.
+import { slot } from '/extensions.js'
+
 const $ = (id) => document.getElementById(id)
 const POLL_MS = 30_000
 const STATUSES = ['Counting', 'Stale', 'Waiting', 'Ended', 'No night'] // spec v2.1 §10, on the door's Event
@@ -23,6 +25,16 @@ const el = (tag, props = {}, ...children) => {
   const node = Object.assign(document.createElement(tag), props)
   node.append(...children)
   return node
+}
+
+// An Extension's slot (v2.2 §8): its nodes after `anchor`, in place of the ones it gave the last render. Its
+// refresh loads again, as after a change.
+const filled = new Map()
+function fillSlot(name, anchor, ctx) {
+  for (const node of filled.get(name) ?? []) node.remove()
+  const nodes = slot(name, { ...ctx, refresh: load })
+  anchor.after(...nodes)
+  filled.set(name, nodes)
 }
 
 async function load() {
@@ -159,6 +171,7 @@ function render() {
   $('pause-state').textContent = data.pauseSignUps ? 'paused' : 'open'
   $('pause').textContent = data.pauseSignUps ? 'Open sign-ups' : 'Pause sign-ups'
   $('pause').className = data.pauseSignUps ? 'primary' : 'danger'
+  fillSlot('operator.site', $('pause'), {})
 
   const count = (status) => data.households.filter((h) => h.status === status).length
   $('chips').replaceChildren(
@@ -188,6 +201,7 @@ function render() {
   $('d-name').textContent = detail.displayName || '(no name yet)'
   $('d-state').textContent = `${detail.status} · ${detail.kids} kids · last kid ${ago(detail.lastKidAt)} · ${detail.suspendedSince ? `Suspended since ${time(detail.suspendedSince)}` : 'Active'} · Area ${detail.area} · ${detail.timeZone} · signed up ${time(detail.signedUpAt)}`
   $('d-managers').textContent = detail.managers.join(', ') || 'none'
+  fillSlot('operator.household', $('d-managers').parentElement, { household: { id: detail.id } })
   // Each Report names its night (v2.2 §9): the page it came from isn't kept, and the night is the same on each.
   $('d-reports').replaceChildren(
     ...detail.reports.map((r) =>

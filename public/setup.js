@@ -12,6 +12,7 @@ import {
 import { alsoOpen, doorCard, nightRow, nightScreen, nothingOpen, typedMissed, waiting } from './setup-night.js'
 import { wireHousehold } from './setup-household.js'
 import { createHelp } from './setup-help-ui.js'
+import { slot } from '/extensions.js'
 
 let house = null // /api/household: { id, displayName, timeZone, joinKey, tvToken, checklist, lastYear, … }
 let events = []
@@ -332,7 +333,8 @@ function countHere() {
 }
 
 // ---- drawing
-const context = () => ({ events, door: doorEvent(events), timeZone: timeZone(), shares, batches, day: zoneDay, now: Date.now, ui, act })
+// slot, household and refresh are for an Extension's setup.nightTools (v2.2 §8): refresh loads again, as after a change.
+const context = () => ({ events, door: doorEvent(events), timeZone: timeZone(), shares, batches, day: zoneDay, now: Date.now, ui, act, slot, household: { id: house.id }, refresh: () => load().catch((err) => say(err.message, true)) })
 
 function render() {
   $('house-name').textContent = house.displayName

@@ -1,7 +1,7 @@
 # Page slots and the privacy fragment
 
 Type: build (AFK)
-Status: open
+Status: done
 Blocked by: 65
 
 ## What to build
@@ -21,13 +21,13 @@ Core pages carry named slots an Extension may fill. With no Extension, every pag
 
 ## Acceptance criteria
 
-- [ ] With no Extension, `/setup`, `/summary`, `/`, `/operator` and `/privacy` render as before, and `/extensions.js` serves a `slot` that returns `[]`
-- [ ] The fixture's `setup.nightTools` node shows after Sharing on a night's screen and the Tonight card, and survives a re-render; its `refresh()` re-renders
-- [ ] The fixture's `summary.closing` node is on the Manager's closing slide with `shareLinks` on and off, and never on `/share`
-- [ ] The fixture's `home` line and footer link show signed in and signed out
-- [ ] Both `/operator` slots render, and `operator.household` gets the Household's id
-- [ ] A slot function that throws, and a `slots.js` that 404s, leave the page working with the slot empty
-- [ ] `/privacy` shows the fixture's `<li>` in "What's public" and the later date; with no fragment, the core's date and no item
-- [ ] The CSP is unchanged
-- [ ] Checked in the browser at 390 px and on a laptop: no layout change with no Extension
-- [ ] `bun test` passes
+- [x] With no Extension, `/setup`, `/summary`, `/`, `/operator` and `/privacy` render as before, and `/extensions.js` serves a `slot` that returns `[]`
+- [x] The fixture's `setup.nightTools` node shows after Sharing on a night's screen and the Tonight card, and survives a re-render; its `refresh()` re-renders
+- [x] The fixture's `summary.closing` node is on the Manager's closing slide with `shareLinks` on and off, and never on `/share`
+- [x] The fixture's `home` line and footer link show signed in and signed out
+- [x] Both `/operator` slots render, and `operator.household` gets the Household's id
+- [x] A slot function that throws, and a `slots.js` that 404s, leave the page working with the slot empty
+- [x] `/privacy` shows the fixture's `<li>` in "What's public" and the later date; with no fragment, the core's date and no item
+- [x] The CSP is unchanged
+- [x] Checked in the browser at 390 px and on a laptop: no layout change with no Extension
+- [x] `bun test` passes

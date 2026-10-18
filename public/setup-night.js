@@ -1,6 +1,6 @@
 // /setup's night pieces (spec v2.1 §9): Tonight's door card and rows, the Nights rows, and a night's screen.
 // Each builds DOM from one Event and a context `ctx` that setup.js hands in:
-//   { events, door, timeZone, shares, day(ms), now(), ui: { ending, missed }, batches, act: { … } }
+//   { events, door, timeZone, shares, day(ms), now(), ui: { ending, missed }, batches, act: { … }, slot, household, refresh }
 // and every button calls one of ctx.act's handlers with the Event.
 import { raceChoices } from '../shared/race-against.js'
 import { atEventTime, clockTime as zoneClock, eventNow, minuteOfDay, slots, stamp, tickNoteText } from '../shared/night-maths.js'
@@ -59,6 +59,9 @@ function sharing(e, ctx) {
   return parts
 }
 
+// An Extension's night tools, after Sharing (v2.2 §8).
+const nightToolsSlot = (e, ctx) => ctx.slot('setup.nightTools', { event: { id: e.id, state: e.state }, household: ctx.household, refresh: ctx.refresh })
+
 // The night tools that make sense in its state. On Tonight, Add missed kids opens the night's screen.
 function tools(e, ctx, { onTonight = false } = {}) {
   const t = []
@@ -67,7 +70,7 @@ function tools(e, ctx, { onTonight = false } = {}) {
     if (tool === 'missed') t.push(h('button', { className: 'small', textContent: '➕ Add missed kids', ariaExpanded: String(!onTonight && ctx.ui.missed === e.id), onclick: () => ctx.act.missed(e, onTonight) }))
     if (tool === 'csv') t.push(h('button', { className: 'small', textContent: '⬇ CSV', onclick: () => ctx.act.csv(e) }))
     if (tool === 'tally') t.push(h('a', { className: 'link', href: `/tally?event=${e.id}`, target: '_blank', textContent: '🖨 Tally sheet' }))
-    if (tool === 'summary') t.push(summaryLink(e), ...sharing(e, ctx))
+    if (tool === 'summary') t.push(summaryLink(e), ...sharing(e, ctx), ...nightToolsSlot(e, ctx))
     if (tool === 'recap') t.push(h('a', { className: 'link', href: `/tv?event=${e.id}`, target: '_blank', textContent: '📺 TV recap' }))
   }
   return t.length ? h('div', { className: 'row tools' }, t) : null

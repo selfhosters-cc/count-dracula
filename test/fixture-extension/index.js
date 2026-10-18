@@ -34,3 +34,6 @@ export function start(core) {
     stop() {},
   }
 }
+
+// Its item in the privacy notice's "What's public" (v2.2 §8), and the day it last changed what's public.
+export const privacy = { item: "<li><b>The fixture</b> makes nothing public: it's here only for the core's tests.</li>", updated: '2026-10-25' }
