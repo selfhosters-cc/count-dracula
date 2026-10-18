@@ -159,17 +159,18 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     return kind === 'paired' ? { key: house.joinKey(), code: house.joinCode(), household: house.displayName(), msLeft } : { msLeft }
   }
   const tvSnapshotFor = (house, kind) => {
-    const snap = { ...withNearby(tvSnapshot(doorSnapshot(house)), house), watchQr: watchQrFor(house, kind) }
-    return kind === 'paired' ? { ...snap, joinQr: joinQrFor(house, kind) } : snap
+    const snap = withNearby(tvSnapshot(doorSnapshot(house)), house)
+    return kind === 'paired' ? { ...snap, joinQr: joinQrFor(house, kind), watchQr: watchQrFor(house, kind) } : snap
   }
   const publishJoinQr = (house) => hub.sendByKind(house.id, 'joinQr', (kind) => joinQrFor(house, kind))
 
   // The watch QR: the TV link as a QR, with its watch code, so someone at the porch can watch along on their own
-  // phone. Shown for 2 minutes like the helper QR, but on every screen: a TV-link viewer holds the link already.
-  // The TV shows one card at a time, so showing either takes the other down.
+  // phone. Shown for 2 minutes on the paired TVs, like the helper QR: it's for the porch, so a TV-link viewer
+  // watching from afar never gets it. The TV shows one card at a time, so showing either takes the other down.
   const watchQrUntil = new Map() // household id → ms
   const watchQrLeft = (house) => Math.max(0, (watchQrUntil.get(house.id) ?? 0) - now())
   function watchQrFor(house, kind) {
+    if (kind === 'tvLink') return undefined
     const msLeft = watchQrLeft(house)
     if (!msLeft) return null
     return kind === 'phone' ? { msLeft } : { token: house.tvToken(), code: house.watchCode(), msLeft }
@@ -655,19 +656,20 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
       const viewers = hub.counts().households[house.id]?.tvLink ?? 0 // screens on the TV link, which never get it
       return Response.json({ shown: joinQrLeft(house) > 0, msLeft: joinQrLeft(house), tvs, viewers })
     }),
-    // ☰ "📺 Show the watch QR on the TV", and /setup's: the watch QR on every screen watching for 2 minutes, or
-    // { show: false } to take it down. The answer counts the screens on now (paired TVs and TV-link viewers).
+    // ☰ "📺 Show the watch QR on the TV", and /setup's: the watch QR on the paired TVs for 2 minutes, or
+    // { show: false } to take it down. The answer counts the paired TVs on now, and the TV-link screens, which
+    // never get it, so the phone can say why.
     'POST /api/tv/watch-qr': write(async (req, house) => {
       const { show } = await req.json()
       if (show && !guard.take('joinQr', house.id)) return tooMany()
       const streams = hub.counts().households[house.id]
-      const tvs = (streams?.paired ?? 0) + (streams?.tvLink ?? 0)
+      const [tvs, viewers] = [streams?.paired ?? 0, streams?.tvLink ?? 0]
       if (show && tvs) {
         watchQrUntil.set(house.id, now() + JOIN_QR_MS)
         if (joinQrUntil.delete(house.id)) publishJoinQr(house)
       } else watchQrUntil.delete(house.id)
       publishWatchQr(house)
-      return Response.json({ shown: watchQrLeft(house) > 0, msLeft: watchQrLeft(house), tvs })
+      return Response.json({ shown: watchQrLeft(house) > 0, msLeft: watchQrLeft(house), tvs, viewers })
     }),
     // The ☰ menu's codes: the join code, the watch code and the TV link it stands for, read when the menu opens, so
     // a Change join key or Rotate TV link in /setup shows at once. A door phone may hand them on: a counter can

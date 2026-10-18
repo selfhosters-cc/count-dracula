@@ -118,11 +118,14 @@ export function tvQrButton(msLeft) {
   return { showing: true, label: `Hide from the TV (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} left)` }
 }
 
+// How to pair the porch TV, for when a QR has nowhere to go.
+const PAIR_IT = 'On the TV, open Setup and tap Use this screen as the TV, or enter the code a bare /tv shows.'
+
 // What the phone or /setup says after a press: the answer counts the paired TVs on now, and the TV-link screens,
-// which never get the helper QR (it lets whoever scans it count).
+// which never get either QR (the helper QR lets whoever scans it count; the watch QR is for the porch).
 export function tvQrSays({ shown, tvs, viewers = 0 }) {
-  if (!tvs && viewers) return "Your TV is on the TV link, so it can't show the helper QR: anyone watching could scan it and count. Give the helper the join code instead, or pair the TV with the code on its screen."
-  if (!tvs) return 'No paired TV is on right now. Pair your porch TV with the code on its screen to show the QR there.'
+  if (!tvs && viewers) return `Your TV is on the TV link, so it can't show the helper QR: anyone watching could scan it and count. Give the helper the join code instead, or pair the TV. ${PAIR_IT}`
+  if (!tvs) return `No paired TV is on right now. ${PAIR_IT}`
   if (!shown) return 'Taken off the TV'
   return `📺 On ${tvs === 1 ? 'the TV' : `${tvs} TVs`} for 2 minutes`
 }
@@ -133,11 +136,12 @@ export function watchQrButton(msLeft) {
   return button.showing ? button : { showing: false, label: '📺 Show the watch QR on the TV' }
 }
 
-// After a press: the answer counts every screen watching, a paired TV or anyone on the TV link.
-export function watchQrSays({ shown, tvs }) {
-  if (!tvs) return 'No TV is on right now. Put your TV link on the TV first.'
+// After a press: the same answer, for the watch QR.
+export function watchQrSays({ shown, tvs, viewers = 0 }) {
+  if (!tvs && viewers) return `Your TV is on the TV link, so it only watches: pair it to show the QR there. ${PAIR_IT}`
+  if (!tvs) return `No paired TV is on right now. ${PAIR_IT}`
   if (!shown) return 'Taken off the TV'
-  return `📺 On ${tvs === 1 ? 'the TV' : `${tvs} screens`} for 2 minutes`
+  return `📺 On ${tvs === 1 ? 'the TV' : `${tvs} TVs`} for 2 minutes`
 }
 
 export function helperWording(householdName) {

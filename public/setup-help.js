@@ -51,7 +51,7 @@ export const HELP = {
     title: 'Watch',
     p: [
       'Watch on this device opens the TV screen right here, as your porch TV shows it. Send the TV link, or give out the watch code (entered under "Got a code?" on the homepage), so family can watch from anywhere.',
-      "Show the watch QR on the TV puts a QR on your TV for 2 minutes, for someone at the porch to scan. Watchers see tonight's count and costumes, never your phones' names, and can't count. Rotate TV link in Household changes the link and the code, and cuts everyone off, your porch TV too.",
+      "Show the watch QR on the TV puts a QR on your paired porch TV for 2 minutes, for someone at the porch to scan. Watchers see tonight's count and costumes, never your phones' names, and can't count. Rotate TV link in Household changes the link and the code, and cuts everyone off, your porch TV too.",
     ],
   },
 

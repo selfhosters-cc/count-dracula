@@ -561,9 +561,9 @@ if (pairingMode) {
 }
 let wasDisconnected = false
 
-// ---- the QR card, for 2 minutes from a door phone or /setup: the helper join QR (spec v2.1 §4), only ever sent
-// to a paired TV, or the watch QR (the TV link and its watch code), sent to every screen. One at a time: the server
-// takes one down when the other goes up. No sound. It steps aside for a takeover and comes back after.
+// ---- the QR card, for 2 minutes from a door phone or /setup, only ever on a paired TV: the helper join QR (spec
+// v2.1 §4) or the watch QR (the TV link and its watch code). One at a time: the server takes one down when the
+// other goes up. No sound. It steps aside for a takeover and comes back after.
 const JOIN_QR_MS = 2 * 60_000
 let qrDrawnFor = null // what the card was drawn for
 function renderQrCard() {

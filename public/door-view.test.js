@@ -372,7 +372,7 @@ describe('the helper QR on the TV', () => {
     expect(tvQrSays({ shown: true, tvs: 1 })).toBe('📺 On the TV for 2 minutes')
     expect(tvQrSays({ shown: true, tvs: 2 })).toBe('📺 On 2 TVs for 2 minutes')
     expect(tvQrSays({ shown: false, tvs: 1 })).toBe('Taken off the TV')
-    expect(tvQrSays({ shown: false, tvs: 0 })).toBe('No paired TV is on right now. Pair your porch TV with the code on its screen to show the QR there.')
+    expect(tvQrSays({ shown: false, tvs: 0 })).toBe('No paired TV is on right now. On the TV, open Setup and tap Use this screen as the TV, or enter the code a bare /tv shows.')
     // Only a TV-link screen on: it never gets the helper QR, and the answer says why, and what to do instead.
     expect(tvQrSays({ shown: false, tvs: 0, viewers: 1 })).toMatch(/^Your TV is on the TV link, so it can't show the helper QR/)
   })

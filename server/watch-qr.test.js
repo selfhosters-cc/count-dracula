@@ -1,5 +1,5 @@
 // Watchers: the watch code (the TV link's short form, typed under "Got a code?") and the watch QR, which a door
-// phone or /setup puts on every screen watching for 2 minutes, so someone at the porch can watch along.
+// phone or /setup puts on the paired TVs for 2 minutes, so someone at the porch can watch along.
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -45,6 +45,12 @@ async function nextFrame(s) {
     const f = await s.next()
     if (f.event !== 'ping') return f
   }
+}
+
+// A screen a Manager paired with Use this screen as the TV: the Household's own TV.
+async function pairedQuery(app, cookie) {
+  const { tvToken, deviceToken } = await (await fetch(`${app.url}/api/pair/here`, { method: 'POST', headers: { Cookie: cookie } })).json()
+  return `key=${tvToken}&device=${deviceToken}`
 }
 
 const code = (app, text, ip = anotherIp()) => fetch(`${app.url}/api/code?code=${encodeURIComponent(text)}`, { headers: { 'CF-Connecting-IP': ip } })
@@ -105,37 +111,44 @@ describe('the watch code', () => {
 })
 
 describe('the watch QR on the TV', () => {
-  test('every screen watching gets the link and code; a door phone only the time left', async () => {
-    const { app, info } = await household()
+  test('a paired TV gets the link and code; a TV-link viewer nothing; a door phone only the time left', async () => {
+    const { app, cookie, info } = await household()
+    const tv = await stream(app, await pairedQuery(app, cookie))
     const viewer = await stream(app, `key=${info.tvToken}`)
     const phone = await stream(app, `key=${info.joinKey}`)
-    for (const s of [viewer, phone]) expect((await s.next()).event).toBe('snapshot')
+    for (const s of [tv, viewer, phone]) expect((await s.next()).event).toBe('snapshot')
 
     const res = await show(app, info.joinKey, 'watch')
-    expect(await res.json()).toMatchObject({ shown: true, tvs: 1 })
+    expect(await res.json()).toMatchObject({ shown: true, tvs: 1, viewers: 1 })
 
-    expect(await nextFrame(viewer)).toMatchObject({ event: 'watchQr', data: { token: info.tvToken, code: info.watchCode, msLeft: 120_000 } })
-    expect(await nextFrame(phone)).toMatchObject({ event: 'watchQr', data: { msLeft: 120_000 } })
+    expect(await nextFrame(tv)).toMatchObject({ event: 'watchQr', data: { token: info.tvToken, code: info.watchCode, msLeft: expect.any(Number) } })
+    expect(await nextFrame(phone)).toMatchObject({ event: 'watchQr', data: { msLeft: expect.any(Number) } })
+    // The viewer's next frame is the mix change that follows, not the QR; its snapshot never carries one either.
+    await fetch(`${app.url}/api/mix`, { method: 'POST', headers: { 'X-Join-Key': info.joinKey }, body: JSON.stringify({ volume: 0.5, mutes: {} }) })
+    expect((await nextFrame(viewer)).event).toBe('delta')
+    expect((await (await stream(app, `key=${info.tvToken}`)).next()).data.watchQr).toBeUndefined()
     const reconnected = (await (await stream(app, `key=${info.joinKey}`)).next()).data.watchQr
     expect(Object.keys(reconnected)).toEqual(['msLeft']) // a phone that reconnects gets the time left, still no link
   })
 
   test('the TV shows one card at a time: the watch QR takes the helper QR down, and back', async () => {
-    const { app, info } = await household()
-    const viewer = await stream(app, `key=${info.tvToken}`)
-    await viewer.next()
+    const { app, cookie, info } = await household()
+    const tv = await stream(app, await pairedQuery(app, cookie))
+    await tv.next()
 
-    const noPairedTv = await (await show(app, info.joinKey, 'join')).json()
-    expect(noPairedTv).toMatchObject({ shown: false, tvs: 0 }) // the helper QR needs a paired TV
+    await show(app, info.joinKey, 'join')
+    expect(await nextFrame(tv)).toMatchObject({ event: 'joinQr', data: { code: info.joinCode } })
     await show(app, info.joinKey, 'watch')
-    expect((await nextFrame(viewer)).event).toBe('watchQr')
+    expect(await nextFrame(tv)).toMatchObject({ event: 'joinQr', data: null })
+    expect((await nextFrame(tv)).event).toBe('watchQr')
 
     await show(app, info.joinKey, 'watch', false)
-    expect(await nextFrame(viewer)).toMatchObject({ event: 'watchQr', data: null })
+    expect(await nextFrame(tv)).toMatchObject({ event: 'watchQr', data: null })
   })
 
-  test('with no screen watching it says so, and holds nothing', async () => {
+  test('with only TV-link screens on it holds nothing, and says why', async () => {
     const { app, info } = await household()
-    expect(await (await show(app, info.joinKey, 'watch')).json()).toEqual({ shown: false, msLeft: 0, tvs: 0 })
+    await (await stream(app, `key=${info.tvToken}`)).next()
+    expect(await (await show(app, info.joinKey, 'watch')).json()).toEqual({ shown: false, msLeft: 0, tvs: 0, viewers: 1 })
   })
 })
