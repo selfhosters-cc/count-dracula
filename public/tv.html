@@ -201,9 +201,11 @@
     #pairing { position: fixed; inset: 0; z-index: 85; display: grid; grid-template-columns: 1.3fr 1fr; align-items: center; gap: 5vw;
       padding: 8vh 7vw; background: var(--night); }
     #pairing[hidden] { display: none; }
-    #pairing .title { font-size: clamp(28px, 4.4vw, 84px); margin-bottom: 4vh; }
-    #pairing p { font-size: clamp(16px, 2.2vw, 40px); color: var(--ink-dim); line-height: 1.35; margin: 0 0 4vh; }
-    #pairing p b { color: var(--ink); }
+    #pairing .title { font-size: clamp(26px, 3.6vw, 72px); margin-bottom: 2vh; }
+    #pairing ol { font-size: clamp(15px, 1.9vw, 36px); color: var(--ink-dim); line-height: 1.35; margin: 3vh 0; padding-left: 1.3em; }
+    #pairing li + li { margin-top: 1.4vh; }
+    #pairing p.small { font-size: clamp(12px, 1.3vw, 24px); color: var(--ink-dim); margin: 0; }
+    #pairing b { color: var(--ink); }
     .pair-code { font-size: clamp(48px, 8vw, 180px); white-space: nowrap; color: var(--pumpkin); letter-spacing: .06em; font-weight: 700; }
     #pair-qr { background: #fff; border-radius: 2vw; padding: 2vw; }
     #pair-qr svg { width: 100%; height: auto; display: block; }
@@ -288,10 +290,16 @@
   <div id="unavailable" hidden>Not available</div>
   <div id="tv-full" hidden>This TV is full, try again soon</div>
   <section id="pairing" hidden aria-label="Pair this TV">
+    <!-- Three ways to pair, any one: each ends with someone who runs the Household signed in, saying yes. -->
     <div class="pair-text">
-      <div class="title">Count Dracula</div>
-      <p>Scan this with your phone's camera, or on your phone go to <b id="pair-where"></b> and enter</p>
+      <div class="title">Make this your porch TV</div>
       <div class="pair-code num" id="pair-code">···-···</div>
+      <ol>
+        <li><b>Scan the QR</b> with your phone's camera</li>
+        <li>Or on your phone, go to <b id="pair-where"></b> and enter the code under <b>Got a code?</b></li>
+        <li>Or send the code to whoever runs your Setup: they enter it under <b>📺 Your TV</b></li>
+      </ol>
+      <p class="small">Whoever pairs it signs in to your household. The code changes by itself every few minutes.</p>
     </div>
     <div id="pair-qr"></div>
   </section>

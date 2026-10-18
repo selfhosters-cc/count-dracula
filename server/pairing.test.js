@@ -100,12 +100,14 @@ describe('redeeming', () => {
     expect(await res.text()).toBe('That code has expired: your TV shows a new one now. Scan it again, or type the new one.')
   })
 
-  test("the TV's pairing screen leads with the QR, then the address and code (sign-in-simplify 07)", async () => {
+  test("the TV's pairing screen gives all three ways: scan, type it in on the site, or send it to whoever runs Setup", async () => {
     const { app } = await setUp()
 
     const html = await (await fetch(`${app.url}/tv`)).text()
 
-    expect(html).toContain("<p>Scan this with your phone's camera, or on your phone go to <b id=\"pair-where\"></b> and enter</p>")
+    expect(html).toContain("<li><b>Scan the QR</b> with your phone's camera</li>")
+    expect(html).toContain('<li>Or on your phone, go to <b id="pair-where"></b> and enter the code under <b>Got a code?</b></li>')
+    expect(html).toContain('<li>Or send the code to whoever runs your Setup: they enter it under <b>📺 Your TV</b></li>')
   })
 
   test('a code works once', async () => {
