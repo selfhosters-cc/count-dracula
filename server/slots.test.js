@@ -41,7 +41,7 @@ describe('/extensions.js', () => {
   })
 
   test("loads each Extension's public/slots.js, stamped with this build, and none for one without", async () => {
-    const app = start([fixture, { ...fixture, name: 'plain', dir: undefined }, { ...fixture, name: 'other', dir: join(import.meta.dir, '../test/fixtures') }])
+    const app = start([fixture, { ...fixture, name: 'plain', dir: undefined, owns: {}, migrations: [] }, { ...fixture, name: 'other', dir: join(import.meta.dir, '../test/fixtures'), owns: {}, migrations: [] }])
 
     const { js, modules } = await extensionsJs(app)
 

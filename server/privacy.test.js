@@ -95,8 +95,8 @@ describe("/privacy with an Extension's fragment", () => {
   })
 
   test("a fragment dated before the core's keeps the core's date; two Extensions' items go in list order", async () => {
-    const older = { ...fixture, name: 'older', dir: undefined, privacy: { item: '<li>The older one.</li>', updated: '2026-03-01' } }
-    const plain = { ...fixture, name: 'plain', dir: undefined, privacy: undefined }
+    const older = { ...fixture, name: 'older', dir: undefined, owns: {}, migrations: [], privacy: { item: '<li>The older one.</li>', updated: '2026-03-01' } }
+    const plain = { ...fixture, name: 'plain', dir: undefined, owns: {}, migrations: [], privacy: undefined }
 
     const alone = await text(withExtensions([older, plain]), '/privacy')
     const both = await text(withExtensions([fixture, older]), '/privacy')

@@ -88,7 +88,7 @@ describe('deploy/pack.sh pack_app (the tarball, REVISION and the env file)', () 
 
     expect(packed.code).toBe(0)
     const shipped = packed.listing.filter((path) => path.startsWith('extensions/')).filter((path) => !path.endsWith('/'))
-    expect(shipped.sort()).toEqual(['extensions/fixture/index.js', 'extensions/fixture/public/index.html', 'extensions/fixture/public/page.js'])
+    expect(shipped.sort()).toEqual(['extensions/fixture/index.js', 'extensions/fixture/public/index.html', 'extensions/fixture/public/page.js', 'extensions/fixture/public/slots.js'])
     expect(packed.listing).toContain('server/main.js')
     expect(packed.env).toBe(`${[...coreEnv, 'EXTENSIONS=/opt/count-dracula/extensions/fixture/index.js', 'FIXTURE_TOKEN=fixture-secret'].join('\n')}\n`)
     expect(packed.revision).toBe(`${await coreCommit()}\n${repo.commit} ${repo.dir}\n`)
