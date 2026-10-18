@@ -116,3 +116,7 @@ _Avoid_: Inactive, dormant, stale (Stale is an Operator-dashboard status on the 
 **Abandoned sign-up**:
 A Household that never counted a kid on any Event but its Test night and that no Manager has signed in to for 60 days. It's deleted like an Idle Household, just sooner.
 _Avoid_: Unused account, trial, bot account
+
+**Extension**:
+Private code a deployment runs on top of the open core, named in the server's settings and started with it. countdracula.cc runs its hosted-only features this way; a self-hosted install runs none and loses nothing. An Extension owns the addresses under its name, keeps its own tables, and leaves no trace of a Household or Event once the core deletes it. It can't loosen what the core promises (credentials, the page's security rules, the privacy notice). Unsupported outside countdracula.cc, with no promise of stability.
+_Avoid_: Plugin, add-on, module
