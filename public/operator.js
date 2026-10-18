@@ -58,22 +58,57 @@ function renderStats() {
     stat('Phones', d.phones, `over ${d.nights} ${d.nights === 1 ? 'night' : 'nights'}`),
     stat('TV screens', d.tvScreens, `${d.pairedTvs} TVs paired by code`),
   )
-  renderSignUps()
+  renderVisits()
+  renderDaily('signups', 'sign-up', signUpDays())
 }
 
-// One bar per day of the Operator's own calendar, today last. Hover a day for its count.
-function renderSignUps() {
+// The last 30 days of the Operator's own calendar, today last: [{ at, key: "2026-10-31", n: 0 }].
+function lastDays() {
   const today = new Date(stats.now)
   today.setHours(0, 0, 0, 0)
   const start = today.getTime() - 29 * DAY
-  const days = Array.from({ length: 30 }, (_, i) => ({ at: new Date(start + i * DAY + DAY / 2).setHours(0, 0, 0, 0), n: 0 }))
+  return Array.from({ length: 30 }, (_, i) => {
+    const at = new Date(start + i * DAY + DAY / 2).setHours(0, 0, 0, 0)
+    return { at, key: new Date(at).toLocaleDateString('en-CA'), n: 0 }
+  })
+}
+
+function signUpDays() {
+  const days = lastDays()
   for (const h of data.households) {
-    const day = new Date(h.signedUpAt).setHours(0, 0, 0, 0)
-    const slot = days.find((d) => d.at === day)
+    const slot = days.find((d) => d.at === new Date(h.signedUpAt).setHours(0, 0, 0, 0))
     if (slot) slot.n++
   }
+  return days
+}
+
+// The homepage's visitors (counted by the server: no cookies, no outside service), and where they came from.
+function renderVisits() {
+  const days = lastDays()
+  let views = 0
+  for (const v of stats.visits.days.filter((v) => v.page === '/')) {
+    const slot = days.find((d) => d.key === v.day)
+    if (slot) slot.n += v.visitors
+    views += v.views
+  }
+  const visitors = days.reduce((t, d) => t + d.n, 0)
+  const signUps = signUpDays().reduce((t, d) => t + d.n, 0)
+  $('visit-stats').replaceChildren(
+    stat('Homepage visitors', visitors, `${views.toLocaleString()} views, last 30 days`),
+    stat('Sign-ups per visitor', visitors ? `${Math.round((signUps / visitors) * 100)}%` : '—', `${signUps} sign-ups in the same 30 days`),
+  )
+  renderDaily('visitors', 'visitor', days)
+  $('sources').replaceChildren(
+    ...(stats.visits.sources.length
+      ? stats.visits.sources.map((s) => el('tr', {}, el('td', { textContent: s.source === 'direct' ? 'Direct (typed, or an app that says nothing)' : s.source }), el('td', { textContent: s.visitors.toLocaleString() })))
+      : [el('tr', {}, el('td', { className: 'muted', textContent: 'No visitors yet' }), el('td'))]),
+  )
+}
+
+// One bar per day, today last. Hover a day for its count.
+function renderDaily(id, noun, days) {
   const W = 300, H = 90, step = W / days.length, max = Math.max(1, ...days.map((d) => d.n))
-  const svg = $('signups')
+  const svg = $(id)
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`)
   const node = (tag, attrs) => {
     const n = document.createElementNS(SVG, tag)
@@ -86,15 +121,15 @@ function renderSignUps() {
     ...days.map((d, i) => {
       const g = node('g', {})
       const title = node('title', {})
-      title.textContent = `${dayName(d.at)}: ${d.n} sign-up${d.n === 1 ? '' : 's'}`
+      title.textContent = `${dayName(d.at)}: ${d.n} ${noun}${d.n === 1 ? '' : 's'}`
       const h = (d.n / max) * (H - 4)
       g.append(title, node('rect', { class: 'hit', x: i * step, y: 0, width: step, height: H }), node('rect', { class: 'bar', x: i * step + 1, y: H - h, width: step - 2, height: h, rx: Math.min(1.5, h / 2) }))
       return g
     }),
   )
   const total = days.reduce((t, d) => t + d.n, 0)
-  svg.setAttribute('aria-label', `Sign-ups per day over the last 30 days: ${total} in all, at most ${max} in one day`)
-  $('signups-from').textContent = dayName(days[0].at)
+  svg.setAttribute('aria-label', `${noun[0].toUpperCase()}${noun.slice(1)}s per day over the last 30 days: ${total} in all, at most ${max} in one day`)
+  $(`${id}-from`).textContent = dayName(days[0].at)
 }
 
 async function loadDetail(id) {

@@ -258,6 +258,25 @@ const MIGRATIONS = [
     }
     db.exec('CREATE UNIQUE INDEX households_by_join_code ON households (join_code)')
   },
+
+  // 22 → 23: visits to the public pages, counted by the server itself (server/visits.js): counts only, per day.
+  (db) => {
+    db.exec(`
+      CREATE TABLE site_visits (
+        day TEXT NOT NULL,
+        page TEXT NOT NULL,
+        views INTEGER NOT NULL DEFAULT 0,
+        visitors INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (day, page)
+      );
+      CREATE TABLE site_sources (
+        day TEXT NOT NULL,
+        source TEXT NOT NULL,
+        visitors INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (day, source)
+      );
+    `)
+  },
 ]
 
 // A 6-character code no Household has yet, as its join code or its watch code.

@@ -20,6 +20,7 @@ import { toCsv } from './export.js'
 import { isMailAddress, sendMail } from './mail.js'
 import { maskEmail, signInEmail } from './email-sign-in.js'
 import { clientIpOf, trustedProxies } from './client-ip.js'
+import { VISIT_PAGES, createVisits } from './visits.js'
 
 // The release, from package.json: on every page (__VERSION__) and /operator, so a reload shows an update arrived.
 export const VERSION = JSON.parse(readFileSync(resolve(import.meta.dir, '../package.json'), 'utf8')).version
@@ -77,6 +78,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
   let failNext = null // tests: the next request throws, to check what the Errors tile keeps
   const db = new Database(config.dbPath, { create: true })
   const ledger = openLedger(db, { ...config, now })
+  const visits = createVisits({ db, now }) // the public pages' visits, for /operator (the Ledger's migrations made its tables)
   const accounts = openAccounts(db, {
     ledger,
     google: google ?? googleClient({ clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }),
@@ -368,7 +370,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // The Stats section: sign-ups, nights and devices across the site, from what's stored (no names, no emails).
     'GET /api/operator/stats': operator(() => {
       const at = now()
-      return Response.json({ now: at, ...siteStats({ households: ledger.households(), nights: ledger.nights(), pairedTvs: ledger.pairedTvs() }, at) })
+      return Response.json({ now: at, ...siteStats({ households: ledger.households(), nights: ledger.nights(), pairedTvs: ledger.pairedTvs() }, at), visits: visits.summary(30) })
     }),
     'POST /api/operator/action': operator(async (req, session) => {
       const { householdId, action, value } = await req.json()
@@ -866,6 +868,20 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
   }
 
   // Behind a proxy, the visitor's address (server/client-ip.js).
+  // A public page served to someone not signed in (a Manager is counted already): server/visits.js keeps the counts.
+  function countVisit(req, server) {
+    const { pathname } = new URL(req.url)
+    if (!VISIT_PAGES.has(pathname) || accounts.session(tokenOf(req))) return
+    visits.record({
+      page: pathname,
+      ip: clientIp(req, server),
+      userAgent: req.headers.get('User-Agent') ?? '',
+      referer: req.headers.get('Referer'),
+      url: req.url,
+      host: new URL(originOf(req)).hostname,
+    })
+  }
+
   function clientIp(req, server) {
     return clientIpOf(req.headers.get('CF-Connecting-IP'), server?.requestIP(req)?.address, trusted)
   }
@@ -893,6 +909,7 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
           throw new Error(message)
         }
         res = await route(req, server)
+        if (req.method === 'GET' && res.status === 200) countVisit(req, server)
         if (res.status >= 500 && res.status !== 503) recordError(`HTTP ${res.status}`, req) // 503 is a refusal (a full TV, paused sign-ups)
       } catch (err) {
         recordError(err?.name ?? 'Error', req)
