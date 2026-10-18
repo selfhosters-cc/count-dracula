@@ -277,6 +277,20 @@ const MIGRATIONS = [
       );
     `)
   },
+
+  // 23 → 24: Extensions' tables (v2.2 §5–6): each Extension's own step counter, and which of its tables hold a
+  // Household or Event id, kept here so a delete reaches them even with the Extension gone (deploy/redelete.js).
+  (db) => {
+    db.exec(`
+      CREATE TABLE extension_versions (name TEXT PRIMARY KEY, version INTEGER NOT NULL);
+      CREATE TABLE extension_owns (
+        tbl TEXT PRIMARY KEY,
+        extension TEXT NOT NULL,
+        household_col TEXT,
+        event_col TEXT
+      );
+    `)
+  },
 ]
 
 // A 6-character code no Household has yet, as its join code or its watch code.
@@ -307,4 +321,73 @@ export function migrate(db, { now }) {
       db.exec(`PRAGMA user_version = ${version + 1}`)
     })()
   }
+}
+
+// An Extension's own steps (v2.2 §5), after the core's: from its extension_versions row, each in one transaction
+// that bumps the row. A step may create, drop or change only what's named <name>_…; anything else rolls it back
+// and stops the boot.
+export function migrateExtension(db, { name, migrations = [] }, { now }) {
+  const version = db.query('SELECT version FROM extension_versions WHERE name = ?').get(name)?.version ?? 0
+  for (let step = version; step < migrations.length; step++) {
+    db.transaction(() => {
+      const before = schema(db)
+      migrations[step](db, { now })
+      const after = schema(db)
+      for (const key of new Set([...before.keys(), ...after.keys()])) {
+        if (before.get(key)?.sql === after.get(key)?.sql) continue
+        const { type, name: what, tbl_name } = after.get(key) ?? before.get(key)
+        if (!ownedBy(name, what, tbl_name)) throw new Error(`The Extension ${name}'s step ${step + 1} touched the ${type} ${what}, not ${name}_…`)
+      }
+      db.query('INSERT INTO extension_versions (name, version) VALUES (?, ?) ON CONFLICT (name) DO UPDATE SET version = excluded.version').run(name, step + 1)
+    })()
+  }
+}
+
+// Which of an Extension's tables hold a Household or Event id (v2.2 §6), recorded in place of what it said
+// last boot, after its steps (so its tables exist). Each is named <name>_…, exists, and has the columns named.
+export function recordOwns(db, { name, owns = {} }) {
+  const rows = Object.entries(owns).map(([table, { household = null, event = null, ...other }]) => {
+    if (!table.startsWith(`${name}_`)) throw new Error(`The Extension ${name} owns only tables named ${name}_…, not ${table}`)
+    if (Object.keys(other).length) throw new Error(`The Extension ${name}'s ${table} names a household and an event column, not ${Object.keys(other).join(', ')}`)
+    const columns = db.query('SELECT name FROM pragma_table_info(?)').all(table).map((c) => c.name)
+    if (!columns.length) throw new Error(`The Extension ${name} owns ${table}, which none of its steps made`)
+    for (const col of [household, event]) {
+      if (col != null && !columns.includes(col)) throw new Error(`The Extension ${name}'s ${table} has no column ${col}`)
+    }
+    return [table, name, household, event]
+  })
+  db.transaction(() => {
+    db.query('DELETE FROM extension_owns WHERE extension = ?').run(name)
+    const insert = db.query('INSERT INTO extension_owns (tbl, extension, household_col, event_col) VALUES (?, ?, ?, ?)')
+    for (const row of rows) insert.run(...row)
+  })()
+}
+
+// Every recorded Extension table's rows for a Household (by its household column, and by its event column for
+// that Household's Events, so call it before they go) or for one Event (v2.2 §6). Run inside the core's own
+// delete, so both go or neither. A recorded table that no longer exists (its Extension removed) is skipped.
+export function deleteOwned(db, { household, event }) {
+  for (const { tbl, household_col, event_col } of db.query('SELECT tbl, household_col, event_col FROM extension_owns').all()) {
+    if (!db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(tbl)) continue
+    if (household != null) {
+      if (household_col) db.query(`DELETE FROM ${quoted(tbl)} WHERE ${quoted(household_col)} = ?`).run(household)
+      if (event_col) db.query(`DELETE FROM ${quoted(tbl)} WHERE ${quoted(event_col)} IN (SELECT id FROM events WHERE household_id = ?)`).run(household)
+    } else if (event_col) {
+      db.query(`DELETE FROM ${quoted(tbl)} WHERE ${quoted(event_col)} = ?`).run(event)
+    }
+  }
+}
+
+const quoted = (identifier) => `"${identifier.replaceAll('"', '""')}"`
+
+// What sqlite_master holds, by type and name.
+function schema(db) {
+  return new Map(db.query('SELECT type, name, tbl_name, sql FROM sqlite_master').all().map((row) => [`${row.type} ${row.name}`, row]))
+}
+
+// Named <name>_… and on a table named so; SQLite's own indexes and AUTOINCREMENT counter for such a table too.
+function ownedBy(name, what, table) {
+  const prefix = `${name}_`
+  if (what === 'sqlite_sequence') return true
+  return table.startsWith(prefix) && (what.startsWith(prefix) || what.startsWith(`sqlite_autoindex_${prefix}`))
 }

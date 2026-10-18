@@ -78,7 +78,12 @@ Each deploy:
 - refuses if a key is missing from `deploy/local.env`, or if the tests fail
 - takes a timestamped `VACUUM INTO` copy of the database into `/var/lib/count-dracula/deploy-copies/` first, and
   stops if it can't
-- writes `/etc/count-dracula/env` (the five private keys, mode 640, group `countdracula`)
+- writes `/etc/count-dracula/env` (the five private keys, mode 640, group `countdracula`), keeping the previous
+  one for `--rollback`
+- with `EXTENSION_REPOS` set (`deploy/local.env.example`), refuses a private checkout with uncommitted changes or
+  failing tests, ships each of its Extensions at `/opt/count-dracula/extensions/<name>/` (no `*.test.js`), sets
+  `EXTENSIONS` and passes each one's `<NAME>_*` keys, and lists every checkout's commit in `REVISION`. Unset, a
+  deploy ships the core alone. The packing is `deploy/pack.sh`, tested in `deploy/pack.test.js`
 - writes `/etc/count-dracula/config.json` from `deploy/config.production.json` on the first deploy only; on a
   v1 server it removes the dead keys once (`adminPin`, `ghostSeed`, `lanUrl`, `autoJoinHosts`), adds
   `backupDir`, and says what it changed

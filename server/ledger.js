@@ -1,10 +1,11 @@
 // The Ledger: every write goes through apply(), every read through snapshot(), each on one Household.
 // See .scratch/count-dracula/modules.md §1 and .scratch/multi-household/spec.md §4.
-import { nextWallTime, toBuckets, zonedTime } from '../shared/night-maths.js'
-import { freshCode, migrate, randomKey, randomToken } from './migrations.js'
+import { costumeOfTheNight, nextWallTime, peakHalfHour, stamp as wallStamp, toBuckets, zonedTime } from '../shared/night-maths.js'
+import { deleteOwned, freshCode, migrate, randomKey, randomToken } from './migrations.js'
 import { isCell } from '../shared/geohash.js'
 import { isBlocked } from './blocklist.js'
 import { canRace } from '../shared/race-against.js'
+import { halfHourText } from '../shared/summary.js'
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS events (
@@ -267,10 +268,11 @@ export function openLedger(db, config) {
       return db.query('SELECT id FROM households WHERE join_key = ?').get(key)?.id ?? null
     },
 
-    // Delete my Household (spec §3): every event and everything they hold, then the Household itself.
-    // The Accounts module deletes its own rows in the same transaction.
+    // Delete my Household (spec §3): every event and everything they hold, then the Household itself, and every
+    // Extension's rows for it (v2.2 §6). The Accounts module deletes its own rows in the same transaction.
     deleteHousehold(id) {
       db.transaction(() => {
+        deleteOwned(db, { household: id })
         const events = 'SELECT id FROM events WHERE household_id = ?'
         for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches', 'event_devices']) {
           db.query(`DELETE FROM ${table} WHERE event_id IN (${events})`).run(id)
@@ -366,6 +368,66 @@ export function openLedger(db, config) {
         `)
         .all(householdId)
         .map((n) => ({ ...n, testNight: n.testNight === 1 }))
+    },
+
+    // The night-card read (spec v2.2 §7), for a page that shows many nights at once: one card per Event id that
+    // exists, in the order asked, missing ids left out. One query per table, never a snapshot per Event; kids,
+    // topCostume and peak are nightFacts' over a lighter row set, so they agree with the share page. Never the
+    // cell, an email, a phone name or the Race against's name.
+    nightCards(eventIds) {
+      const ids = JSON.stringify([...new Set(eventIds)].filter(Number.isInteger))
+      const asked = 'SELECT value FROM json_each(?)'
+      const byEvent = (rows) => Map.groupBy(rows, (r) => r.eventId)
+      const events = db
+        .query(`
+          SELECT e.id, e.household_id, e.state, e.counts_only, e.went_live_at, e.clock_shift_ms, e.race_against_id,
+            h.display_name, h.time_zone, h.location_cell, h.suspended_since
+          FROM events e JOIN households h ON h.id = e.household_id WHERE e.id IN (${asked})
+        `)
+        .all(ids)
+      const kids = byEvent(db.query(`SELECT event_id AS eventId, tag_id AS tagId, tapped_at AS tappedAt FROM kids WHERE event_id IN (${asked}) AND deleted_at IS NULL`).all(ids))
+      const tags = byEvent(db.query(`SELECT event_id AS eventId, id, name, emoji, sort_order AS "order" FROM tags WHERE event_id IN (${asked})`).all(ids))
+      // Each Race against's total, as ghostOf adds it up: its stored counts, or its own kids.
+      const raced = new Map(
+        db
+          .query(`
+            SELECT a.id, CASE WHEN a.counts_only
+              THEN (SELECT COALESCE(SUM(b.count), 0) FROM ghost_buckets b WHERE b.event_id = a.id)
+              ELSE (SELECT COUNT(*) FROM kids k WHERE k.event_id = a.id AND k.deleted_at IS NULL) END AS total
+            FROM events a WHERE a.id IN (SELECT race_against_id FROM events WHERE id IN (${asked}))
+          `)
+          .all(ids)
+          .map((a) => [a.id, a.total]),
+      )
+      const cards = new Map(
+        events.map((e) => {
+          const night = kids.get(e.id) ?? []
+          const top = costumeOfTheNight(night, tags.get(e.id) ?? [])
+          const peak = peakHalfHour(night, e.clock_shift_ms, e.time_zone)
+          const why = !(e.state === 'ended' || e.state === 'past') ? 'not-over'
+            : e.counts_only ? 'counts-only'
+            : !night.length ? 'no-kids'
+            : e.location_cell == null ? 'no-location'
+            : null
+          return [e.id, {
+            eventId: e.id,
+            householdId: e.household_id,
+            state: e.state,
+            countsOnly: e.counts_only === 1,
+            kids: night.length,
+            area: e.location_cell?.slice(0, 4) ?? null,
+            date: e.went_live_at == null ? null : wallStamp(e.went_live_at, e.time_zone).slice(0, 10),
+            topCostume: top && { name: top.name, emoji: top.emoji, count: top.count },
+            peak: peak && halfHourText(peak),
+            vsLast: e.race_against_id == null ? null : night.length - raced.get(e.race_against_id),
+            name: e.display_name,
+            suspended: e.suspended_since != null,
+            eligible: why == null,
+            why,
+          }]
+        }),
+      )
+      return JSON.parse(ids).map((id) => cards.get(id)).filter(Boolean)
     },
 
     // TVs paired by code, across the site.
@@ -893,6 +955,7 @@ export function openLedger(db, config) {
         if (!isOpen(event)) throw new BadCommand('Only a live or ended night can be reset')
         if (liveCount.get(event.id).n > RESET_CONFIRM_ABOVE && confirm !== event.name) throw new BadCommand(`Type "${event.name}" to reset it`)
         for (const table of ['kids', 'backfill_batches', 'fired_moments', 'golden_tickets', 'share_links', 'event_devices']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
+        deleteOwned(db, { event: event.id })
         db.query(`
           UPDATE events SET state = 'upcoming', went_live_at = NULL, ended_automatically = 0, summary_nearby = NULL, devices_counted = 1,
             tick_note = NULL, tick_note_at = NULL, tick_note_for = NULL,
@@ -1090,10 +1153,11 @@ export function openLedger(db, config) {
       return door ? [{ type: 'event.updated', eventId: door.id }] : []
     }
 
-    // An event and everything it holds; anything racing it goes to None.
+    // An event and everything it holds, every Extension's rows for it too (v2.2 §6); anything racing it goes to None.
     function removeEvent(id) {
       db.query('UPDATE events SET race_against_id = NULL WHERE race_against_id = ?').run(id)
       for (const table of ['kids', 'tags', 'ghost_buckets', 'fired_moments', 'golden_tickets', 'backfill_batches', 'share_links', 'reports', 'event_devices']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(id)
+      deleteOwned(db, { event: id })
       db.query('UPDATE households SET test_night_event_id = NULL WHERE test_night_event_id = ?').run(id)
       db.query('DELETE FROM events WHERE id = ?').run(id)
     }

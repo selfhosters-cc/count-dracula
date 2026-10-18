@@ -3,8 +3,20 @@
 // ({ ...fixture, name: 'api' }), or wrap its start() to watch what reaches it.
 export const name = 'fixture'
 export const dir = import.meta.dir // its public/ folder is served at /fixture/
-export const owns = {}
-export const migrations = []
+// Its two steps: an entry for a Household, perhaps on one of its Events; then a mark on an Event alone. Both go
+// when the core deletes what they belong to (v2.2 §6).
+export const owns = { fixture_entries: { household: 'household_id', event: 'event_id' }, fixture_marks: { event: 'event_id' } }
+export const migrations = [
+  (db) => {
+    db.exec(`
+      CREATE TABLE fixture_entries (id INTEGER PRIMARY KEY, household_id INTEGER NOT NULL, event_id INTEGER, note TEXT);
+      CREATE INDEX fixture_entries_by_household ON fixture_entries (household_id);
+    `)
+  },
+  (db) => {
+    db.exec('CREATE TABLE fixture_marks (event_id INTEGER NOT NULL, mark TEXT NOT NULL)')
+  },
+]
 
 export function start(core) {
   return {

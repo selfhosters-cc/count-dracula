@@ -15,6 +15,7 @@ import { LIMITS, createGuard } from './guard.js'
 import { createBackups } from './backups.js'
 import { STATUSES, healthTiles, householdStatus, siteStats } from './operator.js'
 import { createNearby } from './nearby.js'
+import { migrateExtension, recordOwns } from './migrations.js'
 import { isBlocked } from './blocklist.js'
 import { toCsv } from './export.js'
 import { isMailAddress, sendMail } from './mail.js'
@@ -910,8 +911,9 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
   }
 
   // Extensions (v2.2 §3, ADR 0001), in list order, once the core's migrations have run and before the server
-  // listens. A throw here (a bad name, a taken one, a throw in start) stops the server, so /healthz never answers
-  // and the deploy rolls back. An entry module: { name, dir, owns, migrations, start(core) → { handle(req, url),
+  // listens: its own steps, then its owns recorded (v2.2 §5–6), then start. A throw here (a bad name, a taken one,
+  // a step that touched a core table, owns naming a table or column it lacks, a throw in start) stops the server,
+  // so /healthz never answers and the deploy rolls back. An entry module: { name, dir, owns, migrations, start(core) → { handle(req, url),
   // stop() } }, where dir is its own folder (import.meta.dir), whose public/ is served at /<name>/.
   const loaded = [] // { name, publicDir, handle, stop }
   try {
@@ -920,7 +922,8 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
       if (!EXTENSION_NAME.test(ext.name ?? '')) throw new Error(`An Extension's name is lower-case letters and digits, not ${JSON.stringify(ext.name)}`)
       if (taken.has(ext.name)) throw new Error(`The Extension name ${ext.name} is taken`)
       taken.add(ext.name)
-      // Ticket 66 records its owns and runs its migrations here, before start (v2.2 §5–6).
+      migrateExtension(db, ext, { now })
+      recordOwns(db, ext)
       const publicDir = ext.dir ? resolve(ext.dir, 'public') : null
       const { handle, stop } = ext.start(coreFor(ext.name, publicDir))
       if (typeof handle !== 'function') throw new Error(`The Extension ${ext.name} started with no handle`)

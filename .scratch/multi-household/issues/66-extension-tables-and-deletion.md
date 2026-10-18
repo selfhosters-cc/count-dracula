@@ -1,7 +1,7 @@
 # Extension tables and the ownership registry
 
 Type: build (AFK)
-Status: open
+Status: done
 Blocked by: 65
 
 ## What to build
@@ -19,12 +19,12 @@ An Extension keeps its own tables, and the core deletes its rows with the Househ
 
 ## Acceptance criteria
 
-- [ ] The fixture's two steps run once; a restart runs nothing; a third step added later runs alone
-- [ ] A step that creates `other_table` or an unprefixed index fails the boot and leaves no table behind
-- [ ] `owns` naming `events`, or a column the table lacks, fails the boot
-- [ ] Delete Household removes the fixture's rows for that Household and no other's
-- [ ] Delete Event and Reset each remove the fixture's rows for that Event, and leave the Household's other Events' rows
-- [ ] `redelete.js` on a database with the fixture's rows, run with no Extension, deletes them for a logged Household
-- [ ] A recorded table that was dropped is skipped: Delete Household still succeeds
-- [ ] A new Event that reuses a deleted Event's id has none of its rows
-- [ ] `bun test` passes
+- [x] The fixture's two steps run once; a restart runs nothing; a third step added later runs alone
+- [x] A step that creates `other_table` or an unprefixed index fails the boot and leaves no table behind
+- [x] `owns` naming `events`, or a column the table lacks, fails the boot
+- [x] Delete Household removes the fixture's rows for that Household and no other's
+- [x] Delete Event and Reset each remove the fixture's rows for that Event, and leave the Household's other Events' rows
+- [x] `redelete.js` on a database with the fixture's rows, run with no Extension, deletes them for a logged Household
+- [x] A recorded table that was dropped is skipped: Delete Household still succeeds
+- [x] A new Event that reuses a deleted Event's id has none of its rows
+- [x] `bun test` passes

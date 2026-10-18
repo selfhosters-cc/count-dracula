@@ -180,6 +180,8 @@ Google Cloud console → **Google Auth Platform**:
 **Open sign-ups**, press it. **Sign-up is open.**
 
 From here every deploy is fix-forward: `deploy.sh` copies the database first, and migrations only add.
+With `EXTENSION_REPOS` in `deploy/local.env`, each private checkout's Extensions ship in the same deploy (its tests
+run after the core's, and it must be committed); `--rollback` swaps them, and their env, with the core.
 
 ---
 
@@ -210,7 +212,7 @@ redeploy, and run it again. (Oct 11, on v2: dev box 5 ms and 79 MB; LXC 118 a me
 | Scenario | First move |
 |---|---|
 | **Site down** | systemd restarts it by itself. `lxc "journalctl -u count-dracula -n 100"`; `lxc "systemctl status count-dracula"`; the `/operator` health strip once it's back |
-| **Bad deploy** | `deploy/deploy.sh --rollback` (the previous build; the database isn't touched) |
+| **Bad deploy** | `deploy/deploy.sh --rollback` (the previous build, its Extensions with it; the database isn't touched) |
 | **Database file damaged** | Restore the newest backup, then re-delete (below). At most 15 minutes of taps are lost |
 | **Overload** | Lower the caps in `server/guard.js` and redeploy (outside the freeze, unless the site is down). Phones keep priority by design |
 | **Abuse** | `/operator` → find the Household → **Rename** (a bad name) or **Suspend** (a pattern). No warning step |

@@ -2,15 +2,21 @@
 // and so the same numbers, as the TV's end-of-night recap, read in the Household's zone.
 import { biggestCrew, clockTime, costumeOfTheNight, eventNow, leaderboard, minuteOfDay, peakHalfHour } from './night-maths.js'
 
+// "8:00–8:30": a half-hour ({ start, end } in "HH:MM") as the Night summary words its peak. The night-card
+// read words it the same way.
+export function halfHourText({ start, end }) {
+  const clock = (hhmm) => {
+    const [h, m] = hhmm.split(':').map(Number)
+    return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')}`
+  }
+  return `${clock(start)}–${clock(end)}`
+}
+
 // summary: what /api/summary answers (or a share link's page).
 export function nightFacts(summary) {
   const { event, kids, tags, ghost, timeZone } = summary
   const shift = event.clockShiftMs ?? 0
   const time = (ms) => clockTime(ms + shift, timeZone).replace(/\s/, '').toLowerCase()
-  const clock = (hhmm) => {
-    const [h, m] = hhmm.split(':').map(Number)
-    return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')}`
-  }
   const total = kids.length
   const times = kids.map((k) => k.tappedAt)
   const first = total ? Math.min(...times) : null
@@ -38,7 +44,7 @@ export function nightFacts(summary) {
     last,
     span: total ? `${time(first)} – ${time(last)}` : '',
     peak,
-    peakText: peak ? `${clock(peak.start)}–${clock(peak.end)}` : '—',
+    peakText: peak ? halfHourText(peak) : '—',
     crew,
     crewAt: crew ? time(crew.at) : '',
     top: costumeOfTheNight(kids, tags),
