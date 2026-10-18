@@ -29,7 +29,14 @@ describe('/privacy', () => {
     for (const heading of ['What we keep', 'Who else sees it', "What's public", 'How long', 'Deleting', 'Contact', 'House rules']) {
       expect(configured).toContain(heading)
     }
-    expect(configured).toContain('Updated Oct 17, 2026')
+    expect(configured).toContain('Updated Oct 18, 2026')
+  })
+
+  test('a Report from any page that shows a night: its reason goes when the report is dealt with', async () => {
+    const page = await text(server({}), '/privacy')
+
+    expect(page).toContain('If someone reports a page, the reason they give is deleted when the report is dealt with.')
+    expect(page).not.toContain('a shared page')
   })
 
   test('promises no reply time', async () => {

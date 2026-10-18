@@ -1,7 +1,7 @@
 # Reports name their night
 
 Type: build (AFK)
-Status: open
+Status: done
 Blocked by: —
 
 ## What to build
@@ -14,7 +14,7 @@ See [v2.2 §9](../spec-v2.2.md#9-reports-name-their-night).
 
 ## Acceptance criteria
 
-- [ ] A Report from a share page shows its Event's name and date on `/operator`
-- [ ] A Report whose Event was deleted shows "(a deleted night)" and can still be dismissed
-- [ ] `/privacy` says "reports a page"
-- [ ] `bun test` passes
+- [x] A Report from a share page shows its Event's name and date on `/operator`
+- [x] A Report whose Event was deleted shows "(a deleted night)" and can still be dismissed
+- [x] `/privacy` says "reports a page"
+- [x] `bun test` passes

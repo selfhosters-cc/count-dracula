@@ -188,9 +188,10 @@ function render() {
   $('d-name').textContent = detail.displayName || '(no name yet)'
   $('d-state').textContent = `${detail.status} · ${detail.kids} kids · last kid ${ago(detail.lastKidAt)} · ${detail.suspendedSince ? `Suspended since ${time(detail.suspendedSince)}` : 'Active'} · Area ${detail.area} · ${detail.timeZone} · signed up ${time(detail.signedUpAt)}`
   $('d-managers').textContent = detail.managers.join(', ') || 'none'
+  // Each Report names its night (v2.2 §9): the page it came from isn't kept, and the night is the same on each.
   $('d-reports').replaceChildren(
     ...detail.reports.map((r) =>
-      el('div', { className: 'house' }, el('span', { className: 'top' }, el('span', { className: 'name', textContent: `⚑ ${time(r.at)}: ${r.reason || '(no reason given)'}` }), el('button', { textContent: 'Dismiss', onclick: () => dismissReport(r.id) })))),
+      el('div', { className: 'house' }, el('span', { className: 'top' }, el('span', { className: 'name', textContent: `⚑ ${time(r.at)} · ${r.eventName ?? '(a deleted night)'}: ${r.reason || '(no reason given)'}` }), el('button', { textContent: 'Dismiss', onclick: () => dismissReport(r.id) })))),
   )
   if (document.activeElement !== $('d-rename')) $('d-rename').value = detail.displayName
   if (document.activeElement !== $('d-zone')) $('d-zone').value = detail.timeZone
