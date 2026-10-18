@@ -55,7 +55,7 @@ getJson('/api/home').then((home) => {
   if (home.household != null) {
     $('house-name').textContent = home.household
     $('signed-in').hidden = false
-    for (const id of ['sign-in', 'code-line', 'sticky-cta', 'sticky-space']) $(id).hidden = true
+    for (const id of ['sign-in', 'code-line', 'tv-line', 'sticky-cta', 'sticky-space']) $(id).hidden = true
     watch.disconnect()
   }
 })
@@ -74,6 +74,18 @@ $('count-here').addEventListener('click', async () => {
 $('watch-here').addEventListener('click', async () => {
   const house = await getJson('/api/household')
   location.href = house?.tvToken ? `/tv/k/${house.tvToken}?from=home` : '/setup'
+})
+
+// Make this the porch TV: Use this screen as the TV, as in /setup: paired with no code, then the bare /tv, which keeps it.
+$('tv-here').addEventListener('click', async () => {
+  const res = await fetch('/api/pair/here', { method: 'POST' }).catch(() => null)
+  if (!res?.ok) return (location.href = '/setup') // signed out meanwhile, or Suspended: Setup says which
+  try {
+    localStorage.setItem('cd.tvLink', JSON.stringify(await res.json())) // tv.js's stored link: { tvToken, deviceToken }
+  } catch {
+    return (location.href = '/tv') // can't keep it: the bare /tv pairs by its code instead
+  }
+  location.href = '/tv'
 })
 
 // A TV's scan-to-pair QR on a signed-out phone lands here with ?pair=: every way in carries the code on to /setup.

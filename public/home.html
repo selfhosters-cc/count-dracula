@@ -53,6 +53,7 @@
     .sign-in #email-form button { margin-top: 10px; }
     .sign-in .after { margin: 12px 0 0; }
     .code-line { text-align: center; margin: 0 0 18px; }
+    #code-line { margin-bottom: 6px; } /* the porch TV's line sits right under it */
     .how { background: none; padding: 0; }
     .how h2 { font-size: 24px; margin-bottom: 4px; }
     .how > p { color: var(--dim); }
@@ -132,6 +133,7 @@
     <a class="button primary" href="/setup">Go to Setup ›</a>
     <button type="button" id="count-here">📱 Count on this device</button>
     <button type="button" id="watch-here">📺 Watch on this device</button>
+    <button type="button" id="tv-here">📺 Make this the porch TV</button>
     <div class="muted after">Not you? <form method="post" action="/auth/signout"><button class="link-button" type="submit">Sign out</button></form></div>
   </section>
 
@@ -158,6 +160,9 @@
       By continuing you agree to the <a href="/privacy">Privacy notice and House rules</a>.</p>
   </section>
   <p class="muted code-line" id="code-line">Got a code from a TV or a host? <a href="#code">Enter it here</a></p>
+  <!-- The porch TV's way in: the bare /tv shows a code to pair it from a phone, then keeps the board. A signed-in
+       Manager gets Use this screen as the porch TV on Welcome back instead, with no code. -->
+  <p class="muted code-line" id="tv-line">Is this screen your porch TV? <a href="/tv">Open the TV screen ›</a></p>
   </div>
   <div class="hero-art" aria-hidden="true">
     <img class="hero-tv" src="/tv.png" width="800" height="450" loading="lazy" alt="">
