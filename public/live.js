@@ -20,7 +20,7 @@ const MAX_BACKOFF_MS = 60_000
 // that joined each night (the server keeps only a hash of it per night). A browser that can't keep it makes a
 // new one each time the page opens.
 const DEVICE_ID = 'cd.deviceId'
-function deviceId() {
+export function deviceId() {
   const made = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
   try {
     let id = localStorage.getItem(DEVICE_ID)

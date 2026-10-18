@@ -1,5 +1,5 @@
 // The door phone on /door (v1 spec §4–5, v2.1 §4): counting, the ☰ door menu, the soundboard.
-import { connectLive } from '/live.js'
+import { connectLive, deviceId } from '/live.js'
 import { createOutbox, uuid } from '/outbox.js'
 import { doorScreen, doorView, goLiveNowTarget, helperLink, helperWording, joinCodeLine, quietNudge, refusedKey, tvQrButton, tvQrSays, watchLink, watchQrButton, watchQrSays } from '/door-view.js'
 import { noNightLines } from '/no-night.js'
@@ -684,18 +684,24 @@ if (savedName) {
     .then((snap) => {
       if (!snap?.household) return
       const where = Object.assign(document.createElement('b'), { textContent: snap.household })
-      $('who-intro').replaceChildren("You're counting trick-or-treaters for ", where, ': one tap per kid at the door. First, who\'s holding this phone?')
+      $('who-intro').replaceChildren("You're counting trick-or-treaters for ", where, ': one tap per kid at the door. First, your name, so everyone can see who tapped.')
     })
     .catch(() => {})
-  const choose = (name) => {
-    name = name.trim()
-    if (!name) return
+  // The name is the person's own, typed: no two phones alike, so the server says if another phone has it. With
+  // no answer (offline, or a key that's gone) the name is kept as typed: the door says what's wrong next.
+  $('who').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const typed = $('custom').value.trim()
+    if (!typed) return ($('who-says').textContent = 'Type your name first')
+    const res = await fetch('/api/phone-name', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Join-Key': joinKey },
+      body: JSON.stringify({ name: typed, deviceId: deviceId() }),
+    }).catch(() => null)
+    if (res?.status === 400 || res?.status === 409) return ($('who-says').textContent = await res.text())
+    const name = res?.ok ? (await res.json()).name : typed
     localStorage.setItem('cd.phoneName', name)
     start(name)
-  }
-  for (const b of $('who').querySelectorAll('[data-name]')) b.addEventListener('click', () => choose(b.dataset.name))
-  $('who').addEventListener('submit', (e) => {
-    e.preventDefault()
-    choose($('custom').value)
   })
+  $('custom').addEventListener('input', () => ($('who-says').textContent = ''))
 }

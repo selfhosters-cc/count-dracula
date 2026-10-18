@@ -42,6 +42,8 @@ const SIGN_IN = '/#sign-in'
 const DEFAULT_CONTACT = 'privacy@count-dracula.example.com'
 const OPERATOR_ACTIONS = new Set(['rename', 'timeZone', 'suspend', 'unsuspend', 'invite', 'dismissReport'])
 const DEVICE_ID = /^[0-9a-f]{32}$/ // what live.js makes: 16 random bytes, hex
+const NAME_CLAIM_MS = 24 * 60 * 60_000 // a phone name another phone chose stays taken this long
+const BACKFILL_PHONE = 'Add missed kids' // the Ledger's name on kids added from Setup: never a phone's
 
 // The sign-in cookie (spec §3): 90 days, renewed with use; the session itself lives server-side.
 const SESSION_COOKIE = 'cd_session'
@@ -163,6 +165,9 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     return kind === 'paired' ? { ...snap, joinQr: joinQrFor(house, kind), watchQr: watchQrFor(house, kind) } : snap
   }
   const publishJoinQr = (house) => hub.sendByKind(house.id, 'joinQr', (kind) => joinQrFor(house, kind))
+
+  // Phone names chosen in the last day, per Household, in memory (a restart forgets them; the kids' names stay).
+  const phoneNames = new Map() // household id → Map(lower-case name → { deviceId, at })
 
   // The watch QR: the TV link as a QR, with its watch code, so someone at the porch can watch along on their own
   // phone. Shown for 2 minutes on the paired TVs, like the helper QR: it's for the porch, so a TV-link viewer
@@ -678,6 +683,24 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
     // a Change join key or Rotate TV link in /setup shows at once. A door phone may hand them on: a counter can
     // already see more.
     'GET /api/codes': write((req, house) => Response.json({ joinCode: house.joinCode(), watchCode: house.watchCode(), tvToken: house.tvToken() })),
+    // A new phone's name, typed on its first screen: refused if another phone has it, so the Recent list and the
+    // night's helpers never mix two people up. Taken means it counted a kid on an open night, or another phone
+    // chose it in the last day; the same phone (by its device id) may choose its own again.
+    'POST /api/phone-name': write(async (req, house) => {
+      const { name, deviceId } = await req.json()
+      const clean = String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)
+      if (!clean) return new Response('Type your name first', { status: 400 })
+      const key = clean.toLowerCase()
+      const claims = phoneNames.get(house.id) ?? new Map()
+      for (const [k, claim] of claims) if (now() - claim.at > NAME_CLAIM_MS) claims.delete(k)
+      const claim = claims.get(key)
+      const mine = claim != null && DEVICE_ID.test(deviceId ?? '') && claim.deviceId === deviceId
+      const counted = [BACKFILL_PHONE, ...house.phoneNamesTonight()].some((n) => n.toLowerCase() === key)
+      if (!mine && (claim || counted)) return new Response(`Someone's already counting as ${clean}. Add something to tell you apart, like ${clean} B.`, { status: 409 })
+      claims.set(key, { deviceId: DEVICE_ID.test(deviceId ?? '') ? deviceId : null, at: now() })
+      phoneNames.set(house.id, claims)
+      return Response.json({ name: clean })
+    }),
     'POST /api/catch-up': write(async (req, house) => {
       if (!guard.take('taps', house.id)) return tooMany()
       const { tag, n, kid, eventId, stamp } = await req.json()

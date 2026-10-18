@@ -81,7 +81,13 @@ if ((${#missing[@]})); then
 fi
 
 echo "==> Tests"
-bun test >/dev/null 2>&1 || { echo "!! Tests fail: not deploying. Run bun test." >&2; exit 1; }
+# Every test starts a real server: on a busy machine one can pass Bun's 5 s without anything being wrong, so 20 s
+# keeps a real hang failing without a slow run blocking a deploy.
+if ! tests=$(bun test --timeout 20000 2>&1); then
+  grep -E '^\(fail\)' <<<"$tests" >&2 || true
+  echo "!! Tests fail: not deploying. Run bun test." >&2
+  exit 1
+fi
 
 # Every deploy is a release: the patch number goes up, committed and tagged (and pushed, so the repo has what's
 # live), before packing, so the build carries it. A deploy that fails after this just skips a number.

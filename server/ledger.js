@@ -1169,6 +1169,17 @@ export function openLedger(db, config) {
         return household().join_code
       },
 
+      // The phone names that counted a kid on any open night: a new phone can't take one (no two phones alike).
+      phoneNamesTonight() {
+        return db
+          .query(`
+            SELECT DISTINCT k.phone_name AS name FROM kids k JOIN events e ON e.id = k.event_id
+            WHERE e.household_id = ? AND e.${OPEN} AND k.deleted_at IS NULL AND k.phone_name IS NOT NULL
+          `)
+          .all(householdId)
+          .map((r) => r.name)
+      },
+
       canEstimateLastYear,
 
       // The estimated total last year, or null.

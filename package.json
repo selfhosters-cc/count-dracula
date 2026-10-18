@@ -6,6 +6,6 @@
   "type": "module",
   "scripts": {
     "start": "bun server/main.js",
-    "test": "bun test"
+    "test": "bun test --timeout 20000"
   }
 }

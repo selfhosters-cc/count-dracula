@@ -187,6 +187,10 @@
     #who button { background: var(--panel2); }
     #who .who-intro { color: var(--dim); font-size: 1.05rem; line-height: 1.4; text-align: center; max-width: 20rem; margin: 0; }
     #who .who-intro b { color: var(--text); }
+    #who .who-says { color: var(--danger); font-size: 1rem; text-align: center; max-width: 20rem; margin: 0; }
+    #who .who-says:empty { display: none; }
+    #who button.go { background: var(--orange); color: #1a0d00; font-weight: 800; white-space: nowrap; width: 16rem; }
+    #who input { width: 16rem; }
     #who input { border: 1px solid #ffffff30; background: var(--panel); color: var(--text); }
   </style>
 </head>
@@ -309,13 +313,11 @@
 
     <form id="who">
       <!-- A helper's first screen, from a QR, a join link or the join code: what this is, and whose door. -->
-      <p class="who-intro" id="who-intro">You're counting trick-or-treaters at the door: one tap per kid. First, who's holding this phone?</p>
+      <p class="who-intro" id="who-intro">You're counting trick-or-treaters at the door: one tap per kid. First, your name, so everyone can see who tapped.</p>
       <h1>Who's tapping?</h1>
-      <button type="button" data-name="Dad">Dad</button>
-      <button type="button" data-name="Mom">Mom</button>
-      <button type="button" data-name="Grandma">Grandma</button>
-      <input id="custom" maxlength="40" placeholder="Someone else…" autocomplete="off">
-      <button type="submit">OK</button>
+      <input id="custom" maxlength="40" placeholder="Your name" aria-label="Your name" autocomplete="given-name" enterkeyhint="go">
+      <p class="who-says" id="who-says" role="alert"></p>
+      <button type="submit" class="go">Start counting</button>
     </form>
   </div>
 
