@@ -97,6 +97,13 @@ $('tv-here').addEventListener('click', async () => {
   location.href = '/tv'
 })
 
+// Sent here to sign in by /operator (/?next=operator): noted for 15 minutes, so /setup sends an Operator back.
+if (new URLSearchParams(location.search).get('next') === 'operator') {
+  try {
+    localStorage.setItem('cd.next', JSON.stringify({ to: '/operator', at: Date.now() }))
+  } catch {}
+}
+
 // A TV's scan-to-pair QR on a signed-out phone lands here with ?pair=: every way in carries the code on to /setup.
 const waitingTv = tvCodeFrom(new URLSearchParams(location.search).get('pair'))
 if (waitingTv) {

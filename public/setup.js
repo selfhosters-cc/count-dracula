@@ -39,8 +39,21 @@ async function get(path) {
   return res.json()
 }
 
+// Sent to sign in from /operator (the homepage noted it, home.js): an Operator goes back there once signed in.
+// The note is in this browser only, for 15 minutes, and used once.
+function afterSignIn() {
+  try {
+    const next = JSON.parse(localStorage.getItem('cd.next') ?? 'null')
+    localStorage.removeItem('cd.next')
+    return next?.to === '/operator' && Date.now() - next.at < 15 * 60_000 && house.operator
+  } catch {
+    return false
+  }
+}
+
 async function load() {
   house = await get('/api/household')
+  if (afterSignIn()) return location.replace('/operator')
   ui.tvQr.until = Date.now() + house.joinQrMsLeft
   ui.watchQr.until = Date.now() + house.watchQrMsLeft
   ;[events, shares] = await Promise.all([get('/api/events'), get('/api/shares')])
@@ -324,6 +337,7 @@ const context = () => ({ events, door: doorEvent(events), timeZone: timeZone(), 
 function render() {
   $('house-name').textContent = house.displayName
   $('who-email').textContent = house.manager.email
+  $('operator-link').hidden = !house.operator // only an Operator ever sees the way to /operator
   $('who').hidden = false
   const night = shownNight()
   if (screen.event != null && !night) { // deleted meanwhile: back to the tab it opened from

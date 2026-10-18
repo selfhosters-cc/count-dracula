@@ -302,8 +302,8 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     // ---- The Operator (spec §13): a Manager on OPERATOR_EMAILS.
     'GET /operator': async (req) => {
       const session = accounts.session(tokenOf(req))
-      if (!session) return redirect(SIGN_IN)
-      if (!session.operator) return page('Not here', '<p>This page is for the Operator.</p>', 403)
+      if (!session) return redirect('/?next=operator#sign-in') // the homepage notes it, so sign-in comes back here
+      if (!session.operator) return page('Not here', '<p>This page is for the Operator.</p><p><a href="/setup">‹ Back to Setup</a></p>', 403)
       return renew(await serveStatic('/operator', req), session, req)
     },
     // The whole dashboard in one answer, polled every 30 s (spec §13). No emails and no Location cells here.
