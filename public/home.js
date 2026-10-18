@@ -3,6 +3,7 @@
 import { doorRedirect } from '/door-view.js'
 import { maskCodeInput, readCode, tvCodeFrom } from '/shared/codes.js'
 import { homeSiteLine } from '/nearby-text.js'
+import { slot } from '/extensions.js'
 
 const $ = (id) => document.getElementById(id)
 
@@ -46,6 +47,11 @@ getJson('/api/site').then((answer) => {
 })
 
 getJson('/api/home').then((home) => {
+  // An Extension's home slot (v2.2 §8), the same signed in or out: a line under the site-wide line, and a link
+  // in the footer after Privacy and House rules.
+  const signedIn = home?.household != null
+  $('site-line').after(...slot('home', { signedIn, place: 'line' }))
+  document.querySelector('footer a[href="/privacy"]').after(...slot('home', { signedIn, place: 'footer' }).flatMap((link) => [' · ', link]))
   if (!home) return
   // Paused sign-ups show here, before anyone goes to Google. Signing in still works, so the buttons stay.
   $('paused').hidden = !home.signUpsPaused

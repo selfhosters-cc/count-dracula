@@ -3,6 +3,7 @@
 // in the Household's zone. Names are set as text, never as HTML.
 import { nightFacts } from '/shared/summary.js'
 import { eventNow, ghost as ghostCurve, minuteOfDay, raceWindow } from '/shared/night-maths.js'
+import { slot } from '/extensions.js'
 
 const $ = (id) => document.getElementById(id)
 const fmt = (n) => n.toLocaleString('en-US')
@@ -206,7 +207,9 @@ if (location.pathname === '/summary') {
   else {
     const summary = await res.json()
     await document.fonts.ready
-    showSlides(summary, { closing: summary.switches.shareLinks === false ? [] : [shareControls(Number(eventId), summary.displayName)] })
+    // An Extension's summary.closing comes after Share (v2.2 §8), with or without it; never on a share page.
+    const share = summary.switches.shareLinks === false ? [] : [shareControls(Number(eventId), summary.displayName)]
+    showSlides(summary, { closing: [...share, ...slot('summary.closing', { eventId: Number(eventId) })] })
   }
 } else if (location.pathname === '/share') {
   // A public share link: no sign-in. The name is off when the Household's toggle says so.

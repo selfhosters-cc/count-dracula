@@ -2,7 +2,7 @@
 // publish the deltas. Every read and write carries a credential (v2 spec §3): a phone's join key, or a
 // Manager's session. There's no Household in any URL: the credential carries it.
 import { Database } from 'bun:sqlite'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import { loadConfig } from './config.js'
 import { BadCommand, DEFAULT_SWITCHES, openLedger } from './ledger.js'
@@ -27,6 +27,7 @@ export const VERSION = JSON.parse(readFileSync(resolve(import.meta.dir, '../pack
 const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
+const PRIVACY_PAGE = resolve(PUBLIC_DIR, 'privacy.html')
 const PAGES = { '/': '/home.html', '/door': '/door.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html', '/privacy': '/privacy.html', '/summary': '/summary.html' }
 const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink', 'setLocation', 'setLastYear', 'checklist', 'close', 'reset'])
 
@@ -710,6 +711,13 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
       const { tag, n, kid, eventId, stamp } = await req.json()
       hub.publish(house.id, house.apply({ type: 'catchUp', tag, n, kid, eventId, stamp }))
     }),
+    // Page slots (v2.2 §8): the module the core's pages import for slot(name, ctx), loading each Extension's
+    // public/slots.js. With no Extension it loads nothing, and every slot is empty.
+    'GET /extensions.js': () => {
+      const urls = loaded.filter((ext) => ext.publicDir && existsSync(resolve(ext.publicDir, 'slots.js'))).map((ext) => `/${ext.name}/slots.js?v=${BUILD}`)
+      const js = `import { loadSlots } from '/extension-slots.js'\nexport const slot = await loadSlots(${JSON.stringify(urls)})\n`
+      return new Response(stampImports(js), { headers: { 'Content-Type': 'text/javascript;charset=utf-8', 'Cache-Control': 'no-cache' } })
+    },
   }
 
   // A phone's join key (X-Join-Key, or ?key=), the TV link's token (?key=), or a Manager's session
@@ -897,7 +905,7 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
     if (handler) return handler(req, server)
     // The TV link's page: the same TV page; it reads its token from the address.
     if (req.method === 'GET' && pathname.startsWith('/tv/k/')) return serveStatic('/tv', req, contact, 'watch')
-    if (req.method === 'GET') return serveStatic(pathname, req, contact)
+    if (req.method === 'GET') return serveStatic(pathname, req, contact, pathname, privacy)
     return notFound()
   }
 
@@ -923,6 +931,9 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
     for (const ext of loaded) ext.stop?.()
     throw err
   }
+  // What each Extension makes public (v2.2 §8): its entry module's privacy, { item: one <li> for the notice's
+  // "What's public", updated: 'YYYY-MM-DD', the day that last changed }. Either is optional.
+  const privacy = extensions.map((ext) => ext.privacy).filter(Boolean)
 
   // What an Extension's start gets (v2.2 §3), and nothing more: its own env keys and site switches, the core's
   // guards as they are (bound to this server, since handle has none), and its public/ folder templated like ours.
@@ -1036,18 +1047,18 @@ const PREVIEWS = {
   },
 }
 
-async function serveStatic(pathname, req, contact = DEFAULT_CONTACT, preview = pathname) {
+async function serveStatic(pathname, req, contact = DEFAULT_CONTACT, preview = pathname, privacy = []) {
   const [dir, rest] = pathname.startsWith('/shared/')
     ? [SHARED_DIR, pathname.slice('/shared'.length)]
     : pathname.startsWith('/kiosk/')
       ? [KIOSK_DIR, pathname.slice('/kiosk'.length)]
       : [PUBLIC_DIR, PAGES[pathname] ?? pathname]
-  return serveFile(dir, rest, req, contact, preview)
+  return serveFile(dir, rest, req, contact, preview, privacy)
 }
 
 // One file of a folder the core serves (public/, shared/, kiosk/ or an Extension's public/): `rest` is its path
 // in the folder, still URL-encoded. Nothing outside the folder, and never a test file.
-async function serveFile(dir, rest, req, contact = DEFAULT_CONTACT, preview) {
+async function serveFile(dir, rest, req, contact = DEFAULT_CONTACT, preview, privacy = []) {
   let path
   try {
     path = resolve(dir, '.' + decodeURIComponent(rest))
@@ -1067,6 +1078,7 @@ async function serveFile(dir, rest, req, contact = DEFAULT_CONTACT, preview) {
     const card = PREVIEWS[preview]
     let html = (await file.text()).replaceAll('__CONTACT__', esc(contact)).replaceAll('__ORIGIN__', esc(originOf(req))).replaceAll('__VERSION__', VERSION)
     if (card) html = html.replaceAll('__PREVIEW_TITLE__', esc(card.title)).replaceAll('__PREVIEW_TEXT__', esc(card.text)).replaceAll('__PREVIEW_IMAGE__', card.image)
+    if (path === PRIVACY_PAGE) html = privacyNotice(html, privacy)
     return new Response(stampScripts(html), { headers: { 'Content-Type': file.type, ...cache } })
   }
   if (path.endsWith('.js')) return new Response(stampImports(await file.text()), { headers: { 'Content-Type': file.type, ...cache } })
@@ -1075,6 +1087,20 @@ async function serveFile(dir, rest, req, contact = DEFAULT_CONTACT, preview) {
   const since = Date.parse(req.headers.get('If-Modified-Since') ?? '')
   if (!Number.isNaN(since) && since >= modified.getTime()) return new Response(null, { status: 304, headers: cache })
   return new Response(file, { headers: { ...cache, 'Last-Modified': modified.toUTCString() } })
+}
+
+// The privacy notice with each Extension's item in "What's public", just before "Never public", and Updated the
+// later of the core's own date and theirs (v2.2 §8). With none, the page as the core wrote it.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function privacyNotice(html, privacy) {
+  html = html.replace('__EXTENSIONS_PRIVACY__', () => privacy.map((p) => (p.item ? `${p.item}\n      ` : '')).join('')) // as written, $ and all
+  return html.replace(/Updated (\w{3}) (\d{1,2}), (\d{4})/, (line, month, day, year) => {
+    const own = `${year}-${String(MONTHS.indexOf(month) + 1).padStart(2, '0')}-${day.padStart(2, '0')}`
+    const latest = [own, ...privacy.map((p) => p.updated).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d ?? ''))].sort().at(-1)
+    if (latest === own) return line
+    const [y, m, d] = latest.split('-').map(Number)
+    return `Updated ${MONTHS[m - 1]} ${d}, ${y}`
+  })
 }
 
 // Every script's address carries this build (?v=), in the pages' <script> tags and in every import, so no cache
