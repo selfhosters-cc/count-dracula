@@ -149,6 +149,11 @@ describe('what core holds', () => {
     expect(seen.core.env).toEqual({ FIXTURE_DATA: '/srv/fixture' })
   })
 
+  // Its env is every key named <NAME>_…, so no key the core reads may be: GOOGLE_CLIENT_SECRET, SMTP_PASS, ….
+  test.each(['google', 'smtp', 'public', 'trusted', 'count'])('%s, the first part of a core env key, fails the boot', (name) => {
+    expect(() => start({ extensions: [{ ...fixture, name, owns: {}, migrations: [] }] })).toThrow(`${name.toUpperCase()}_`)
+  })
+
   test('site switches only under <name>., and the config switches read-only', () => {
     const { ext, seen } = watched()
     const app = start({ extensions: [ext] })

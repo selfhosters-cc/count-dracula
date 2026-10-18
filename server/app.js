@@ -5,7 +5,7 @@ import { Database } from 'bun:sqlite'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import { loadConfig } from './config.js'
-import { BadCommand, DEFAULT_SWITCHES, openLedger } from './ledger.js'
+import { BadCommand, DEFAULT_SWITCHES, coreSchemaNames, openLedger } from './ledger.js'
 import { NEW_HOUSEHOLD_NAME, openAccounts } from './accounts.js'
 import { googleClient } from './google.js'
 import { createHub } from './hub.js'
@@ -16,6 +16,7 @@ import { createBackups } from './backups.js'
 import { STATUSES, healthTiles, householdStatus, siteStats } from './operator.js'
 import { createNearby } from './nearby.js'
 import { migrateExtension, recordOwns } from './migrations.js'
+import { CORE_ENV_KEYS } from './env-keys.js'
 import { isBlocked } from './blocklist.js'
 import { toCsv } from './export.js'
 import { isMailAddress, sendMail } from './mail.js'
@@ -57,7 +58,7 @@ const sessionCookie = (token, maxAge = 90 * 86_400) => `${SESSION_COOKIE}=${toke
 const MAX_BODY_BYTES = 64 * 1024
 
 // env: PUBLIC_HOST, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OPERATOR_EMAILS, OPERATOR_CONTACT, SMTP_HOST, SMTP_PORT,
-// SMTP_USER, SMTP_PASS, EMAIL_FROM, TRUSTED_PROXIES (deploy/local.env). google, mailer, now, canSignUp, tickMs, limits and log are seams for the tests.
+// SMTP_USER, SMTP_PASS, EMAIL_FROM, TRUSTED_PROXIES (deploy/local.env; server/env-keys.js). google, mailer, now, canSignUp, tickMs, limits and log are seams for the tests.
 // extensions: the entry modules server/main.js imports from EXTENSIONS (v2.2 §3), or a test's own.
 export function startServer({ configPath, port, heartbeatMs, env = process.env, google, mailer, now = Date.now, canSignUp, tickMs = 60_000, limits = LIMITS, log = console.log, extensions = [] }) {
   const config = loadConfig(configPath)
@@ -209,7 +210,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
     'GET /': (req) => {
       const { search, searchParams } = new URL(req.url)
       if (searchParams.get('key')) return new Response(null, { status: 302, headers: { Location: `/door${search}` } })
-      return serveStatic('/', req, contact)
+      return serveStatic('/', req, templating)
     },
     // The TV's pairing screen's short address to type on a phone: Setup's Tonight, with the Your TV box (through
     // sign-in if need be). Not the homepage: a phone that counts goes from there to its door.
@@ -308,7 +309,7 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       const session = accounts.session(tokenOf(req))
       if (!session) return redirect('/?next=operator#sign-in') // the homepage notes it, so sign-in comes back here
       if (!session.operator) return page('Not here', '<p>This page is for the Operator.</p><p><a href="/setup">‹ Back to Setup</a></p>', 403)
-      return renew(await serveStatic('/operator', req), session, req)
+      return renew(await serveStatic('/operator', req, templating), session, req)
     },
     // The whole dashboard in one answer, polled every 30 s (spec §13). No emails and no Location cells here.
     'GET /api/operator': operator(() => {
@@ -580,7 +581,7 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
       house.unshare((await req.json()).eventId)
     }),
     'GET /api/shares': manager((req, house) => Response.json(house.shares().map(({ token, ...s }) => ({ ...s, url: shareUrl(req, token) })))),
-    'GET /share': (req) => serveStatic('/summary', req, contact),
+    'GET /share': (req) => serveStatic('/summary', req, templating),
     'GET /api/share': (req) => {
       const shared = sharedNight(new URL(req.url).searchParams.get('key'))
       if (!shared) return new Response('Not available', { status: 404 })
@@ -792,7 +793,7 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
         return redirect(pair ? `/?pair=${pair}#sign-in` : SIGN_IN)
       }
       if (ledger.isSuspended(session.householdId)) return page('Suspended', `<p>This Household is suspended by the Operator.</p><p>Questions: <a href="mailto:${esc(contact)}">${esc(contact)}</a></p>`, 403)
-      return renew(await serveStatic(pathname, req, contact), session, req)
+      return renew(await serveStatic(pathname, req, templating), session, req)
     }
   }
 
@@ -905,10 +906,16 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
     const handler = routes[`${req.method} ${pathname}`]
     if (handler) return handler(req, server)
     // The TV link's page: the same TV page; it reads its token from the address.
-    if (req.method === 'GET' && pathname.startsWith('/tv/k/')) return serveStatic('/tv', req, contact, 'watch')
-    if (req.method === 'GET') return serveStatic(pathname, req, contact, pathname, privacy)
+    if (req.method === 'GET' && pathname.startsWith('/tv/k/')) return serveStatic('/tv', req, { ...templating, preview: 'watch' })
+    if (req.method === 'GET') return serveStatic(pathname, req, templating)
     return notFound()
   }
+
+  // What each Extension makes public (v2.2 §8): its entry module's privacy, { item: one <li> for the notice's
+  // "What's public", updated: 'YYYY-MM-DD', the day that last changed }. Either is optional.
+  const privacy = extensions.map((ext) => ext.privacy).filter(Boolean)
+  // What the pages' placeholders are filled with (serveFile): the contact address, and each Extension's privacy.
+  const templating = { contact, privacy }
 
   // Extensions (v2.2 §3, ADR 0001), in list order, once the core's migrations have run and before the server
   // listens: its own steps, then its owns recorded (v2.2 §5–6), then start. A throw here (a bad name, a taken one,
@@ -920,8 +927,8 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
     const taken = coreNames(routes)
     for (const ext of extensions) {
       if (!EXTENSION_NAME.test(ext.name ?? '')) throw new Error(`An Extension's name is lower-case letters and digits, not ${JSON.stringify(ext.name)}`)
-      if (taken.has(ext.name)) throw new Error(`The Extension name ${ext.name} is taken`)
-      taken.add(ext.name)
+      if (taken.has(ext.name)) throw new Error(`The Extension name ${ext.name} is taken: ${taken.get(ext.name)} has it`)
+      taken.set(ext.name, 'another Extension')
       migrateExtension(db, ext, { now })
       recordOwns(db, ext)
       const publicDir = ext.dir ? resolve(ext.dir, 'public') : null
@@ -934,15 +941,12 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
     for (const ext of loaded) ext.stop?.()
     throw err
   }
-  // What each Extension makes public (v2.2 §8): its entry module's privacy, { item: one <li> for the notice's
-  // "What's public", updated: 'YYYY-MM-DD', the day that last changed }. Either is optional.
-  const privacy = extensions.map((ext) => ext.privacy).filter(Boolean)
 
   // What an Extension's start gets (v2.2 §3), and nothing more: its own env keys and site switches, the core's
   // guards as they are (bound to this server, since handle has none), and its public/ folder templated like ours.
   function coreFor(name, publicDir) {
     const envPrefix = `${name.toUpperCase()}_`
-    const own = (key) => {
+    const ownSwitch = (key) => {
       if (!String(key).startsWith(`${name}.`)) throw new Error(`The Extension ${name} has only the site switches under ${name}., not ${key}`)
       return key
     }
@@ -956,13 +960,13 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
         take: (rule, key) => guard.take(rule, key),
       }),
       clientIp: (req) => clientIp(req, server),
-      serve: (req, path) => (publicDir ? serveFile(publicDir, `/${path}`, req, contact) : notFound()),
+      serve: (req, path) => (publicDir ? serveFile(publicDir, `/${path}`, req, templating) : notFound()),
       now,
       log,
       env: Object.freeze(Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith(envPrefix)))),
       switches: Object.freeze({ ...switches }),
-      siteSwitch: (key) => ledger.siteSwitch(own(key)),
-      setSiteSwitch: (key, on) => ledger.setSiteSwitch(own(key), on),
+      siteSwitch: (key) => ledger.siteSwitch(ownSwitch(key)),
+      setSiteSwitch: (key, on) => ledger.setSiteSwitch(ownSwitch(key), on),
     })
   }
 
@@ -980,7 +984,7 @@ ${problem ? `<p class="problem" role="alert">${esc(problem)}</p>` : ''}<button c
     if (res) return res
     if (api || req.method !== 'GET' || !ext.publicDir) return notFound()
     const rest = url.pathname.slice(ext.name.length + 1)
-    return serveFile(ext.publicDir, rest === '' || rest === '/' ? '/index.html' : rest, req, contact)
+    return serveFile(ext.publicDir, rest === '' || rest === '/' ? '/index.html' : rest, req, templating)
   }
 
   // The core's own timers and streams: stopped before any Extension's, and if an Extension fails to start.
@@ -1050,18 +1054,21 @@ const PREVIEWS = {
   },
 }
 
-async function serveStatic(pathname, req, contact = DEFAULT_CONTACT, preview = pathname, privacy = []) {
+// templating: { contact, preview, privacy }, as serveFile takes it; preview is the address's own unless given.
+async function serveStatic(pathname, req, templating = {}) {
   const [dir, rest] = pathname.startsWith('/shared/')
     ? [SHARED_DIR, pathname.slice('/shared'.length)]
     : pathname.startsWith('/kiosk/')
       ? [KIOSK_DIR, pathname.slice('/kiosk'.length)]
       : [PUBLIC_DIR, PAGES[pathname] ?? pathname]
-  return serveFile(dir, rest, req, contact, preview, privacy)
+  return serveFile(dir, rest, req, { preview: pathname, ...templating })
 }
 
 // One file of a folder the core serves (public/, shared/, kiosk/ or an Extension's public/): `rest` is its path
-// in the folder, still URL-encoded. Nothing outside the folder, and never a test file.
-async function serveFile(dir, rest, req, contact = DEFAULT_CONTACT, preview, privacy = []) {
+// in the folder, still URL-encoded. Nothing outside the folder, and never a test file. A page's placeholders are
+// filled from templating: contact (the privacy contact), preview (which link-preview card) and privacy (each
+// Extension's, for the privacy notice).
+async function serveFile(dir, rest, req, { contact = DEFAULT_CONTACT, preview, privacy = [] } = {}) {
   let path
   try {
     path = resolve(dir, '.' + decodeURIComponent(rest))
@@ -1094,16 +1101,15 @@ async function serveFile(dir, rest, req, contact = DEFAULT_CONTACT, preview, pri
 
 // The privacy notice with each Extension's item in "What's public", just before "Never public", and Updated the
 // later of the core's own date and theirs (v2.2 §8). With none, the page as the core wrote it.
+// The day the core's own notice last changed: bump it with public/privacy.html, whose Updated says it.
+const PRIVACY_UPDATED = '2026-10-18'
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 function privacyNotice(html, privacy) {
-  html = html.replace('__EXTENSIONS_PRIVACY__', () => privacy.map((p) => (p.item ? `${p.item}\n      ` : '')).join('')) // as written, $ and all
-  return html.replace(/Updated (\w{3}) (\d{1,2}), (\d{4})/, (line, month, day, year) => {
-    const own = `${year}-${String(MONTHS.indexOf(month) + 1).padStart(2, '0')}-${day.padStart(2, '0')}`
-    const latest = [own, ...privacy.map((p) => p.updated).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d ?? ''))].sort().at(-1)
-    if (latest === own) return line
-    const [y, m, d] = latest.split('-').map(Number)
-    return `Updated ${MONTHS[m - 1]} ${d}, ${y}`
-  })
+  const latest = [PRIVACY_UPDATED, ...privacy.map((p) => p.updated).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d ?? ''))].sort().at(-1)
+  const [y, m, d] = latest.split('-').map(Number)
+  return html
+    .replace('__EXTENSIONS_PRIVACY__', () => privacy.map((p) => (p.item ? `${p.item}\n      ` : '')).join('')) // as written, $ and all
+    .replace('__PRIVACY_UPDATED__', `${MONTHS[m - 1]} ${d}, ${y}`)
 }
 
 // Every script's address carries this build (?v=), in the pages' <script> tags and in every import, so no cache
@@ -1121,16 +1127,20 @@ function cacheControlOf(path) {
   return /\.(png|jpe?g|gif|webp|ico|woff2?|ttf|otf|mp3|ogg|wav|m4a)$/i.test(path) ? 'public, max-age=86400' : 'no-cache'
 }
 
-// The names no Extension can take (v2.2 §3): the first part of every core address, the second of every /api/ one,
-// and public/'s folders.
+// The names no Extension can take (v2.2 §3), each with what has it: the first part of every core address, the second
+// of every /api/ one, and public/'s folders; the first part of every core table or index, which <name>_… in its
+// steps would reach (v2.2 §5); and of every core env key, which its env's <NAME>_* would.
 function coreNames(routes) {
-  const names = new Set(['shared', 'kiosk'])
-  for (const path of [...Object.keys(routes).map((key) => key.split(' ')[1]), ...Object.keys(PAGES)]) {
+  const names = new Map()
+  const take = (name, what) => names.has(name) || names.set(name, what)
+  for (const path of ['/shared/', '/kiosk/', ...Object.keys(routes).map((key) => key.split(' ')[1]), ...Object.keys(PAGES)]) {
     const [, first, second] = path.split('/')
-    names.add(first)
-    if (first === 'api' && second) names.add(second)
+    take(first, `the address ${path}`)
+    if (first === 'api' && second) take(second, `the address ${path}`)
   }
-  for (const entry of readdirSync(PUBLIC_DIR, { withFileTypes: true })) if (entry.isDirectory()) names.add(entry.name)
+  for (const entry of readdirSync(PUBLIC_DIR, { withFileTypes: true })) if (entry.isDirectory()) take(entry.name, `the folder public/${entry.name}/`)
+  for (const name of coreSchemaNames()) if (name.includes('_')) take(name.split('_')[0], `the core's ${name}`)
+  for (const key of CORE_ENV_KEYS) if (key.includes('_')) take(key.split('_')[0].toLowerCase(), `the core's env key ${key}`)
   return names
 }
 

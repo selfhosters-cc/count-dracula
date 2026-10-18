@@ -325,19 +325,22 @@ export function migrate(db, { now }) {
 
 // An Extension's own steps (v2.2 §5), after the core's: from its extension_versions row, each in one transaction
 // that bumps the row. A step may create, drop or change only what's named <name>_…; anything else rolls it back
-// and stops the boot.
+// and stops the boot. A marker table made last, before the step, no Extension's name can own: whatever the step
+// makes gets a later rowid in sqlite_master, so even a core table dropped and made again as it was is a change.
 export function migrateExtension(db, { name, migrations = [] }, { now }) {
   const version = db.query('SELECT version FROM extension_versions WHERE name = ?').get(name)?.version ?? 0
   for (let step = version; step < migrations.length; step++) {
     db.transaction(() => {
+      db.exec(`CREATE TABLE ${STEP_MARKER} (x)`)
       const before = schema(db)
       migrations[step](db, { now })
       const after = schema(db)
       for (const key of new Set([...before.keys(), ...after.keys()])) {
-        if (before.get(key)?.sql === after.get(key)?.sql) continue
+        if (same(before.get(key), after.get(key))) continue
         const { type, name: what, tbl_name } = after.get(key) ?? before.get(key)
         if (!ownedBy(name, what, tbl_name)) throw new Error(`The Extension ${name}'s step ${step + 1} touched the ${type} ${what}, not ${name}_…`)
       }
+      db.exec(`DROP TABLE ${STEP_MARKER}`)
       db.query('INSERT INTO extension_versions (name, version) VALUES (?, ?) ON CONFLICT (name) DO UPDATE SET version = excluded.version').run(name, step + 1)
     })()
   }
@@ -380,10 +383,15 @@ export function deleteOwned(db, { household, event }) {
 
 const quoted = (identifier) => `"${identifier.replaceAll('"', '""')}"`
 
-// What sqlite_master holds, by type and name.
+const STEP_MARKER = '_extension_step' // <name>_… never starts with _
+
+// What sqlite_master holds, by type and name: each row with its rowid and root page, so an object dropped and made
+// again, even with the same sql, isn't the same row.
 function schema(db) {
-  return new Map(db.query('SELECT type, name, tbl_name, sql FROM sqlite_master').all().map((row) => [`${row.type} ${row.name}`, row]))
+  return new Map(db.query('SELECT rowid, type, name, tbl_name, rootpage, sql FROM sqlite_master').all().map((row) => [`${row.type} ${row.name}`, row]))
 }
+
+const same = (a, b) => a?.rowid === b?.rowid && a?.tbl_name === b?.tbl_name && a?.rootpage === b?.rootpage && a?.sql === b?.sql
 
 // Named <name>_… and on a table named so; SQLite's own indexes and AUTOINCREMENT counter for such a table too.
 function ownedBy(name, what, table) {

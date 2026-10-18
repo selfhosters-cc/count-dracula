@@ -137,6 +137,18 @@ describe('deploy/pack.sh check_extension_repos (before the tests, the version an
       expect(err).toContain(says)
     }
   })
+
+  test("refuses an Extension named for a core env key's first part, as its <NAME>_* keys would take the core's", async () => {
+    for (const [name, says] of [['google', 'GOOGLE_CLIENT_ID'], ['smtp', 'SMTP_'], ['trusted', 'TRUSTED_PROXIES'], ['extension', 'EXTENSION_REPOS'], ['lxc', 'LXC_IP']]) {
+      const repo = await checkout()
+      await git(repo.dir, 'mv', 'fixture', name)
+      await git(repo.dir, 'commit', '-q', '-m', 'renamed')
+
+      const { err, code } = await bash('check_extension_repos', { EXTENSION_REPOS: repo.dir })
+      expect({ name, code }).toEqual({ name, code: 1 })
+      expect(err).toContain(says)
+    }
+  })
 })
 
 describe('deploy/pack.sh tests_pass (each checkout runs its own bun test)', () => {

@@ -77,7 +77,7 @@ describe("/privacy with an Extension's fragment", () => {
     for (const path of ['/privacy', '/privacy.html']) {
       const page = await text(withExtensions([]), path)
 
-      expect(page).not.toContain('__EXTENSIONS_PRIVACY__')
+      expect(page).not.toMatch(/__[A-Z_]+__/)
       expect(page).toContain('Updated Oct 18, 2026')
       expect(whatsPublic(page)).toMatch(/Never a name, an address or a place\.<\/li>\n {6}<li><b>Never public:/)
       expect(whatsPublic(page).match(/<li>/g)).toHaveLength(4)

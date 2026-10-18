@@ -47,6 +47,18 @@ describe('page slots (v2.2 §8)', () => {
     errors.mockRestore()
   })
 
+  test("a slots.js whose import never settles is let go after the wait, like one that failed: the page still renders", async () => {
+    const errors = quiet()
+    const hangs = { '/hangs/slots.js': new Promise(() => {}) }
+    const load = (url) => hangs[url] ?? modules({ '/b/slots.js': { home: () => 'b' } })(url)
+
+    const slot = await loadSlots(['/hangs/slots.js', '/b/slots.js'], load, 20)
+
+    expect(slot('home', { place: 'line' })).toEqual(['b'])
+    expect(String(errors.mock.calls[0])).toContain('/hangs/slots.js')
+    errors.mockRestore()
+  })
+
   test('an export that is not a function is no slot', async () => {
     const slot = await loadSlots(['/a/slots.js'], modules({ '/a/slots.js': { home: 'not a function', default: () => 'x' } }))
 

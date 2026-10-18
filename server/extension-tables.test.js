@@ -32,6 +32,9 @@ function tablesIn(dir) {
   return names
 }
 
+// The CREATE statement sqlite_master holds for `name`.
+const sqlOf = (db, name) => db.query('SELECT sql FROM sqlite_master WHERE name = ?').get(name).sql
+
 // The fixture with each step counted as it runs, and `more` steps after its own.
 function counted(ran, more = []) {
   return { ...fixture, migrations: [...fixture.migrations, ...more].map((step, i) => (...args) => (ran.push(i), step(...args))) }
@@ -58,6 +61,8 @@ describe("an Extension's steps", () => {
     ["a fixture_… index on a core table", (db) => db.exec('CREATE TABLE fixture_kept (x INTEGER); CREATE INDEX fixture_by_name ON events (name)')],
     ['a changed core table', (db) => db.exec('CREATE TABLE fixture_kept (x INTEGER); ALTER TABLE events ADD COLUMN fixture_x INTEGER')],
     ['a dropped core table', (db) => db.exec('CREATE TABLE fixture_kept (x INTEGER); DROP TABLE site_visits')],
+    ['a core table made again as it was', (db) => db.exec(`CREATE TABLE fixture_kept (x INTEGER); DROP TABLE site_visits; ${sqlOf(db, 'site_visits')}`)],
+    ["the core's last-made table made again as it was", (db) => db.exec(`DROP TABLE extension_owns; ${sqlOf(db, 'extension_owns')}`)],
   ])('a step that touches %s fails the boot and leaves nothing behind', (_, step) => {
     const dir = mkdtempSync(join(tmpdir(), 'count-dracula-'))
     start({ dir, extensions: [] })
@@ -76,6 +81,14 @@ describe("an Extension's steps", () => {
     })
     expect(tablesIn(dir)).toContain('fixture_kept')
     expect(tablesIn(dir)).toContain('sqlite_autoindex_fixture_kept_1')
+  })
+})
+
+describe("an Extension's name and the core's tables", () => {
+  // Its steps may touch whatever is named <name>_…, so no core table or index may be: extension_owns,
+  // event_devices, ghost_buckets, golden_tickets, email_links, paired_devices, backfill_batches, fired_moments, ….
+  test.each(['extension', 'event', 'ghost', 'golden', 'email', 'paired', 'backfill', 'fired'])('%s, the first part of a core table, fails the boot', (name) => {
+    expect(() => start({ extensions: [{ ...fixture, name, owns: {}, migrations: [] }] })).toThrow(`${name}_`)
   })
 })
 

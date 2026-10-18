@@ -56,7 +56,7 @@ About this addendum:
 
 - **`startServer` takes an `extensions: [...]` option**, a list of entry modules. `server/main.js` fills it from the **`EXTENSIONS`** env key: a list of entry-module paths, imported at boot. Tests pass the option directly. With the key unset, the list is empty and nothing below happens.
 - **An entry module exports** `{ name, owns, migrations, start(core) }`:
-  - `name`: lower-case letters and digits (`/^[a-z][a-z0-9]*$/`). It must not collide with another Extension or with any core path (`/api`, `/door`, `/setup`, `/shared`, `/vendor`, …).
+  - `name`: lower-case letters and digits (`/^[a-z][a-z0-9]*$/`). It must not collide with another Extension or with any core path (`/api`, `/door`, `/setup`, `/shared`, `/vendor`, …). Nor may it be the first part of a core table or index (`extension_owns`, `event_devices`, …: its steps may touch `<name>_…`) or of a core env key (`GOOGLE_CLIENT_SECRET`, `SMTP_PASS`, …: its `env` is `<NAME>_*`; the core's keys are listed once, in `server/env-keys.js`).
   - `owns`: which of its tables hold a Household or Event id ([§6](#6-deleting-what-it-owns)).
   - `migrations`: its own list of steps ([§5](#5-its-tables)).
   - `start(core)` returns `{ handle(req, url), stop() }`.

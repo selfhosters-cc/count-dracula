@@ -53,3 +53,28 @@ describe('/extensions.js', () => {
     }
   })
 })
+
+// Every module a page at `path` loads before any of its code runs: its <script src>s and their static imports, as
+// served (a dynamic import(), which runs only where the page's code says, isn't followed).
+async function staticModules(app, path) {
+  const html = await (await fetch(`${app.url}${path}`)).text()
+  const queue = [...html.matchAll(/<script\b[^>]*\ssrc="(\/[^"?]+\.js)/g)].map((m) => m[1])
+  const seen = new Set()
+  while (queue.length) {
+    const module = queue.shift()
+    if (seen.has(module)) continue
+    seen.add(module)
+    const js = await (await fetch(`${app.url}${module}`)).text()
+    for (const [, , url] of js.matchAll(/(?:\bfrom\s*|^\s*import\s*)(['"])(\/[^'"?]+\.js)(?:\?v=\w+)?\1/gm)) queue.push(url)
+  }
+  return seen
+}
+
+describe('which pages load the Extensions\' slots.js', () => {
+  test("the Manager's pages do, before they render; the public share page never does (v2.2 §8)", async () => {
+    const app = start([fixture])
+
+    for (const page of ['/', '/setup', '/operator']) expect({ page, loads: (await staticModules(app, page)).has('/extensions.js') }).toEqual({ page, loads: true })
+    expect((await staticModules(app, '/share?key=x')).has('/extensions.js')).toBe(false)
+  })
+})
