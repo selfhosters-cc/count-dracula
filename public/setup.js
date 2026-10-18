@@ -364,7 +364,37 @@ function renderTonight(ctx) {
       others.length ? alsoOpen(others, ctx) : null,
       waits.length ? waiting(waits, ctx) : null,
       h('section', { data: { help: 'helpers' } }, h('h2', {}, '📱 Helpers'), helperBox('tonight')),
-      h('section', { data: { help: 'watch' } }, h('h2', {}, '📺 Watch'), ...watchBox())))
+      h('section', { data: { help: 'tv' } }, h('h2', {}, '📺 Your TV'), ...tvBox()),
+      h('section', { data: { help: 'watch' } }, h('h2', {}, '👀 Watch'), ...watchBox())))
+}
+
+// Your TV on Tonight: whether a paired TV is on (only a paired TV shows the helper and watch QRs), the code a bare
+// /tv shows, and Use this screen as the TV. Made once, so a half-typed code survives a redraw; the 3 s poll
+// keeps the line under the heading current.
+const pairInput = h('input', { placeholder: 'K7Q-M4X', ariaLabel: 'The code on the TV', autocomplete: 'off', autocapitalize: 'characters', spellcheck: false })
+const tvStatus = h('p', { className: 'muted' })
+const tvNodes = [
+  tvStatus,
+  h('form', { className: 'row', onsubmit: async (e) => {
+    e.preventDefault()
+    const code = pairInput.value.trim()
+    if (!code || !(await household.redeem(code))) return
+    pairInput.value = ''
+    say('✓ Paired: your TV is showing your board')
+  } }, pairInput, h('button', { className: 'primary', type: 'submit', textContent: 'Pair' })),
+  h('p', { className: 'muted', textContent: `On the TV, open ${location.host}/tv: it shows a code to type here, or a QR to scan with your phone. Or open Setup on the TV itself and:` }),
+  h('div', { className: 'row' }, h('button', { textContent: 'Use this screen as the TV', onclick: () => household.pairHere() })),
+]
+function tvBox() {
+  renderTvStatus()
+  return tvNodes
+}
+function renderTvStatus() {
+  const { paired = 0, tvLink = 0 } = house.screens ?? {}
+  const viewers = `${tvLink === 1 ? 'One screen is' : `${tvLink} screens are`} watching by the TV link, which can't show the QRs.`
+  tvStatus.textContent = paired
+    ? `✓ ${paired === 1 ? 'Your paired TV is on' : `${paired} paired TVs are on`}: it shows the helper and watch QRs.`
+    : `No paired TV is on.${tvLink ? ` ${viewers}` : ''} Pair your porch TV so it can show the QRs.`
 }
 
 // A code to read out or type in, always in sight: "Got a code?" on the homepage takes either.
@@ -530,6 +560,8 @@ setInterval(async () => {
   if (!res?.ok) return
   house = await res.json()
   ui.tvQr.until = Date.now() + house.joinQrMsLeft // shown or hidden from a door phone meanwhile
+  ui.watchQr.until = Date.now() + house.watchQrMsLeft
+  renderTvStatus()
   renderChecklist()
   help.update(screenKey()) // the checklist may have come or gone
 }, 3_000)

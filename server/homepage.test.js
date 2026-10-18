@@ -120,6 +120,24 @@ describe('/ is the homepage', () => {
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image">')
   })
 
+  test('a helper link and a TV link each preview what they are for, never the Household', async () => {
+    const { app } = boot()
+    const page = async (path) => (await fetch(`${app.url}${path}`, { headers: { 'X-Forwarded-Proto': 'https', Host: 'count-dracula.example.com' } })).text()
+
+    const helper = await page('/door?key=Ab3dEf7hJk')
+    const watch = await page('/tv/k/some-tv-token')
+
+    expect(helper).toContain('<meta property="og:title" content="Help count trick-or-treaters with us">')
+    expect(helper).toContain('<meta property="og:image" content="https://count-dracula.example.com/og-helper.png">')
+    expect(watch).toContain('<meta property="og:title" content="Watch our trick-or-treat count, live">')
+    expect(watch).toContain('<meta property="og:image" content="https://count-dracula.example.com/og-watch.png">')
+    for (const html of [helper, watch]) expect(html).not.toContain('og:url') // the link's secret isn't repeated
+    for (const image of ['/og-helper.png', '/og-watch.png']) {
+      const res = await get(app, image)
+      expect([await pngWidth(res.clone()), await pngHeight(res)]).toEqual([1200, 630])
+    }
+  })
+
   test('serves og-home.png at 1200×630, and og-image.png stays for share links', async () => {
     const { app } = boot()
 

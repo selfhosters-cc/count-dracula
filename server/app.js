@@ -532,7 +532,7 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
       const checklist = { tvWatching: (streams?.tvLink ?? 0) + (streams?.paired ?? 0) > 0, anyKids, named: displayName !== NEW_HOUSEHOLD_NAME, ...house.checklistMarks() }
       // The door's Event is what the TV shows: first-run's tick names it (spec v2.1 §8).
       const door = house.doorEvent()
-      return Response.json({ id: house.id, displayName, timeZone, location, checklist, testNightEventId: house.testNightId(), door: door && { id: door.id, name: door.name }, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), joinKey: house.joinKey(), joinCode: house.joinCode(), joinQrMsLeft: joinQrLeft(house), tvToken: house.tvToken(), watchCode: house.watchCode(), watchQrMsLeft: watchQrLeft(house), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
+      return Response.json({ id: house.id, displayName, timeZone, location, checklist, testNightEventId: house.testNightId(), door: door && { id: door.id, name: door.name }, lastYear: house.lastYear(), canEstimateLastYear: house.canEstimateLastYear(), screens: { paired: streams?.paired ?? 0, tvLink: streams?.tvLink ?? 0 }, joinKey: house.joinKey(), joinCode: house.joinCode(), joinQrMsLeft: joinQrLeft(house), tvToken: house.tvToken(), watchCode: house.watchCode(), watchQrMsLeft: watchQrLeft(house), manager: { email: session.manager.email, name: session.manager.name }, operator: session.operator })
     }),
     // Delete my Household: typed name to confirm; everything goes at once, and its streams close.
     'POST /api/household/delete': manager(async (req, house) => {
