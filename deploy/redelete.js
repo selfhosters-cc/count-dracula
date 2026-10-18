@@ -2,6 +2,7 @@
 // was deleted after the backup was taken. Run with the service stopped:
 //   bun deploy/redelete.js <restored database> <household id> [<household id> …]
 // The ids come from the damaged database's `deletions` table, or the journal's "household deleted" lines.
+// No Extension is loaded: its rows go too, from the tables the database recorded it owns (v2.2 §6).
 import { Database } from 'bun:sqlite'
 import { openLedger } from '../server/ledger.js'
 import { openAccounts } from '../server/accounts.js'
