@@ -29,6 +29,25 @@ async function run(script, ...args) {
   return { out, err, code }
 }
 
+describe('deploy/bump-version.js (every deploy)', () => {
+  test('the patch number goes up by one, the rest of package.json as it was', async () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'count-dracula-version-')), 'package.json')
+    await Bun.write(path, `${JSON.stringify({ name: 'count-dracula', version: '0.9.9', private: true }, null, 2)}\n`)
+
+    const { out, code } = await run('bump-version.js', path)
+
+    expect(code).toBe(0)
+    expect(out.trim()).toBe('0.9.10')
+    expect(readFileSync(path, 'utf8')).toBe(`${JSON.stringify({ name: 'count-dracula', version: '0.9.10', private: true }, null, 2)}\n`)
+  })
+
+  test("refuses a version that isn't major.minor.patch", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'count-dracula-version-')), 'package.json')
+    await Bun.write(path, JSON.stringify({ version: '1.0' }))
+    expect((await run('bump-version.js', path)).code).toBe(1)
+  })
+})
+
 describe('deploy/redelete.js (after restoring a backup)', () => {
   test('deletes the listed Households again, everything they own, and logs each in deletions', async () => {
     const { path, ids } = database()

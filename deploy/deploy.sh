@@ -2,6 +2,7 @@
 # Deploys the current checkout to the Count Dracula LXC: deploy/deploy.sh
 #   deploy/deploy.sh --rollback       puts the previous build back
 #   deploy/deploy.sh --check-freeze   only says whether now is inside the Oct 31 change freeze
+# Each deploy bumps the patch version in package.json (deploy/bump-version.js), commits and tags it, and pushes.
 # Refuses to ship if the tests fail. Copies the database first, every time. Keeps the database untouched;
 # writes /etc/count-dracula/config.json on the first deploy, and on a v1 server removes its dead keys once.
 # The private settings (deploy/local.env, git-ignored) go to /etc/count-dracula/env for the service.
@@ -81,6 +82,14 @@ fi
 
 echo "==> Tests"
 bun test >/dev/null 2>&1 || { echo "!! Tests fail: not deploying. Run bun test." >&2; exit 1; }
+
+# Every deploy is a release: the patch number goes up, committed and tagged (and pushed, so the repo has what's
+# live), before packing, so the build carries it. A deploy that fails after this just skips a number.
+version=$(bun deploy/bump-version.js package.json)
+git commit -q -m "v$version" -- package.json
+git tag "v$version"
+git push -q origin HEAD "refs/tags/v$version" || echo "!! Couldn't push v$version: push it yourself (git push --follow-tags)" >&2
+echo "==> Version $version"
 
 echo "==> Packing $(git rev-parse --short HEAD)$(git diff --quiet || echo ' (+ uncommitted changes)')"
 stage=$(mktemp -d)
