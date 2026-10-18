@@ -1,7 +1,7 @@
 # The Extension loader, its `core` and its addresses
 
 Type: build (AFK)
-Status: open
+Status: done
 Blocked by: —
 
 ## What to build
@@ -20,14 +20,14 @@ The core can start Extensions it doesn't contain. See [v2.2 §3–4](../spec-v2.
 
 ## Acceptance criteria
 
-- [ ] With `EXTENSIONS` unset, every existing test passes unchanged
-- [ ] The fixture's `handle` gets `GET /fixture/x` and `POST /api/fixture/y`; a cross-site POST to it is refused before `handle` runs; its responses carry the core's CSP
-- [ ] `GET /fixture` serves its `public/index.html` with `__VERSION__` filled; `GET /fixture/a.test.js` and `GET /fixture/../server/app.js` are 404
-- [ ] `core.serve(req, 'index.html')` from `handle` for `/fixture/abc123` gives the same templated page
-- [ ] A `Cache-Control` set by `handle` reaches the client unchanged
-- [ ] `core.env` holds only `FIXTURE_*` keys; `setSiteSwitch('other.x')` throws
-- [ ] `guard.manager` in an Extension route gives 401 signed out and 403 Suspended, as in a core route
-- [ ] A bad name, a name of `api`, `setup` or `door`, two Extensions with one name, and a throw in `start` each stop `startServer`
-- [ ] A throw in `handle` is a 500 counted on the health strip, and the server keeps serving
-- [ ] `app.stop()` calls the fixture's `stop()`
-- [ ] `bun test` passes
+- [x] With `EXTENSIONS` unset, every existing test passes unchanged
+- [x] The fixture's `handle` gets `GET /fixture/x` and `POST /api/fixture/y`; a cross-site POST to it is refused before `handle` runs; its responses carry the core's CSP
+- [x] `GET /fixture` serves its `public/index.html` with `__VERSION__` filled; `GET /fixture/a.test.js` and `GET /fixture/../server/app.js` are 404
+- [x] `core.serve(req, 'index.html')` from `handle` for `/fixture/abc123` gives the same templated page
+- [x] A `Cache-Control` set by `handle` reaches the client unchanged
+- [x] `core.env` holds only `FIXTURE_*` keys; `setSiteSwitch('other.x')` throws
+- [x] `guard.manager` in an Extension route gives 401 signed out and 403 Suspended, as in a core route
+- [x] A bad name, a name of `api`, `setup` or `door`, two Extensions with one name, and a throw in `start` each stop `startServer`
+- [x] A throw in `handle` is a 500 counted on the health strip, and the server keeps serving
+- [x] `app.stop()` calls the fixture's `stop()`
+- [x] `bun test` passes
