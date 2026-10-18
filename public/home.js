@@ -73,7 +73,7 @@ $('count-here').addEventListener('click', async () => {
 // Watch on this device: the Household's TV link, as in /setup.
 $('watch-here').addEventListener('click', async () => {
   const house = await getJson('/api/household')
-  location.href = house?.tvToken ? `/tv/k/${house.tvToken}` : '/setup'
+  location.href = house?.tvToken ? `/tv/k/${house.tvToken}?from=home` : '/setup'
 })
 
 // A TV's scan-to-pair QR on a signed-out phone lands here with ?pair=: every way in carries the code on to /setup.

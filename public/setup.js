@@ -376,7 +376,7 @@ function watchBox() {
   return [
     codeRow('👀 Watch code', formatCode(house.watchCode)),
     h('div', { className: 'row' },
-      h('button', { className: 'primary', textContent: '📺 Watch on this device', onclick: () => (location.href = household.tvUrl()) }),
+      h('button', { className: 'primary', textContent: '📺 Watch on this device', onclick: () => (location.href = `${household.tvUrl()}?from=setup`) }),
       h('button', { textContent: 'Send the TV link', onclick: () => share(household.tvUrl(), 'Watch our trick-or-treat count') }),
       h('button', { data: { watchQr: '' }, textContent: watchQrButton(watchQrLeft()).label, onclick: toggleWatchQr })),
     h('p', { className: 'muted', data: { watchQrSays: '' }, textContent: ui.watchQr.says, hidden: !ui.watchQr.says }),

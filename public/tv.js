@@ -683,6 +683,15 @@ document.addEventListener('mousemove', () => {
   pointerTimer = setTimeout(() => document.body.classList.remove('pointer'), POINTER_IDLE_MS)
 })
 
+// ---- the way back: a screen opened by Watch on this device (/setup, or the homepage's card) gets "‹ Setup" or
+// "‹ Home" while the mouse moves, and Esc. A sent TV link has no ?from=, so family watching never see it.
+const WAYS_BACK = { setup: ['/setup', '‹ Setup'], home: ['/', '‹ Home'] }
+const wayBack = tvToken ? WAYS_BACK[new URLSearchParams(location.search).get('from')] : null
+if (wayBack) {
+  Object.assign($('way-back'), { href: wayBack[0], textContent: wayBack[1], hidden: false })
+  document.addEventListener('keydown', (e) => e.key === 'Escape' && (location.href = wayBack[0]))
+}
+
 // ---- /tv?border: a test pattern for checking overscan on the real TV (spec §14)
 if (new URLSearchParams(location.search).has('border')) document.body.classList.add('overscan-test')
 
