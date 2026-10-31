@@ -7,6 +7,7 @@ import { fakeGoogle } from '../test/fake-google.js'
 import { cookieOf, signIn } from '../test/sign-in.js'
 import { Database } from 'bun:sqlite'
 import { doorNamed, namingTheDoor } from '../test/v1-night.js'
+import { readFrames } from '../test/sse.js'
 
 const running = []
 afterEach(() => running.splice(0).forEach((app) => app.stop()))
@@ -58,6 +59,19 @@ describe('share links', () => {
     expect(hidden).toBe(first)
     const body = await (await open(hidden)).text()
     expect(body).not.toContain('The Smiths')
+  })
+
+  test("who watched is on the Manager's summary, never on the share link", async () => {
+    const { app, cookie, info, eventId, share, open } = await setUp()
+    const res = await fetch(`${app.url}/api/stream?key=${encodeURIComponent(info.tvToken)}&deviceId=${'9'.repeat(32)}`)
+    const frames = readFrames(res)
+    await frames.next() // an Ended night is still the door's: a late viewer counts
+
+    const mine = await (await fetch(`${app.url}/api/summary?event=${eventId}`, { headers: { Cookie: cookie } })).json()
+    expect(mine.watching).toEqual({ viewers: 1, peak: 1 })
+    const shared = await (await open(await share())).json()
+    expect(shared).not.toHaveProperty('watching')
+    await frames.cancel()
   })
 
   test("there's no link for a night still running", async () => {

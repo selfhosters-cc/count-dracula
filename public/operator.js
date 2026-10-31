@@ -221,13 +221,16 @@ function render() {
         el('td', { textContent: n.wentLiveAt ? time(n.wentLiveAt) : '—' }),
         el('td', { textContent: String(n.kids) }),
         el('td', { textContent: devices(n.phones) }),
-        el('td', { textContent: devices(n.tvScreens) }))),
+        el('td', { textContent: devices(n.tvScreens) }),
+        el('td', { textContent: devices(n.viewers) }),
+        el('td', { textContent: devices(n.peakViewers) }))),
   )
   const real = detail.nights.filter((n) => !n.testNight && n.state !== 'upcoming')
   const sum = (key) => real.reduce((t, n) => t + (n[key] ?? 0), 0)
   $('d-totals').replaceChildren(
     el('td', { textContent: `${real.length} ${real.length === 1 ? 'night' : 'nights'}` }), el('td'), el('td'),
     el('td', { textContent: String(sum('kids')) }), el('td', { textContent: String(sum('phones')) }), el('td', { textContent: String(sum('tvScreens')) }),
+    el('td', { textContent: String(sum('viewers')) }), el('td', { textContent: String(Math.max(0, ...real.map((n) => n.peakViewers ?? 0))) }),
   )
 }
 

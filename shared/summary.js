@@ -60,5 +60,7 @@ export function nightFacts(summary) {
     numberToBeat: total,
     perMinute,
     nearby: summary.nearby ?? null,
+    // The TV-link screens that watched (a Manager's own summary only): null when unknown or none did.
+    watching: summary.watching?.viewers ? { viewers: summary.watching.viewers, peak: summary.watching.peak } : null,
   }
 }

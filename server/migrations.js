@@ -226,7 +226,8 @@ const MIGRATIONS = [
     db.exec("ALTER TABLE households ADD COLUMN checklist TEXT NOT NULL DEFAULT '{}'")
   },
 
-  // 19 → 20: the devices that joined each night, for /operator's Stats: a phone or TV screen once per Event,
+  // 19 → 20: the devices that joined each night, for /operator's Stats: a phone or TV screen once per Event (kind
+  // 'phone' or 'tv'; from 25, a TV screen is 'paired' or 'tvLink'),
   // by a hash of the Event and the device's own random id, so one device can't be followed across Events.
   // Nights that had already gone live count none, and show "—" (devices_counted 0) until a Reset.
   (db) => {
@@ -289,6 +290,16 @@ const MIGRATIONS = [
         household_col TEXT,
         event_col TEXT
       );
+    `)
+  },
+  // 24 → 25: who watched each night. event_devices rows now say 'paired' or 'tvLink' for a TV screen; the old
+  // 'tv' rows stay as they are (no telling the two apart), so a night with any keeps its TV-link viewers unknown.
+  // peak_viewers is the most TV-link screens on at once while it was the door's Event: NULL on a night that had
+  // already gone live (its peak so far is missed) until a Reset, as devices_counted did.
+  (db) => {
+    db.exec(`
+      ALTER TABLE events ADD COLUMN peak_viewers INTEGER DEFAULT 0;
+      UPDATE events SET peak_viewers = NULL WHERE went_live_at IS NOT NULL OR counts_only = 1;
     `)
   },
 ]

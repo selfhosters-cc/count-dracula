@@ -260,10 +260,12 @@ export function startServer({ configPath, port, heartbeatMs, env = process.env, 
       if (refusal) return new Response(refusal === 'tvFull' ? 'This TV is full, try again soon' : 'Too many connections', { status: refusal === 'tvFull' ? 503 : 429 })
       // The browser's own random id (live.js), so /operator can count the devices that joined each night.
       const deviceId = new URL(req.url).searchParams.get('deviceId')
-      if (DEVICE_ID.test(deviceId ?? '')) ledger.countDevice(house.id, deviceId, kind === 'phone' ? 'phone' : 'tv')
-      return kind === 'phone'
-        ? hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(phoneSnapshot(house), house) })
-        : hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => tvSnapshotFor(house, kind), shape: tvDelta })
+      if (DEVICE_ID.test(deviceId ?? '')) ledger.countDevice(house.id, deviceId, kind)
+      if (kind === 'phone') return hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => withNearby(phoneSnapshot(house), house) })
+      const stream = hub.attach(req, server, { householdId: house.id, kind, ip, credential: credential.token, snapshot: () => tvSnapshotFor(house, kind), shape: tvDelta })
+      // The most TV-link screens on at once, for the Night summary: the ones counted above, and this one.
+      if (kind === 'tvLink') ledger.noteViewers(house.id, (counts.households[house.id]?.tvLink ?? 0) + 1)
+      return stream
     }),
 
     // ---- Pairing a TV (spec §9): the bare /tv asks for a code and waits; a Manager redeems it in /setup.
@@ -587,7 +589,8 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
       if (!shared) return new Response('Not available', { status: 404 })
       const summary = ledger.household(shared.householdId).summary(shared.eventId)
       if (!summary) return new Response('Not available', { status: 404 })
-      return Response.json({ ...summary, displayName: shared.hideName ? '' : summary.displayName })
+      const { watching, ...shown } = summary // who watched is the Manager's to know, not the link's
+      return Response.json({ ...shown, displayName: shared.hideName ? '' : summary.displayName })
     },
     // "Report this page", from a share page: 5 per IP per day; no email, the Operator sees it on /operator.
     'POST /api/report': async (req, server) => {

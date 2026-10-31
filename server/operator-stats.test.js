@@ -107,6 +107,50 @@ describe('devices that joined a night', () => {
     expect(JSON.stringify(stats)).not.toContain('@example.com')
   })
 
+  test("TV screens split into paired TVs and TV-link viewers, with the most viewers on at once", async () => {
+    const { app, smith, info, connect, nights } = await setUp()
+    const { code, waitToken } = await (await fetch(`${app.url}/api/pair/code`, { method: 'POST' })).json()
+    await fetch(`${app.url}/api/pair/redeem`, { method: 'POST', headers: { Cookie: smith }, body: JSON.stringify({ code }) })
+    const { deviceToken } = await (await fetch(`${app.url}/api/pair/wait`, { method: 'POST', body: JSON.stringify({ waitToken }) })).json()
+
+    // Three viewers on the TV link at once, then one drops and comes back: still three at the busiest.
+    const open = []
+    const watch = async (deviceId, query = `key=${encodeURIComponent(info.tvToken)}`) => {
+      const res = await fetch(`${app.url}/api/stream?${query}&deviceId=${deviceId}`)
+      const frames = readFrames(res)
+      await frames.next()
+      open.push(frames)
+      return frames
+    }
+    await watch('d'.repeat(32))
+    await watch('e'.repeat(32))
+    const third = await watch('f'.repeat(32))
+    await third.cancel()
+    await watch('f'.repeat(32))
+    await watch(TV, `key=${encodeURIComponent(info.tvToken)}&device=${deviceToken}`) // the paired porch TV: not a viewer
+    await connect(info.joinKey, PHONE_A)
+
+    const test = (await nights()).find((n) => n.testNight)
+    expect(test).toMatchObject({ phones: 1, tvScreens: 4, viewers: 3, peakViewers: 3 })
+    await Promise.all(open.map((f) => f.cancel()))
+
+    await fetch(`${app.url}/api/admin`, { method: 'POST', headers: { Cookie: smith }, body: JSON.stringify({ type: 'reset', eventId: test.id }) })
+    expect((await nights()).find((n) => n.id === test.id)).toMatchObject({ tvScreens: 0, viewers: 0, peakViewers: 0 })
+  })
+
+  test("a night that counted TV screens before they were split keeps its viewers unknown, and a screen counts once", async () => {
+    const { info, connect, nights, dbPath } = await setUp()
+    const test = (await nights()).find((n) => n.testNight)
+    const db = new Database(dbPath)
+    const hash = new Bun.CryptoHasher('sha256').update(`${test.id}:${TV}`).digest('base64url')
+    db.query("INSERT INTO event_devices (event_id, kind, device) VALUES (?, 'tv', ?)").run(test.id, hash)
+    db.close()
+
+    await connect(info.tvToken, TV) // the same screen, back after the upgrade's restart
+
+    expect((await nights()).find((n) => n.id === test.id)).toMatchObject({ tvScreens: 1, viewers: null })
+  })
+
   test('only a hash per Event is kept, and Reset clears it', async () => {
     const { app, smith, info, connect, nights, dbPath } = await setUp()
     await connect(info.joinKey, PHONE_A)

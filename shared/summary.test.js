@@ -48,6 +48,13 @@ describe('night facts', () => {
     expect(f.board.map((t) => [t.name, t.count])).toEqual([['Witch', 3], ['Ghost', 1], ['Bluey', 1]])
   })
 
+  test('who watched on the TV link: only when someone did, and only on a summary that says (a share link never does)', () => {
+    expect(nightFacts({ ...night, watching: { viewers: 12, peak: 7 } }).watching).toEqual({ viewers: 12, peak: 7 })
+    expect(nightFacts({ ...night, watching: { viewers: 0, peak: 0 } }).watching).toBeNull()
+    expect(nightFacts({ ...night, watching: { viewers: null, peak: null } }).watching).toBeNull()
+    expect(nightFacts(night).watching).toBeNull()
+  })
+
   test('the barcode has a bar for every minute from the first kid to the last', () => {
     const f = nightFacts(night)
 

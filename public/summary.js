@@ -120,11 +120,20 @@ export function buildSlides(summary, { showName = true, closing = [] } = {}) {
           text('line', `${f.nearby.houses === 1 ? 'house was' : 'houses were'} counting near you when your night ended, with ${f.nearby.kids30 ? `~${fmt(f.nearby.kids30)}` : 'under 5'} kids in their last half hour.${f.nearby.topCostume ? ` Top costume: ${costume(f.nearby.topCostume)}.` : ''}`),
         ]
       : null,
+    f.watching
+      ? [
+          text('eyebrow', 'Watching along 📺'),
+          text('huge', fmt(f.watching.viewers)),
+          text('line', `${f.watching.viewers === 1 ? 'screen' : 'screens'} watched your night on the TV link${f.watching.peak ? `, ${fmt(f.watching.peak)} at once at the busiest` : ''}.`),
+        ]
+      : null,
     [receipt(summary, f, showName)],
     [text('eyebrow', who), text('huge', fmt(f.total)), text('line', [f.verdict, f.top ? `👑 ${f.top.name}` : null, f.peak ? `⏰ ${f.peakText}` : null, f.won.length ? `🎫 ${f.won.length}` : null].filter(Boolean).join(' · ')), ...closing],
   ]
-  // The intro, the closing card and the receipt (which prints its own) carry no brand line.
-  return slides.map((content, i) => (content ? { content, background: `s${i}`, branded: i > 0 && i < 7 } : null)).filter(Boolean)
+  // Each slide's background by its place: s7 is the receipt's, s8 the closing card's, s9 Watching along's. The
+  // intro, the closing card and the receipt (which prints its own) carry no brand line.
+  const backgrounds = ['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's9', 's7', 's8']
+  return slides.map((content, i) => (content ? { content, background: backgrounds[i], branded: i > 0 && i < 8 } : null)).filter(Boolean)
 }
 
 // ---- the stage: tap the right two-thirds (or → / space) for the next slide, the left third (or ←) for back

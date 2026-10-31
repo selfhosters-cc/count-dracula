@@ -113,6 +113,10 @@ const isOpen = (event) => event.state === 'live' || event.state === 'ended'
 // A night that's over, Ended or Past: only then do its numbers leave the Ledger (recap, summary, night cards).
 const isOver = (event) => event.state === 'ended' || event.state === 'past'
 // An events row `e` that is its Household's door's Event: open, with the latest go-live stamp.
+// An Event e's TV-link screens: null before devices were counted, or with old 'tv' rows that don't say which.
+const VIEWERS = `CASE WHEN e.devices_counted AND NOT EXISTS (SELECT 1 FROM event_devices d WHERE d.event_id = e.id AND d.kind = 'tv')
+  THEN (SELECT COUNT(*) FROM event_devices d WHERE d.event_id = e.id AND d.kind = 'tvLink') END`
+
 const DOOR_ROW = `e.state IN ('live', 'ended') AND e.id = (
   SELECT d.id FROM events d WHERE d.household_id = e.household_id AND d.state IN ('live', 'ended')
   ORDER BY d.went_live_at DESC, d.id DESC LIMIT 1)`
@@ -360,7 +364,8 @@ export function openLedger(db, config) {
     },
 
     // A phone or TV screen that opened a stream joins its Household's door's Event, once per Event and kind
-    // (/operator's Stats). Only a hash of the Event and its id is kept, never the id itself.
+    // ('phone', 'paired' or 'tvLink'), for /operator's Stats and the Night summary. Only a hash of the Event and
+    // its id is kept, never the id itself.
     countDevice(householdId, deviceId, kind) {
       const door = db.query(`SELECT e.id FROM events e WHERE e.household_id = ? AND ${DOOR_ROW}`).get(householdId)
       if (!door) return
@@ -368,9 +373,17 @@ export function openLedger(db, config) {
       db.query('INSERT OR IGNORE INTO event_devices (event_id, kind, device) VALUES (?, ?, ?)').run(door.id, kind, device)
     },
 
+    // The TV-link screens on now (the porch TV too, if it isn't paired): the door's Event keeps the most it saw.
+    noteViewers(householdId, watching) {
+      const door = db.query(`SELECT e.id FROM events e WHERE e.household_id = ? AND ${DOOR_ROW}`).get(householdId)
+      if (door) db.query('UPDATE events SET peak_viewers = ?2 WHERE id = ?1 AND peak_viewers < ?2').run(door.id, watching)
+    },
+
     // Every Event that went live (or is Upcoming), for /operator's Stats, or one Household's: [{ id, householdId,
-    // name, state, wentLiveAt, testNight, kids, phones, tvScreens }]. Imported and estimated counts aren't nights;
-    // phones and tvScreens are null on a night that went live before devices were counted.
+    // name, state, wentLiveAt, testNight, kids, phones, tvScreens, viewers, peakViewers }]. Imported and estimated
+    // counts aren't nights; phones and tvScreens are null on a night that went live before devices were counted.
+    // tvScreens counts each screen once, paired or not; viewers are the TV-link ones alone, null on a night that
+    // counted TV screens before the two were told apart; peakViewers, the most at once, null before it was kept.
     nights(householdId = null) {
       return db
         .query(`
@@ -378,7 +391,8 @@ export function openLedger(db, config) {
             e.id IS h.test_night_event_id AS testNight,
             (SELECT COUNT(*) FROM kids k WHERE k.event_id = e.id AND k.deleted_at IS NULL) AS kids,
             CASE WHEN e.devices_counted THEN (SELECT COUNT(*) FROM event_devices d WHERE d.event_id = e.id AND d.kind = 'phone') END AS phones,
-            CASE WHEN e.devices_counted THEN (SELECT COUNT(*) FROM event_devices d WHERE d.event_id = e.id AND d.kind = 'tv') END AS tvScreens
+            CASE WHEN e.devices_counted THEN (SELECT COUNT(DISTINCT device) FROM event_devices d WHERE d.event_id = e.id AND d.kind != 'phone') END AS tvScreens,
+            ${VIEWERS} AS viewers, e.peak_viewers AS peakViewers
           FROM events e JOIN households h ON h.id = e.household_id
           WHERE e.counts_only = 0 AND (?1 IS NULL OR e.household_id = ?1) ORDER BY e.id
         `)
@@ -973,7 +987,7 @@ export function openLedger(db, config) {
         for (const table of ['kids', 'backfill_batches', 'fired_moments', 'golden_tickets', 'share_links', 'event_devices']) db.query(`DELETE FROM ${table} WHERE event_id = ?`).run(event.id)
         deleteOwned(db, { event: event.id })
         db.query(`
-          UPDATE events SET state = 'upcoming', went_live_at = NULL, ended_automatically = 0, summary_nearby = NULL, devices_counted = 1,
+          UPDATE events SET state = 'upcoming', went_live_at = NULL, ended_automatically = 0, summary_nearby = NULL, devices_counted = 1, peak_viewers = 0,
             tick_note = NULL, tick_note_at = NULL, tick_note_for = NULL,
             goes_live_at = CASE WHEN goes_live_at > ? THEN goes_live_at END
           WHERE id = ?
@@ -1394,6 +1408,8 @@ export function openLedger(db, config) {
           recap,
           switches: settings.switches,
           nearby: event.summary_nearby ? JSON.parse(event.summary_nearby) : null,
+          // For the Manager alone: a share link's page leaves it out (app.js).
+          watching: db.query(`SELECT ${VIEWERS} AS viewers, e.peak_viewers AS peak FROM events e WHERE e.id = ?`).get(event.id),
         }
       },
 
