@@ -57,7 +57,7 @@ describe('markup built in the browser', () => {
   // Each of these was read and builds only static markup, esc()'d text, numbers or the QR library's SVG. Names
   // people type (households, nights, costumes, phones) go in as text. A new one needs the same check before it
   // joins the list: the CSP stops scripts, not a <meta> redirect or a <style> over the TV.
-  const CHECKED = { 'door.js': 3, 'setup.js': 1, 'summary.js': 2, 'tv.js': 5, 'tally.js': 1, 'setup-household.js': 1 }
+  const CHECKED = { 'door.js': 3, 'setup.js': 1, 'summary.js': 2, 'tv.js': 5, 'tally.js': 1, 'setup-household.js': 1, 'watch-sign.js': 1 }
 
   test('sets HTML only where it was checked', async () => {
     const found = {}

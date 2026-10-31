@@ -61,6 +61,7 @@ const ROUTES = [
   ['GET', '/api/export?event=LIVE', null, ['session']],
   ['POST', '/api/admin', () => ({ type: 'updateTag', tagId: 'TAG', name: 'Witchy' }), ['session']],
   ['GET', '/tally', null, ['session']],
+  ['GET', '/watch-sign', null, ['session']],
   ['GET', '/setup', null, ['session']],
 ]
 

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Watch-along sign</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <link rel="stylesheet" href="/vendor/fonts/fonts.css">
+  <style>
+    /* One printed page for the porch, a window or the fridge: the TV link's QR and its watch code. Reads in black
+       and white too: the orange is only an accent. */
+    @page { size: letter portrait; margin: 14mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; font-family: "Fredoka", system-ui, sans-serif; color: #111; background: #fff; text-align: center; }
+    .sign { max-width: 190mm; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 6mm; }
+    h1 { font-family: "Creepster", Impact, fantasy; font-weight: 400; font-size: 54pt; line-height: 1; margin: 4mm 0 0; color: #e86100; letter-spacing: .02em; }
+    .for { font-size: 18pt; margin: 0; }
+    .for b { font-weight: 600; }
+    #qr { width: 120mm; height: 120mm; }
+    #qr svg { width: 100%; height: 100%; display: block; }
+    .scan { font-size: 20pt; font-weight: 600; margin: 0; }
+    .code { font-size: 15pt; margin: 0; }
+    .code b { font-family: "Bungee", "Fredoka", sans-serif; font-weight: 400; font-size: 24pt; letter-spacing: .06em; white-space: nowrap; }
+    .brand { font-size: 11pt; color: #555; margin: 2mm 0 0; }
+    .screen-only { max-width: 150mm; margin: 8mm auto 0; font-size: 12pt; color: #444; }
+    .print { font: inherit; font-size: 13pt; padding: 8pt 16pt; margin-top: 6pt; cursor: pointer; }
+    @media print { body { padding: 0; } .screen-only { display: none; } }
+  </style>
+</head>
+<body>
+  <main class="sign">
+    <h1>Watch our count live!</h1>
+    <p class="for" id="for" hidden>Trick-or-treaters at <b id="name"></b></p>
+    <div id="qr" role="img" aria-label="QR code to watch along"></div>
+    <p class="scan">📱 Scan to watch tonight's count on your phone</p>
+    <p class="code" id="code-line"></p>
+    <p class="brand">Count Dracula 🧛</p>
+  </main>
+  <div class="screen-only">
+    <button class="print" id="print">🖨 Print</button>
+    <p>Anyone who scans this watches your nights, read-only, like your porch TV. To stop every copy working, Rotate TV link in Setup, then print a new sign.</p>
+  </div>
+  <script type="module" src="/watch-sign.js"></script>
+</body>
+</html>

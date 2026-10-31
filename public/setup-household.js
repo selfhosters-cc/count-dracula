@@ -47,6 +47,8 @@ export function wireHousehold(core) {
     $('qr-full').hidden = false
   })
   $('qr-full').addEventListener('click', () => ($('qr-full').hidden = true))
+  // A printed watch-along sign for the porch or the fridge: the same link, in its own tab to print.
+  $('tv-sign').addEventListener('click', () => open('/watch-sign', '_blank'))
   // Use this screen as the TV: paired, as if by its code, then the bare /tv, which keeps it like any paired TV.
   async function pairHere() {
     const res = await fetch('/api/pair/here', { method: 'POST' }).catch(() => null)

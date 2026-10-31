@@ -30,7 +30,7 @@ const PUBLIC_DIR = resolve(import.meta.dir, '../public')
 const SHARED_DIR = resolve(import.meta.dir, '../shared') // served at /shared/ for the browser
 const KIOSK_DIR = resolve(import.meta.dir, '../kiosk') // the TV laptop's launchers, downloadable from /kiosk/
 const PRIVACY_PAGE = resolve(PUBLIC_DIR, 'privacy.html')
-const PAGES = { '/': '/home.html', '/door': '/door.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html', '/privacy': '/privacy.html', '/summary': '/summary.html' }
+const PAGES = { '/': '/home.html', '/door': '/door.html', '/tv': '/tv.html', '/setup': '/setup.html', '/tally': '/tally.html', '/watch-sign': '/watch-sign.html', '/help/tv': '/help-tv.html', '/operator': '/operator.html', '/privacy': '/privacy.html', '/summary': '/summary.html' }
 const ADMIN_COMMANDS = new Set(['createEvent', 'goLive', 'settings', 'changeKey', 'deleteEvent', 'createTag', 'updateTag', 'deleteTag', 'addTicket', 'backfill', 'removeBatch', 'rename', 'rotateTvLink', 'setLocation', 'setLastYear', 'checklist', 'close', 'reset'])
 
 // What a TV-link holder gets (spec §9): what the TV draws, without each kid's phone name.
@@ -538,6 +538,8 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
     'GET /setup': managerPage('/setup'),
     // The print tally sheet, opened from /setup.
     'GET /tally': managerPage('/tally'),
+    // The watch-along sign: the TV link's QR and watch code on a printed page, opened from /setup's 📺 Your TV.
+    'GET /watch-sign': managerPage('/watch-sign'),
     'GET /api/household': manager((req, house, session) => {
       const { displayName, timeZone, location } = ledger.households().find((h) => h.id === house.id)
       const streams = hub.counts().households[house.id]

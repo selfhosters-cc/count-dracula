@@ -203,10 +203,10 @@ describe("every script has this build's address (Cloudflare forces browsers to k
 })
 
 describe('every "go sign in" points at /', () => {
-  test('/setup, /tally, /summary and /operator without a session go to the Sign in form', async () => {
+  test('/setup, /tally, /watch-sign, /summary and /operator without a session go to the Sign in form', async () => {
     const { app } = boot()
 
-    for (const path of ['/setup', '/tally', '/summary']) {
+    for (const path of ['/setup', '/tally', '/watch-sign', '/summary']) {
       const res = await get(app, path)
       expect({ path, status: res.status, to: res.headers.get('Location') }).toEqual({ path, status: 303, to: '/#sign-in' })
     }
