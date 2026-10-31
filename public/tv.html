@@ -140,6 +140,12 @@
     #fx .flyer { position: absolute; top: 0; opacity: 0; will-change: transform; }
     #fx .shout { position: absolute; left: 50%; top: 22%; translate: -50% 0; font-family: var(--f-spooky); white-space: nowrap;
       font-size: clamp(40px, 9vw, 180px); color: var(--ink); text-shadow: 0 0 30px #7a3cff; }
+    /* Huge words: the door phone's 📢 Words and the idle spooks, over everything but the takeovers */
+    #word { position: fixed; inset: 0; z-index: 38; display: grid; place-content: center; padding: 6vh 5vw; pointer-events: none;
+      background: radial-gradient(ellipse at 50% 50%, #0a0614e6 30%, #0a0614a0 75%); opacity: 0; }
+    #word[hidden] { display: none; }
+    #word-text { font-family: var(--f-spooky); font-size: clamp(72px, 15vw, 320px); line-height: .95; text-align: center; text-wrap: balance;
+      color: var(--pumpkin); letter-spacing: .02em; text-shadow: 0 0 .15em #ff6a00aa, 0 0 .5em #7a3cffaa, 0 .06em 0 #000; }
     /* The idle teaser: the new-costume banner, toned down (spec §7 States) */
     #teaser { position: fixed; left: 0; right: 0; top: 0; z-index: 30; transform: translateY(-110%); background: var(--night-2);
       border-bottom: 2px solid var(--grid); padding: 1.6vh 5vw; pointer-events: none; text-align: center;
@@ -273,6 +279,7 @@
   </div>
   <div id="takeover" aria-live="assertive"><div><div class="k" id="take-k"></div><div class="h" id="take-h"></div><div class="s" id="take-s"></div></div></div>
   <div id="fx"></div>
+  <div id="word" hidden><div id="word-text"></div></div>
   <aside id="join-qr" hidden>
     <div class="h" id="jq-h"></div>
     <div class="s" id="jq-for"></div>

@@ -149,7 +149,14 @@ export const DEFAULT_SWITCHES = {
   estimatedGhost: true, // v2: "About how many kids came last year?" (spec §14)
   siteTopCostume: true, // v2: the site line's "top costume" clause (spec §14), the first extra to drop
   nearbyEdges: true, // v2.1: "near you" across Area edges (spec v2.1 §10); off: the Household's own Area
+  wordBoard: true, // the door phone's 📢 Words: a fixed phrase, huge on the TV
+  idleSpooks: true, // the TV's huge spooky lines when no kid has come for a while
 }
+
+// The word board's phrases, site-wide like the soundboard's (config `words` replaces them): fixed, so nobody can
+// put their own text on a stranger's TV. At most 12, each at most 24 characters.
+const DEFAULT_WORDS = ['BOO!', 'HAPPY HALLOWEEN!', 'TRICK OR TREAT!', 'GREAT COSTUME!', 'TAKE TWO!', 'JUST ONE, PLEASE', 'SAY THANK YOU!', 'MWAHAHAHA!', 'BEWARE…', 'WELCOME, MORTALS', 'WATCH YOUR STEP', 'SEE YOU NEXT YEAR!']
+const WORD_COOLDOWN_MS = 3_000
 
 // The estimated ghost's shape (spec §14): our own 2025 night's five half-hours, as fractions of its total, so
 // no count is in the code. Read at the same local times in each Household's zone.
@@ -184,6 +191,7 @@ export function openLedger(db, config) {
   const now = config.now ?? Date.now
   const random = config.random ?? Math.random
   const soundboard = (config.soundboard ?? []).slice(0, 6).map((s, i) => ({ slot: i + 1, ...s }))
+  const words = (config.words ?? DEFAULT_WORDS).slice(0, 12).map((text, i) => ({ slot: i + 1, text: String(text).slice(0, 24) }))
 
   db.exec('PRAGMA journal_mode = WAL')
   db.exec('PRAGMA synchronous = NORMAL') // a power cut can lose the last commits; no multi-second stalls (spec §4)
@@ -541,6 +549,7 @@ export function openLedger(db, config) {
 
   function householdLedger(householdId) {
     let lastBoardAt = -Infinity
+    let lastWordAt = -Infinity
 
     // Golden tickets (spec §9): drawn blind at Go live, one per band across 10–80% of the Race-against
     // total, or of Expected kids with no ghost. Integer maths, so the bands don't drift with float error.
@@ -856,6 +865,20 @@ export function openLedger(db, config) {
         if (at - lastBoardAt < SOUNDBOARD_COOLDOWN_MS) return []
         lastBoardAt = at
         return [{ type: 'soundboard', eventId: event.id, slot, label: entry.label }]
+      },
+
+      // 📢 Words: a press puts its phrase huge on the TV, like the soundboard: at most once per 3 s across all
+      // phones (its own cooldown, so a word and a sound can go together), only on the Event the TV shows.
+      word({ slot, ...night }) {
+        const event = openNight(night)
+        if (!switches.wordBoard) throw new BadCommand('The word board is switched off')
+        const entry = words.find((w) => w.slot === slot)
+        if (!entry) throw new BadCommand('No such word')
+        if (doorRow()?.id !== event.id) throw new BadCommand(`"${event.name}" isn't on the TV any more`)
+        const at = now()
+        if (at - lastWordAt < WORD_COOLDOWN_MS) return []
+        lastWordAt = at
+        return [{ type: 'word', eventId: event.id, slot, text: entry.text }]
       },
 
       // "🌙 End the night" (spec v2.1 §3): Live → Ended. It stays open, so stragglers still count, until it's
@@ -1456,7 +1479,7 @@ export function openLedger(db, config) {
           ghost: ghostOf(event),
           golden: goldenSummary(event),
           recap: recapOf(event),
-          settings: { switches, mix: currentMix(), soundboard: switches.soundboard ? soundboard : [] },
+          settings: { switches, mix: currentMix(), soundboard: switches.soundboard ? soundboard : [], words: switches.wordBoard ? words : [] },
           timeZone: household().time_zone,
           seq,
         }
@@ -1466,7 +1489,7 @@ export function openLedger(db, config) {
       // Event (`next`, for its name and countdown), the Household's settings, and seq, so the stream's deltas
       // still line up.
       idleSnapshot() {
-        return { event: null, next: nextUpcoming(), tags: [], kids: [], ghost: null, golden: null, recap: null, settings: { switches, mix: currentMix(), soundboard: switches.soundboard ? soundboard : [] }, timeZone: household().time_zone, seq }
+        return { event: null, next: nextUpcoming(), tags: [], kids: [], ghost: null, golden: null, recap: null, settings: { switches, mix: currentMix(), soundboard: switches.soundboard ? soundboard : [], words: switches.wordBoard ? words : [] }, timeZone: household().time_zone, seq }
       },
     }
   }

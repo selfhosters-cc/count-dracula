@@ -53,6 +53,7 @@ const ROUTES = [
   ['POST', '/api/resume', () => ({}), ['key']],
   ['POST', '/api/release', () => ({}), ['key']],
   ['POST', '/api/soundboard', () => ({ slot: 1 }), ['key']],
+  ['POST', '/api/word', () => ({ slot: 1 }), ['key']],
   ['POST', '/api/mix', () => ({ volume: 0.5, mutes: {} }), ['key']],
   ['GET', '/api/household', null, ['session']],
   ['GET', '/api/events', null, ['session']],

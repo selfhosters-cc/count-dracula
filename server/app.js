@@ -655,6 +655,13 @@ ${mail ? emailForm(`<input type="hidden" name="invite" value="${esc(key)}">`) : 
       hub.publish(house.id, deltas)
       return Response.json({ played: deltas.length > 0 })
     }),
+    // 📢 Words: the same, for the word board.
+    'POST /api/word': write(async (req, house) => {
+      const { slot, eventId, stamp } = await req.json()
+      const deltas = house.apply({ type: 'word', slot, eventId, stamp })
+      hub.publish(house.id, deltas)
+      return Response.json({ shown: deltas.length > 0 })
+    }),
     'POST /api/mix': write(async (req, house) => {
       const { volume, mutes } = await req.json()
       hub.publish(house.id, house.apply({ type: 'mix', volume, mutes }))

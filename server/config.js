@@ -15,5 +15,7 @@ export function loadConfig(configPath) {
     switches: raw.switches ?? {},
     // 6 slots (3 homemade, 3 stock): the button label, the file the TV plays, and its TV visual.
     soundboard: (raw.soundboard ?? []).map((slot) => ({ label: slot.label, file: slot.file ?? null, shout: slot.shout ?? null, emoji: slot.emoji ?? null })),
+    // The word board's phrases; without them, the built-in ones (ledger.js).
+    words: Array.isArray(raw.words) ? raw.words.map(String) : undefined,
   }
 }

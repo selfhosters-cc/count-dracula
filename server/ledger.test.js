@@ -105,6 +105,8 @@ describe('feature switches', () => {
       estimatedGhost: true,
       siteTopCostume: true,
       nearbyEdges: true,
+      wordBoard: true,
+      idleSpooks: true,
     })
   })
 })
@@ -148,7 +150,7 @@ describe('snapshot', () => {
       },
       golden: { left: 5, nextIsGolden: false },
       recap: null,
-      settings: { switches: expect.any(Object), mix: expect.any(Object), soundboard: [] },
+      settings: { switches: expect.any(Object), mix: expect.any(Object), soundboard: [], words: expect.any(Array) },
       timeZone: 'America/Toronto',
       seq: 1,
     })
@@ -986,6 +988,43 @@ describe('soundboard', () => {
     expect(() => setup().ledger.apply({ type: 'soundboard', slot: 7 })).toThrow(BadCommand)
     const off = setup({ switches: { soundboard: false } })
     expect(() => off.ledger.apply({ type: 'soundboard', slot: 1 })).toThrow(BadCommand)
+  })
+})
+
+describe('word board', () => {
+  function setup(config = {}) {
+    let clockMs = 1_000_000
+    const ledger = openV1Night(new Database(':memory:'), { ghostSeed, now: () => clockMs, ...config })
+    return { ledger, wait: (ms) => (clockMs += ms) }
+  }
+
+  test('a press puts its words on the TV; 12 fixed words unless the config says otherwise', () => {
+    const { ledger } = setup()
+    const words = ledger.snapshot().settings.words
+    expect(words).toHaveLength(12)
+    expect(words[0]).toEqual({ slot: 1, text: 'BOO!' })
+    expect(ledger.apply({ type: 'word', slot: 2 })).toMatchObject([{ type: 'word', slot: 2, text: words[1].text }])
+
+    const own = setup({ words: ['HI THERE', 'x'.repeat(40)] }).ledger
+    expect(own.snapshot().settings.words).toEqual([{ slot: 1, text: 'HI THERE' }, { slot: 2, text: 'x'.repeat(24) }])
+  })
+
+  test("one 3 s cooldown across every word and phone, apart from the soundboard's", () => {
+    const { ledger, wait } = setup({ soundboard: [{ label: 'Boo' }] })
+    ledger.apply({ type: 'word', slot: 1 })
+    expect(ledger.apply({ type: 'soundboard', slot: 1 })).toHaveLength(1) // a sound still plays
+
+    wait(2_999)
+    expect(ledger.apply({ type: 'word', slot: 5 })).toEqual([])
+    wait(1)
+    expect(ledger.apply({ type: 'word', slot: 5 })).toHaveLength(1)
+  })
+
+  test('refuses a word that isn\'t on the board, and everything with the switch off', () => {
+    expect(() => setup().ledger.apply({ type: 'word', slot: 13 })).toThrow(BadCommand)
+    const off = setup({ switches: { wordBoard: false } })
+    expect(off.ledger.snapshot().settings.words).toEqual([])
+    expect(() => off.ledger.apply({ type: 'word', slot: 1 })).toThrow(BadCommand)
   })
 })
 

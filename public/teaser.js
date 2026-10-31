@@ -23,8 +23,24 @@ export function teaserLines(state, realNowMs) {
   return lines
 }
 
-// show(line) / hide() render it; lines() supplies what to say when it's time.
-export function createTeaser({ clock, show, hide, lines }) {
+// The idle spooks: huge lines over the whole TV when no kid has come for a while (createTeaser with idleMs
+// 2 minutes and showMs 6 s). Fixed, like the word board's phrases.
+export const SPOOKS = ['IS ANYONE OUT THERE?', 'WE HAVE CANDY…', 'COME CLOSER…', 'KNOCK IF YOU DARE', 'THE CANDY AWAITS', 'TRICK… OR TREAT?', "DON'T BE SHY", 'THE BOWL IS HUNGRY', 'WE SEE YOU THERE…', 'BOO!']
+
+// SPOOKS shuffled (so two TVs side by side don't say the same thing), or none with the switch off.
+export function spookLines(state, random = Math.random) {
+  if (state.settings.switches.idleSpooks === false) return []
+  const lines = [...SPOOKS]
+  for (let i = lines.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1))
+    ;[lines[i], lines[j]] = [lines[j], lines[i]]
+  }
+  return lines
+}
+
+// show(line) / hide() render it; lines() supplies what to say when it's time. idleMs and showMs: how long with
+// no taps before a line, and how long each stays up (the teaser's 45 s and 8 s unless told).
+export function createTeaser({ clock, show, hide, lines, idleMs = IDLE_MS, showMs = SHOW_MS }) {
   let timer = null
   let showing = false
   let paused = false
@@ -32,7 +48,7 @@ export function createTeaser({ clock, show, hide, lines }) {
 
   function wait() {
     clock.clearTimeout(timer)
-    if (!paused) timer = clock.setTimeout(appear, IDLE_MS)
+    if (!paused) timer = clock.setTimeout(appear, idleMs)
   }
 
   function appear() {
@@ -44,7 +60,7 @@ export function createTeaser({ clock, show, hide, lines }) {
       hide()
       showing = false
       wait()
-    }, SHOW_MS)
+    }, showMs)
   }
 
   function stop() {

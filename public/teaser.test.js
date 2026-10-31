@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createTeaser, teaserLines } from './teaser.js'
+import { SPOOKS, createTeaser, spookLines, teaserLines } from './teaser.js'
 import { fakeClock } from '../test/fake-clock.js'
 import seed2025 from '../config/2025-counts.json'
 
@@ -87,5 +87,26 @@ describe('teaser timing', () => {
     await clock.advance(10_000)
 
     expect(log).toEqual([[45_000, 'one'], [53_000, null]])
+  })
+})
+
+describe('idle spooks', () => {
+  test('wait 2 minutes with no taps, show a huge line for 6 s, and come back every ~2 minutes with the next', async () => {
+    const clock = fakeClock(0)
+    const log = []
+    const spooks = createTeaser({ clock, idleMs: 120_000, showMs: 6_000, show: (line) => log.push([clock.now(), line]), hide: () => log.push([clock.now(), null]), lines: () => ['A', 'B'] })
+    spooks.activity()
+
+    await clock.advance(250_000)
+
+    expect(log).toEqual([[120_000, 'A'], [126_000, null], [246_000, 'B']])
+  })
+
+  test('are a fixed list, in a shuffled order that changes from TV to TV, and only with the switch on', () => {
+    expect(SPOOKS.length).toBeGreaterThanOrEqual(8)
+    for (const line of SPOOKS) expect(line.length).toBeLessThanOrEqual(24)
+    const lines = spookLines({ settings: { switches: { idleSpooks: true } } }, () => 0.5)
+    expect([...lines].sort()).toEqual([...SPOOKS].sort())
+    expect(spookLines({ settings: { switches: { idleSpooks: false } } })).toEqual([])
   })
 })

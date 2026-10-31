@@ -14,6 +14,7 @@
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="/vendor/fonts/fonts.css"><!-- Creepster, for the 📢 Words buttons -->
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="/icon.png">
   <style>
@@ -111,7 +112,14 @@
     #board button { border-radius: 18px; background: var(--panel); font-weight: 800; font-size: 17px; padding: 6px;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; transition: opacity .2s; }
     #board button .e { font-size: 44px; line-height: 1; }
-    #board.cooling button { opacity: .45; }
+    #board.cooling button, #words.cooling button { opacity: .45; }
+    .board-tabs { display: flex; gap: 8px; }
+    .board-tabs button { flex: 1; height: 44px; border-radius: 12px; background: var(--panel2); font-weight: 800; font-size: 16px; }
+    .board-tabs button[aria-pressed="true"] { background: var(--orange); color: #1a0d00; }
+    .board-tabs[hidden], #board[hidden], #words[hidden] { display: none; }
+    #words { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 8px; }
+    #words button { border-radius: 14px; background: var(--panel); color: var(--orange); font-family: "Creepster", Impact, fantasy;
+      font-size: 21px; letter-spacing: .03em; line-height: 1.05; padding: 4px 8px; transition: opacity .2s; }
     .cool { height: 8px; border-radius: 999px; background: var(--panel2); overflow: hidden; }
     #cool-fill { height: 100%; width: 0; background: var(--orange); }
     #sounds-tab { position: absolute; right: 0; top: 42%; z-index: 15; width: 30px; height: 76px; border-radius: 14px 0 0 14px;
@@ -277,9 +285,11 @@
     </div>
 
     <div id="sounds" aria-hidden="true">
-      <div class="sounds-head"><button id="sounds-close">‹ Back</button><b>🔊 Soundboard</b><span class="dim">plays on the TV</span></div>
+      <div class="sounds-head"><button id="sounds-close">‹ Back</button><b>🔊 Soundboard</b><span class="dim">on the TV</span></div>
+      <div class="board-tabs" id="board-tabs" hidden><button type="button" data-tab="board" aria-pressed="true">🔊 Sounds</button><button type="button" data-tab="words" aria-pressed="false">📢 Words</button></div>
       <div id="board"></div>
-      <div class="cool" title="One sound every 3 s, across all phones"><div id="cool-fill"></div></div>
+      <div id="words" hidden></div>
+      <div class="cool" title="One every 3 s, across all phones"><div id="cool-fill"></div></div>
       <p class="dim" style="margin:0;text-align:center">Swipe right to go back to counting</p>
     </div>
     <button id="sounds-tab" aria-label="Soundboard" hidden>🔊</button>

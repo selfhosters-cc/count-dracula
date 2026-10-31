@@ -326,12 +326,36 @@ function start(phoneName) {
   })
   // ---- the soundboard page: swipe left from counting (or tap the 🔊 edge tab), swipe right to come back
   // A press names the Event on the TV, so with none open there's no soundboard.
+  // The same page holds 📢 Words, the TV's huge phrases, under a second tab.
   const soundboard = () => (live.state?.event ? (live.state.settings.soundboard ?? []) : [])
+  const wordBoard = () => (live.state?.event ? (live.state.settings.words ?? []) : [])
+  function showTab(tab) {
+    for (const b of $('board-tabs').children) b.setAttribute('aria-pressed', String(b.dataset.tab === tab))
+    $('board').hidden = tab !== 'board'
+    $('words').hidden = tab !== 'words'
+  }
   function renderSounds() {
     const sounds = soundboard()
-    $('sounds-tab').hidden = !sounds.length // switched off → no page, no tab
-    $('sounds-from-menu').hidden = !sounds.length
-    if (!sounds.length) closeSounds()
+    const words = wordBoard()
+    const any = sounds.length || words.length
+    $('sounds-tab').hidden = !any // both switched off → no page, no tab
+    $('sounds-from-menu').hidden = !any
+    if (!any) closeSounds()
+    $('board-tabs').hidden = !(sounds.length && words.length)
+    if (!sounds.length) showTab('words')
+    else if (!words.length) showTab('board')
+    const phrases = words.map((w) => `${w.slot}:${w.text}`).join('|')
+    if ($('words').dataset.phrases !== phrases) {
+      $('words').dataset.phrases = phrases
+      $('words').replaceChildren(
+        ...words.map((w) => {
+          const b = Object.assign(document.createElement('button'), { type: 'button', textContent: w.text })
+          b.dataset.slot = w.slot
+          return b
+        }),
+      )
+    }
+    for (const b of $('words').children) b.disabled = !joinKey
     const labels = sounds.map((s) => `${s.slot}:${s.emoji}:${s.label}`).join('|')
     if ($('board').dataset.labels !== labels) {
       $('board').dataset.labels = labels
@@ -348,7 +372,7 @@ function start(phoneName) {
   }
   const soundsOpen = () => $('sounds').classList.contains('on')
   function openSounds() {
-    if (!soundboard().length) return
+    if (!soundboard().length && !wordBoard().length) return
     renderSounds()
     $('menu').classList.remove('on')
     $('sounds').classList.add('on')
@@ -392,6 +416,21 @@ function start(phoneName) {
     // The shared 3 s cooldown, shown as a bar emptying.
     $('board').classList.add('cooling')
     $('cool-fill').animate([{ width: '100%' }, { width: '0%' }], { duration: 3_000, easing: 'linear' }).finished.then(() => $('board').classList.remove('cooling'))
+  })
+  $('board-tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tab]')
+    if (b) showTab(b.dataset.tab)
+  })
+  $('words').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-slot]')
+    if (!b) return
+    const res = await post('/api/word', { slot: Number(b.dataset.slot), ...night() }).catch(() => null)
+    if (res?.status === 400) return toast("That night isn't on the TV any more")
+    if (!res?.ok) return toast("Couldn't reach the TV")
+    if (!(await res.json()).shown) return toast('Cooling down: one every 3 s')
+    navigator.vibrate?.(15)
+    $('words').classList.add('cooling')
+    $('cool-fill').animate([{ width: '100%' }, { width: '0%' }], { duration: 3_000, easing: 'linear' }).finished.then(() => $('words').classList.remove('cooling'))
   })
   // The quiet nudge (spec §7): it opens the usual End the night, choices and all. ✕ hides it for 30 minutes.
   function nudgeDismissedAt() {

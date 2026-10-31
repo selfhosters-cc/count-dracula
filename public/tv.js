@@ -11,7 +11,7 @@ import { createRaceChart } from '/race-chart.js'
 import { biggestCrew, clockTime, costumeOfTheNight, eventNow, ghost, leaderboard, minuteOfDay, pace, peakHalfHour, rush, tagColour } from '/shared/night-maths.js'
 import { createSound } from '/sound.js'
 import { createWebAudio } from '/web-audio.js'
-import { createTeaser, teaserLines } from '/teaser.js'
+import { createTeaser, spookLines, teaserLines } from '/teaser.js'
 import { noNightLines } from '/no-night.js'
 import { helperLink, tvQrCodeLine, watchLink } from '/door-view.js'
 
@@ -504,6 +504,34 @@ const teaser = createTeaser({
 })
 const quietOrAway = (state) => !live?.connected || over(state) || state.event.id == null
 
+// ---- huge words over the whole TV: the door phone's 📢 Words, and the idle spooks when no kid has come for
+// 2 minutes. One layer, under the milestone and golden takeovers; the newest line replaces whatever is up.
+let wordRun = null
+function showWord(text, seconds) {
+  const layer = $('word')
+  wordRun?.stop()
+  $('word-text').textContent = text
+  layer.hidden = false
+  const run = (wordRun = animate(layer, { opacity: [0, 1, 1, 0] }, { duration: seconds, times: [0, 0.08, 0.88, 1] }))
+  animate($('word-text'), { scale: [0.5, 1.08, 1, 1.04], rotate: [-4, 2, -1, 0] }, { duration: seconds, times: [0, 0.1, 0.5, 1] })
+  run.then(() => run === wordRun && (layer.hidden = true))
+}
+function hideWord() {
+  if ($('word').hidden) return
+  wordRun?.stop()
+  const run = (wordRun = animate($('word'), { opacity: 0 }, { duration: 0.3 }))
+  run.then(() => run === wordRun && ($('word').hidden = true))
+}
+let spookOrder = null // shuffled once per TV
+const spooks = createTeaser({
+  clock,
+  idleMs: 120_000,
+  showMs: 6_000,
+  show: (line) => showWord(line, 6),
+  hide: hideWord,
+  lines: () => (live?.state ? (spookOrder ??= spookLines(live.state)) : []),
+})
+
 // ---- live state (or, with /tv?event=<id>, one past night's recap from stored data). A TV link reads with its
 // token; a paired bare /tv adds its device token, which marks it as the Household's own TV.
 const streamUrl = () => {
@@ -644,17 +672,20 @@ live?.on(({ state, cause, delta }) => {
   if (cause === 'disconnected') {
     wasDisconnected = true
     teaser.pause(true)
+    spooks.pause(true)
     return // stay frozen: no error screen, spinner or red
   }
   if (cause === 'nearby') return renderNearby(state)
   if (cause === 'joinQr' || cause === 'watchQr') return renderQrCard()
   teaser.pause(quietOrAway(state))
+  spooks.pause(quietOrAway(state))
   kidsCounted = state.event.id == null ? null : state.kids.length // no night on: no "Start the night"
   showStart()
   if (cause === 'snapshot') {
     if (onScreen !== undefined && state.event.id !== onScreen) cutOff()
     onScreen = state.event.id
     teaser.activity() // (re)connected: the 45 s count from now
+    spooks.activity()
     renderQrCard() // a TV that reconnects mid-way shows the card with the time left
     return renderSnapshot(state, cause)
   }
@@ -666,6 +697,7 @@ live?.on(({ state, cause, delta }) => {
     return renderRace(state) // the hero's pace line becomes the verdict (and back on Resume)
   }
   if (delta.type === 'soundboard') return playBoard(delta)
+  if (delta.type === 'word') return showWord(delta.text, 4)
   if (delta.type === 'mix.changed') return applyMix(state)
   renderRace(state)
   renderGoldenPill(state)
@@ -674,6 +706,7 @@ live?.on(({ state, cause, delta }) => {
   if (inRecap(state)) renderCards(state) // a straggler: it pops, and the recap keeps up
   if (delta.type === 'kid.added') {
     teaser.activity() // any tap cancels the teaser and starts the 45 s over
+    spooks.activity()
     if (!delta.kid.late) born.set(delta.kid.id, performance.now()) // late kids appear quietly
     showCount(total, delta.kid.late ? 'roll' : 'set') // the director's pop does the bounce
     director.push(delta.moments ?? [], delta.kid)
