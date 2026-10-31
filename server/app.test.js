@@ -176,15 +176,17 @@ describe('live stream', () => {
 
 describe('per-Household streams', () => {
   test("a stream opened with one Household's key never hears another Household's taps", async () => {
-    const app = start()
+    // Two weeks before today's time: a sign-up on Halloween evening gets no Test night, and this one needs it.
+    const now = () => Date.now() - 14 * 24 * 60 * 60_000
+    const app = start({}, { now })
     const other = app.ledger.household(app.ledger.createHousehold({ displayName: 'Next door', timeZone: 'America/Toronto' }))
     const controller = new AbortController()
     const res = await fetch(`${app.url}/api/stream?key=${other.joinKey()}`, { signal: controller.signal })
     const stream = readFrames(res)
     expect((await stream.next()).data.event.name).toBe('Test night')
 
-    await postTap(app, aTap('ours'))
-    await postTap(app, aTap('theirs'), { key: other.joinKey(), house: other })
+    await postTap(app, { ...aTap('ours'), tappedAt: now() })
+    await postTap(app, { ...aTap('theirs'), tappedAt: now() }, { key: other.joinKey(), house: other })
 
     const delta = await stream.next()
     expect(delta.data).toMatchObject({ seq: 1, kid: { id: 'theirs', number: 1 } })

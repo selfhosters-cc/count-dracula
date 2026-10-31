@@ -68,7 +68,8 @@ describe('the Household #1 migration', () => {
 })
 
 function twoHouseholds() {
-  const ledger = openLedger(new Database(':memory:'), {})
+  // A fixed afternoon: a sign-up on Halloween evening gets no Test night, and these tests count on one.
+  const ledger = openLedger(new Database(':memory:'), { now: () => Date.parse('2026-10-17T18:00:00Z') })
   const a = namingTheDoor(ledger.household(ledger.createHousehold({ displayName: 'The Smiths', timeZone: 'America/Toronto' })))
   const b = namingTheDoor(ledger.household(ledger.createHousehold({ displayName: 'Casa Ortiz', timeZone: 'America/Vancouver' })))
   return { ledger, a, b }
