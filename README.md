@@ -197,16 +197,9 @@ golden tickets, leaderboard, new-costume alert, soundboard, pumpkin patch, recap
 
 ### How we deploy ours
 
-Our own site runs in a Proxmox LXC under systemd, behind Cloudflare and a shared Caddy. The scripts for that live in
-`deploy/`, and every address and secret they need comes from `deploy/local.env`, which git ignores
-(`deploy/local.env.example` lists them). See [deploy/README.md](deploy/README.md) and the night-of
-[RUNBOOK](deploy/RUNBOOK.md).
-
-```bash
-deploy/create-lxc.sh       # once: creates the LXC
-deploy/deploy.sh           # runs the tests, ships the checkout, restarts, checks it answers
-deploy/deploy.sh --rollback
-```
+Our own site runs this image with a private Extension added, as a Komodo Stack on a Docker Host, behind
+Cloudflare and a shared Caddy. A release is a version tag here, then an image build. See
+[deploy/README.md](deploy/README.md) and the night-of [RUNBOOK](deploy/RUNBOOK.md).
 
 ### The TV laptop
 

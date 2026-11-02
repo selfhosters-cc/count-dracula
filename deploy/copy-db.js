@@ -1,4 +1,4 @@
-// Run on the LXC by deploy.sh before every deploy: bun copy-db.js <config.json> <out dir>
+// Run in the container before a release with a migration (deploy/README.md): bun copy-db.js <config.json> <out dir>
 // A timestamped VACUUM INTO copy of the live database (spec §4); prints its path, or nothing on a first deploy.
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'

@@ -9,7 +9,8 @@ COPY shared shared
 COPY public public
 COPY kiosk kiosk
 COPY config/config.example.json config/2025-counts.json config/
-COPY deploy/copy-db.js deploy/import-past-counts.js deploy/
+# The scripts deploy/RUNBOOK.md runs in the container.
+COPY deploy/copy-db.js deploy/import-past-counts.js deploy/access-request.js deploy/redelete.js deploy/loadtest.js deploy/
 COPY docker/entrypoint.sh docker/entrypoint.sh
 
 # The volume: the SQLite database, nightly backups and config.json (written on first start, then yours to edit).
