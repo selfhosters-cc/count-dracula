@@ -15,7 +15,7 @@ source deploy/local.env       # once per shell, for $PUBLIC_HOST in the commands
 c=count-dracula-count-dracula-1
 app()  { ssh count-dracula "sudo docker exec $c sh -c $(printf '%q' "$1")"; }    # a command in the running container
 once() { ssh count-dracula "sudo docker run --rm -v /srv/count-dracula:/data --entrypoint sh \$(sudo docker inspect -f '{{.Config.Image}}' $c) -c $(printf '%q' "$1")"; }   # the same, while it's stopped
-logs() { ssh count-dracula "sudo docker logs $* $c" 2>&1; }                     # its log: logs --tail 100, logs --since 2026-10-31T23:45:00Z
+logs() { ssh count-dracula "sudo journalctl -t count-dracula -o cat --no-pager $*"; }   # its log: logs -n 100, logs --since 2026-10-31T23:45:00Z
 dock() { ssh count-dracula "sudo docker $1 $c"; }                                # dock stop, dock start, dock restart
 ```
 
@@ -24,7 +24,7 @@ Commands run in `/app`, the image's checkout. Until the image is built on core v
 `tar -c deploy/access-request.js | ssh count-dracula "sudo docker cp - $c:/app/"`. A fresh container from `once`
 doesn't have it, so the re-delete needs v0.9.12.
 
-The log lasts as long as the container: a redeploy starts a new one, with an empty log.
+The log is in the Host's journal, across redeploys, for 30 days (what `/privacy` promises).
 
 ---
 
@@ -234,7 +234,7 @@ release, and run it again. (Oct 11, on v2: dev box 5 ms and 79 MB; the LXC a med
 
 | Scenario | First move |
 |---|---|
-| **Site down** | Docker restarts it by itself if it exits. `logs --tail 100`; `ssh count-dracula "sudo docker ps -a"` (is it `healthy`?); `dock restart`; the `/operator` health strip once it's back |
+| **Site down** | Docker restarts it by itself if it exits. `logs -n 100`; `ssh count-dracula "sudo docker ps -a"` (is it `healthy`?); `dock restart`; the `/operator` health strip once it's back |
 | **Bad release** | Pin the previous image in the infrastructure repo's `stacks/count-dracula/count-dracula/compose.yaml`, push, and deploy the Stack in Komodo. The database isn't touched, and migrations only add, so the previous build runs on it. Renovate's weekly PR would bump it back: release the fix first, or close that PR |
 | **Database file damaged** | Restore the newest backup, then re-delete (below). At most 15 minutes of taps are lost |
 | **`/data` lost** | Restore the Host from its nightly Proxmox backup (the infrastructure repo's runbooks). Up to a day of taps is lost |
@@ -256,8 +256,7 @@ once "cp /data/backups/<newest> /data/count-dracula.sqlite"
 ```
 
 **Then re-delete every Household deleted since the backup's time**, before starting. The ids are in the damaged
-file's `deletions` table if it still opens, and in the log if the container wasn't redeployed since (the backup's
-file name is its UTC time):
+file's `deletions` table if it still opens, and in the log either way (the backup's file name is its UTC time):
 
 ```bash
 once "bun -e \"const { Database } = require('bun:sqlite'); console.log(new Database('/data/damaged-<time>.sqlite', { readonly: true }).query('SELECT household_id FROM deletions WHERE deleted_at > ?').all(Date.parse('<backup time, e.g. 2026-10-31T23:45:00Z>')))\""
@@ -406,7 +405,7 @@ Decided in advance:
   `/setup` says so ("Couldn't go live at 4:00 pm: 3 nights are open…") and goes live once one ends. Nothing for us
   to do. (With fewer than 3 Live, the tick closed its oldest Ended night to make room, and said that instead.)
 - **Site down mid-evening:** phones keep counting into their outbox, and TVs freeze calmly. Make **one 10-minute
-  attempt**: `logs --tail 100`, `dock restart`, and restore the
+  attempt**: `logs -n 100`, `dock restart`, and restore the
   newest backup if the database is damaged (section 3). If it's not back by then, **stop debugging**: our porch goes
   to the paper tally, and every Household's outboxes drain when the site returns.
 - **Home internet down:** nothing to do; wait.

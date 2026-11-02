@@ -14,7 +14,7 @@ commands are in the [RUNBOOK](RUNBOOK.md).
 | Config | `/data/config.json` (switches, soundboard, backup directory), written on the first start only |
 | Private settings | the Stack's `secrets.sops.env` in the infrastructure repo (`COUNT_DRACULA_*`); the rest of the env is in its `compose.yaml` |
 | Data | `/data` is `/srv/count-dracula` on the Host: `count-dracula.sqlite` (WAL), `backups/` (every 15 min), `showcase/` (the tiles) |
-| Logs | `ssh count-dracula "sudo docker logs -f count-dracula-count-dracula-1"`. The log lasts as long as the container |
+| Logs | `ssh count-dracula "sudo journalctl -t count-dracula -f"`: the Host's journal, across redeploys, kept 30 days as `/privacy` says |
 
 There's no LAN address and no tailnet name: phones, TVs and Setup all use the public host. If the home internet
 drops, every TV freezes and phones keep their taps until it's back.
