@@ -1,20 +1,43 @@
-# Count Dracula runbook: opening day to Nov 1
+# Count Dracula runbook
 
 Everything done by hand, in order. The plan behind it is [v2 spec §18](../.scratch/multi-household/spec.md#18-launch-and-the-night-runbook),
 as changed by [v2.1 §12](../.scratch/multi-household/spec-v2.1.md#12-household-1-and-the-opening-line);
-setting up and deploying is in [README.md](README.md). Commands run on the dev machine from the repo, unless they
-say otherwise. `$PUBLIC_HOST` is the real host name from `deploy/local.env`; this file never names it.
+how production runs and how to release is in [README.md](README.md). Commands run on the dev machine from the
+repo, unless they say otherwise. `$PUBLIC_HOST` is the real host name from `deploy/local.env`; this file never
+names it.
+
+Since Nov 1, 2026, production is one container, `count-dracula-count-dracula-1`, on the Docker Host
+`count-dracula`. The database, its backups and `config.json` are in its `/data`. [Section 1](#1-opening-day-checklist)
+is the 2026 opening day as it ran on the LXC before that, kept as a record.
 
 ```bash
 source deploy/local.env       # once per shell, for $PUBLIC_HOST in the commands below
-lxc() { ssh proxmox "pct exec 118 -- bash -c $(printf '%q' "$1")"; }   # a command on LXC 118
+c=count-dracula-count-dracula-1
+app()  { ssh count-dracula "sudo docker exec $c sh -c $(printf '%q' "$1")"; }    # a command in the running container
+once() { ssh count-dracula "sudo docker run --rm -v /srv/count-dracula:/data --entrypoint sh \$(sudo docker inspect -f '{{.Config.Image}}' $c) -c $(printf '%q' "$1")"; }   # the same, while it's stopped
+logs() { ssh count-dracula "sudo docker logs $* $c" 2>&1; }                     # its log: logs --tail 100, logs --since 2026-10-31T23:45:00Z
+dock() { ssh count-dracula "sudo docker $1 $c"; }                                # dock stop, dock start, dock restart
 ```
+
+Commands run in `/app`, the image's checkout. Until the image is built on core v0.9.12, its `deploy/` has only
+`copy-db.js` and `import-past-counts.js`. For `app`, copy a script in first:
+`tar -c deploy/access-request.js | ssh count-dracula "sudo docker cp - $c:/app/"`. A fresh container from `once`
+doesn't have it, so the re-delete needs v0.9.12.
+
+The log lasts as long as the container: a redeploy starts a new one, with an empty log.
 
 ---
 
 ## 1. Opening-day checklist
 
 Done in order. Sign-up opens at step 7.
+
+**A record:** this ran in October 2026 on the LXC, with `deploy/deploy.sh` and this helper. None of it runs on
+the container.
+
+```bash
+lxc() { ssh proxmox "pct exec 118 -- bash -c $(printf '%q' "$1")"; }   # a command on LXC 118
+```
 
 v2's steps 1–4 were done on Oct 11 (v2 on the public host, Household #1 migrated from v1, the load check and the
 privacy checks). For v2.1 production is **rebuilt**: the v2 database is copied and set aside, v2.1 starts on a fresh
@@ -187,11 +210,11 @@ run after the core's, and it must be committed); `--rollback` swaps them, and th
 
 ## 2. Load check
 
-On LXC 118, against a second, scratch instance on a spare port (never the real one, never through Cloudflare or
-Caddy: the per-IP cap would stop it, and it's the server's CPU being measured):
+In the container, against a second, scratch instance on a spare port (never the real one, never through
+Cloudflare or Caddy: the per-IP cap would stop it, and it's the Host's CPU being measured):
 
 ```bash
-lxc "cd /opt/count-dracula && /usr/local/bin/bun deploy/loadtest.js --port 3191"
+app "bun deploy/loadtest.js --port 3191"
 ```
 
 It makes its own Households in a temp database, opens 200 TV-link viewers on one of them plus enough on others to
@@ -202,7 +225,7 @@ reach 3,000 streams, taps, and prints:
 
 It refuses port 3131 and the real database, and deletes its scratch database when done. If either fails, lower the
 caps in `server/guard.js` (`LIMITS`: `householdViewers`, `siteStreams`, `siteCeiling`) to what passes, commit,
-redeploy, and run it again. (Oct 11, on v2: dev box 5 ms and 79 MB; LXC 118 a median of 3.8 ms, worst 7.8 ms, and
+release, and run it again. (Oct 11, on v2: dev box 5 ms and 79 MB; the LXC a median of 3.8 ms, worst 7.8 ms, and
 64 MB.)
 
 ---
@@ -211,10 +234,11 @@ redeploy, and run it again. (Oct 11, on v2: dev box 5 ms and 79 MB; LXC 118 a me
 
 | Scenario | First move |
 |---|---|
-| **Site down** | systemd restarts it by itself. `lxc "journalctl -u count-dracula -n 100"`; `lxc "systemctl status count-dracula"`; the `/operator` health strip once it's back |
-| **Bad deploy** | `deploy/deploy.sh --rollback` (the previous build, its Extensions with it; the database isn't touched) |
+| **Site down** | Docker restarts it by itself if it exits. `logs --tail 100`; `ssh count-dracula "sudo docker ps -a"` (is it `healthy`?); `dock restart`; the `/operator` health strip once it's back |
+| **Bad release** | Pin the previous image in the infrastructure repo's `stacks/count-dracula/count-dracula/compose.yaml`, push, and deploy the Stack in Komodo. The database isn't touched, and migrations only add, so the previous build runs on it. Renovate's weekly PR would bump it back: release the fix first, or close that PR |
 | **Database file damaged** | Restore the newest backup, then re-delete (below). At most 15 minutes of taps are lost |
-| **Overload** | Lower the caps in `server/guard.js` and redeploy (outside the freeze, unless the site is down). Phones keep priority by design |
+| **`/data` lost** | Restore the Host from its nightly Proxmox backup (the infrastructure repo's runbooks). Up to a day of taps is lost |
+| **Overload** | Lower the caps in `server/guard.js` and release (outside the freeze, unless the site is down). Phones keep priority by design |
 | **Abuse** | `/operator` → find the Household → **Rename** (a bad name) or **Suspend** (a pattern). No warning step |
 | **Suspected breach** | Wipe the sessions (every Manager signs in again), rotate every TV link and join key, rotate the Google client secret (below) |
 | **Sign-up flood** | `/operator` → **Pause sign-ups** |
@@ -222,34 +246,38 @@ redeploy, and run it again. (Oct 11, on v2: dev box 5 ms and 79 MB; LXC 118 a me
 
 ### Database file damaged
 
+With the container stopped, `once` runs each command in a fresh one, on the same image and `/data`:
+
 ```bash
-lxc "systemctl stop count-dracula"
-lxc "ls -1t /var/lib/count-dracula/backups/ | head -3"                     # the newest copy, and its time (UTC)
-lxc "cd /var/lib/count-dracula && mv count-dracula.sqlite damaged-\$(date +%s).sqlite && rm -f count-dracula.sqlite-wal count-dracula.sqlite-shm"
-lxc "cp /var/lib/count-dracula/backups/<newest> /var/lib/count-dracula/count-dracula.sqlite && chown countdracula: /var/lib/count-dracula/count-dracula.sqlite"
+dock stop
+once "ls -1t /data/backups/ | head -3"                                       # the newest copy, and its time (UTC)
+once "cd /data && mv count-dracula.sqlite damaged-\$(date +%s).sqlite && rm -f count-dracula.sqlite-wal count-dracula.sqlite-shm"
+once "cp /data/backups/<newest> /data/count-dracula.sqlite"
 ```
 
 **Then re-delete every Household deleted since the backup's time**, before starting. The ids are in the damaged
-file's `deletions` table if it still opens, and in the journal either way (the backup's file name is its UTC time):
+file's `deletions` table if it still opens, and in the log if the container wasn't redeployed since (the backup's
+file name is its UTC time):
 
 ```bash
-lxc "/usr/local/bin/bun -e \"const { Database } = require('bun:sqlite'); console.log(new Database('/var/lib/count-dracula/damaged-<time>.sqlite', { readonly: true }).query('SELECT household_id FROM deletions WHERE deleted_at > ?').all(Date.parse('<backup time, e.g. 2026-10-31T23:45:00Z>')))\""
-lxc "journalctl -u count-dracula --since '<backup time, local>' | grep 'household deleted'"
-lxc "cd /opt/count-dracula && /usr/local/bin/bun deploy/redelete.js /var/lib/count-dracula/count-dracula.sqlite <id> <id> …"
-lxc "chown countdracula: /var/lib/count-dracula/count-dracula.sqlite* && systemctl start count-dracula"
+once "bun -e \"const { Database } = require('bun:sqlite'); console.log(new Database('/data/damaged-<time>.sqlite', { readonly: true }).query('SELECT household_id FROM deletions WHERE deleted_at > ?').all(Date.parse('<backup time, e.g. 2026-10-31T23:45:00Z>')))\""
+logs --since <backup time, e.g. 2026-10-31T23:45:00Z> | grep 'household deleted'
+once "bun deploy/redelete.js /data/count-dracula.sqlite <id> <id> …"
+dock start
 ```
 
 ### Suspected breach
 
 ```bash
-lxc "systemctl stop count-dracula"
-lxc "/usr/local/bin/bun -e \"const { Database } = require('bun:sqlite'); const db = new Database('/var/lib/count-dracula/count-dracula.sqlite'); db.exec('DELETE FROM sessions; DELETE FROM paired_devices'); const t = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url'); const k = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'[b % 56]).join(''); for (const { id } of db.query('SELECT id FROM households').all()) db.query('UPDATE households SET tv_token = ?, join_key = ? WHERE id = ?').run(t(), k(), id)\""
-lxc "systemctl start count-dracula"
+dock stop
+once "bun -e \"const { Database } = require('bun:sqlite'); const db = new Database('/data/count-dracula.sqlite'); db.exec('DELETE FROM sessions; DELETE FROM paired_devices'); const t = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url'); const k = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'[b % 56]).join(''); for (const { id } of db.query('SELECT id FROM households').all()) db.query('UPDATE households SET tv_token = ?, join_key = ? WHERE id = ?').run(t(), k(), id)\""
+dock start
 ```
 
-Then a new client secret in the Google console (**Clients** → the web client → **Add secret**, delete the old one),
-put it in `deploy/local.env`, and `deploy/deploy.sh`. Every TV shows pairing again and every phone needs a new join
-link; every Manager signs in again.
+Then a new client secret in the Google console (**Clients** → the web client → **Add secret**, delete the old one).
+It goes in the infrastructure repo as `COUNT_DRACULA_GOOGLE_CLIENT_SECRET`, in
+`stacks/count-dracula/count-dracula/secrets.sops.env`; then `just baseline count-dracula`, and deploy the Stack in
+Komodo. Every TV shows pairing again and every phone needs a new join link; every Manager signs in again.
 
 ---
 
@@ -258,7 +286,7 @@ link; every Manager signs in again.
 Someone emails asking what we hold about them. Answer by hand, from their email:
 
 ```bash
-lxc "cd /opt/count-dracula && /usr/local/bin/bun deploy/access-request.js /var/lib/count-dracula/count-dracula.sqlite 'them@example.com'"
+app "bun deploy/access-request.js /data/count-dracula.sqlite 'them@example.com'"
 ```
 
 It prints their Manager row, their Household (name, time zone, Location cell, dates) and its Events with kid counts,
@@ -270,13 +298,14 @@ while it's sorted out by email.
 
 ## 5. Checked off production, on the dev box
 
-### Restore drill (ticket 49, once, any time before Oct 31)
+### Restore drill (ticket 49, once a season, before Oct 31)
 
-From the newest daily pull (it checks the off-box pull at the same time):
+From the newest of the app's own 15-minute copies, on a dev-box server. (The copy off the Host is its nightly
+Proxmox backup, drilled from the infrastructure repo.)
 
 ```bash
-ls -1t ~/count-dracula-backups/count-dracula-*.sqlite | head -1            # pulled within the last day?
-mkdir -p /tmp/restore-drill && cp "$(ls -1t ~/count-dracula-backups/count-dracula-*.sqlite | head -1)" /tmp/restore-drill/db.sqlite
+mkdir -p /tmp/restore-drill
+ssh count-dracula 'sudo sh -c "cat \$(ls -1t /srv/count-dracula/backups/count-dracula-*.sqlite | head -1)"' > /tmp/restore-drill/db.sqlite
 echo '{ "port": 3192, "dbPath": "/tmp/restore-drill/db.sqlite" }' > /tmp/restore-drill/config.json
 bun server/main.js /tmp/restore-drill/config.json &                         # "stop, copy into place, start"
 curl -s localhost:3192/healthz                                              # ok
@@ -318,9 +347,9 @@ bun server/main.js /tmp/nearby-check/config.json
 
 Each time, the two houses are in different Areas and **both phones show the same 🏘️ Near you: … · 2 houses** (and
 both TVs "2 houses counting"). If it fails by Oct 31 at 3 pm, `"nearbyEdges": false` goes into `switches` in
-`/etc/count-dracula/config.json` (then a restart, outside the freeze): "near you" is then the Household's own Area,
-which is the one-Area check above (with `edge` or `corner`, neither phone shows "near you"). Then
-`rm -rf /tmp/nearby-check`.
+`/data/config.json` (`/srv/count-dracula/config.json` on the Host; then `dock restart`, outside the freeze):
+"near you" is then the Household's own Area, which is the one-Area check above (with `edge` or `corner`, neither
+phone shows "near you"). Then `rm -rf /tmp/nearby-check`.
 
 **There are no fake Households on production.**
 
@@ -355,8 +384,9 @@ going live Oct 31 at 4:00 pm. Nothing to create. In `/setup`:
 
 ## 8. Oct 31
 
-**Change freeze from 3 pm to midnight.** No app deploys and no Caddy changes unless the site is down
-(`deploy.sh` warns and asks).
+**Change freeze from 3 pm to midnight.** No release of either image (`just release`, or merging Renovate's PR for
+one), no Stack deploy and no Caddy changes, unless the site is down. Nothing checks for it: `deploy.sh`'s warning
+went with the LXC.
 
 Before 3 pm: our `/setup` → **Tonight** has no test night left open (End and Close now any), and **Nights** shows
 Halloween 2026 Upcoming, going live by itself at 4:00 pm, racing "Halloween 2025 (counts)".
@@ -376,7 +406,7 @@ Decided in advance:
   `/setup` says so ("Couldn't go live at 4:00 pm: 3 nights are open…") and goes live once one ends. Nothing for us
   to do. (With fewer than 3 Live, the tick closed its oldest Ended night to make room, and said that instead.)
 - **Site down mid-evening:** phones keep counting into their outbox, and TVs freeze calmly. Make **one 10-minute
-  attempt**: `lxc "journalctl -u count-dracula -n 100"`, `lxc "systemctl restart count-dracula"`, and restore the
+  attempt**: `logs --tail 100`, `dock restart`, and restore the
   newest backup if the database is damaged (section 3). If it's not back by then, **stop debugging**: our porch goes
   to the paper tally, and every Household's outboxes drain when the site returns.
 - **Home internet down:** nothing to do; wait.
@@ -389,7 +419,7 @@ Every Event still Live at 3:00 am (each Household's own time) is ended by itself
 nights still take late kids until **noon**, when each goes **Past** by itself. The freeze is over at midnight.
 
 1. **In the morning, the 3 am end:** `/operator` shows **no Counting, Stale or Waiting rows**, only **Ended** and
-   **No night**. `lxc "journalctl -u count-dracula --since '03:00' | head"` shows no errors around then. If we left
+   **No night**. `logs --since "$(date -d 03:00 -Iseconds)" | head` shows no errors around then. If we left
    ours Live, Halloween 2026 says "Ended automatically at 3:00 am. Late kids still count until noon."
 2. **Before noon**, if our night ran on paper: **Nights** → Halloween 2026 → **➕ Add missed kids** from the tally
    sheet. A Past night takes no more kids, and can't be resumed or reset.
