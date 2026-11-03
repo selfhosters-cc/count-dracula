@@ -10,6 +10,15 @@ function signUp(config = {}) {
 }
 
 describe('last year, estimated', () => {
+  test('is named for the year before the next Halloween: 2026 once Halloween 2026 is over', () => {
+    const { house } = signUp({ now: () => Date.parse('2026-11-03T15:00:00Z') })
+
+    house.apply({ type: 'setLastYear', total: 200 })
+
+    expect(house.events().find((e) => e.estimated).name).toBe('Halloween 2026 (estimated)')
+    expect(house.events().find((e) => e.name === 'Halloween 2027').raceAgainstId).toBe(house.events().find((e) => e.estimated).id)
+  })
+
   test("a total of 200 makes five buckets in 2025's shape that add up to exactly 200", () => {
     const { house, halloween } = signUp()
 
