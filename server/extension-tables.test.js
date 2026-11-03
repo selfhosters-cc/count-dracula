@@ -11,6 +11,8 @@ import * as fixture from '../test/fixture-extension/index.js'
 import { fakeGoogle } from '../test/fake-google.js'
 import { cookieOf, signIn } from '../test/sign-in.js'
 
+// Sign-up before Oct 31 makes "Halloween 2026" Upcoming beside the Test night (spec v2.1 §8); after, only the Test night.
+const BEFORE_HALLOWEEN = Date.parse('2026-10-20T20:00:00Z')
 const running = []
 const stopAll = () => running.splice(0).forEach((app) => app.stop())
 afterEach(stopAll)
@@ -19,7 +21,7 @@ afterEach(stopAll)
 function start({ dir = mkdtempSync(join(tmpdir(), 'count-dracula-')), extensions = [fixture], ...options } = {}) {
   const configPath = join(dir, 'config.json')
   writeFileSync(configPath, JSON.stringify({ dbPath: join(dir, 'db.sqlite') }))
-  const app = startServer({ configPath, port: 0, env: {}, extensions, log: () => {}, ...options })
+  const app = startServer({ configPath, port: 0, env: {}, extensions, log: () => {}, now: () => BEFORE_HALLOWEEN, ...options })
   running.push(app)
   return { app, dir }
 }
