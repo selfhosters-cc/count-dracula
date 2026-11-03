@@ -9,6 +9,8 @@ import { fakeGoogle } from '../test/fake-google.js'
 import { cookieOf, signIn } from '../test/sign-in.js'
 import { readFrames } from '../test/sse.js'
 
+// Sign-up before Oct 31 makes "Halloween 2026" Upcoming beside the Test night (spec v2.1 §8); after, only the Test night.
+const BEFORE_HALLOWEEN = Date.parse('2026-10-20T20:00:00Z')
 const running = []
 const aborts = []
 afterEach(() => {
@@ -24,7 +26,7 @@ async function served() {
   const configPath = join(dir, 'config.json')
   writeFileSync(configPath, JSON.stringify({ dbPath: join(dir, 'db.sqlite') }))
   const google = fakeGoogle()
-  const app = startServer({ configPath, port: 0, google, env: {} })
+  const app = startServer({ configPath, port: 0, google, env: {}, now: () => BEFORE_HALLOWEEN })
   running.push(app)
   const cookie = cookieOf(await signIn({ app, google }, { sub: 'a', email: 'a@example.com' }, { displayName: 'The Smiths' }))
   const info = await (await fetch(`${app.url}/api/household`, { headers: { Cookie: cookie } })).json()

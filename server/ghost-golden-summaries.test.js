@@ -296,7 +296,7 @@ describe('the tally sheet', () => {
     const configPath = join(dir, 'config.json')
     writeFileSync(configPath, JSON.stringify({ dbPath: join(dir, 'db.sqlite') }))
     const google = fakeGoogle()
-    const app = startServer({ configPath, port: 0, google, env: {}, log: () => {} })
+    const app = startServer({ configPath, port: 0, google, env: {}, log: () => {}, now: () => local('2026-10-20', '12:00') }) // before Halloween, which sign-up then makes Upcoming
     running.push(app)
     const cookie = cookieOf(await signIn({ app, google }, { sub: 'a', email: 'a@example.com' }, { displayName: 'The Smiths' }))
     const get = (path) => fetch(`${app.url}${path}`, { headers: { Cookie: cookie } })

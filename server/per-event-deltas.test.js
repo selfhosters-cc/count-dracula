@@ -175,6 +175,8 @@ describe('nothing open', () => {
 })
 
 // ---- over HTTP: what a TV-link stream actually gets
+// Sign-up before Oct 31 makes "Halloween 2026" Upcoming beside the Test night (spec v2.1 §8); after, only the Test night.
+const BEFORE_HALLOWEEN = Date.parse('2026-10-20T20:00:00Z')
 const running = []
 const aborts = []
 afterEach(() => {
@@ -187,7 +189,7 @@ async function served() {
   const configPath = join(dir, 'config.json')
   writeFileSync(configPath, JSON.stringify({ dbPath: join(dir, 'db.sqlite') }))
   const google = fakeGoogle()
-  const app = startServer({ configPath, port: 0, google, env: {} })
+  const app = startServer({ configPath, port: 0, google, env: {}, now: () => BEFORE_HALLOWEEN })
   running.push(app)
   const cookie = cookieOf(await signIn({ app, google }, { sub: 'a', email: 'a@example.com' }, { displayName: 'House A' }))
   const info = await (await fetch(`${app.url}/api/household`, { headers: { Cookie: cookie } })).json()
@@ -211,7 +213,7 @@ describe('a TV-link stream', () => {
     expect(first.event.id).toBe(testNight)
 
     await admin({ type: 'goLive', eventId: halloween })
-    await admin({ type: 'backfill', rows: [{ startMs: Date.now() - 60_000, endMs: Date.now(), count: 1 }], ...named(house, testNight) })
+    await admin({ type: 'backfill', rows: [{ startMs: BEFORE_HALLOWEEN - 60_000, endMs: BEFORE_HALLOWEEN, count: 1 }], ...named(house, testNight) })
 
     const switched = await tv.next()
     const backfilled = await tv.next()
