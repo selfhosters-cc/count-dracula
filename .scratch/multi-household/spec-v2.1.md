@@ -195,7 +195,9 @@ All times are in the Household's zone.
 |---|---|
 | Before Oct 31, 4:00 pm | A live **Test night** (starter costumes, **0 golden tickets**), and **"Halloween 2026"**, Upcoming, going live Oct 31 at 4:00 pm (starter costumes, 5 golden tickets) |
 | Oct 31, 4:00 pm – Nov 1, 3:00 am | Only "Halloween 2026", **live now**. No golden tickets can be drawn until a Race against or Expected kids exists |
-| After Nov 1, 3:00 am | Only a live **Test night** |
+| After Nov 1, 3:00 am | ~~Only a live **Test night**~~ The same as before Oct 31, with next year's Halloween (amended 2026-11-03) |
+
+> **Amended 2026-11-03:** the Halloween is the next one not yet over, by year: from Nov 1 2026, 3:00 am, sign-up makes "Halloween 2027" beside the Test night, and so on each year. "About how many kids came last year?" names its Event for the year before that Halloween ("Halloween 2026 (estimated)").
 
 - The **Test night is an ordinary Event**: no marker and no chip. It auto-ends at 3 am, goes Past at noon, can be renamed or deleted, and has a Night summary. The server remembers **which Event it was, by id**, never by name: `households.test_night_event_id`. Only Abandoned sign-up and checklist item 3 use that.
 - Race against is the Household default, which is None at sign-up.

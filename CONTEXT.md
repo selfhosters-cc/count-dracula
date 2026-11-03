@@ -62,7 +62,7 @@ A short code shown on a TV that has no TV link yet. A Manager enters or scans it
 _Avoid_: TV code, share code, join code
 
 **Goes live at**:
-The time an Upcoming Event becomes Live by itself (a scheduled Go live). It never ends a Live Event. If the Household already has 3 open, it closes the oldest Ended one to make room, or else waits until one is ended or closed. Sign-up sets it on \"Halloween 2026\" to Oct 31, 4:00 pm in the Household's time zone; a Manager can change it or Go live early.
+The time an Upcoming Event becomes Live by itself (a scheduled Go live). It never ends a Live Event. If the Household already has 3 open, it closes the oldest Ended one to make room, or else waits until one is ended or closed. Sign-up sets it on the next Halloween (\"Halloween 2027\" from Nov 1 2026) to Oct 31, 4:00 pm in the Household's time zone; a Manager can change it or Go live early.
 _Avoid_: Start time, scheduled start, auto-start
 
 **Night summary**:

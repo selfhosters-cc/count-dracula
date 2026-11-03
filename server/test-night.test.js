@@ -55,13 +55,23 @@ describe.each(ZONES)('sign-up in %s', (timeZone) => {
     }
   })
 
-  test('after Nov 1, 3:00 am: only a live Test night', () => {
-    for (const [date, time] of [['2026-11-01', '03:00'], ['2026-11-02', '12:00']]) {
+  test('after Nov 1, 3:00 am: a live Test night and Halloween 2027 going live next Oct 31 at 4:00 pm', () => {
+    // Across New Year's too, where Auckland's year is a day ahead of UTC's.
+    for (const [date, time] of [['2026-11-01', '03:00'], ['2026-11-02', '12:00'], ['2026-12-31', '23:30'], ['2027-01-01', '00:30']]) {
       const { house } = signUpAt(date, time, timeZone)
 
-      expect(made(house)).toEqual([{ name: 'Test night', state: 'live', goldenCount: 0, goesLiveAt: null, raceAgainstId: null, costumes: 8 }])
+      expect(made(house)).toEqual([
+        { name: 'Halloween 2027', state: 'upcoming', goldenCount: 5, goesLiveAt: zonedTime('2027-10-31', '16:00', timeZone), raceAgainstId: null, costumes: 8 },
+        { name: 'Test night', state: 'live', goldenCount: 0, goesLiveAt: null, raceAgainstId: null, costumes: 8 },
+      ])
       expect(house.testNightId()).toBe(house.doorEvent().id)
     }
+  })
+
+  test('Oct 31 2027, 4:00 pm: only Halloween 2027, live now', () => {
+    const { house } = signUpAt('2027-10-31', '16:00', timeZone)
+
+    expect(made(house)).toEqual([{ name: 'Halloween 2027', state: 'live', goldenCount: 5, goesLiveAt: null, raceAgainstId: null, costumes: 8 }])
   })
 })
 

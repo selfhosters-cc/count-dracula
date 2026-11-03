@@ -94,10 +94,19 @@ const STARTER_COSTUMES = [
 ]
 
 // The night sign-up schedules (spec §6): Oct 31, 4:00 pm in the Household's zone.
-// A sign-up from its 3:00 am on Nov 1 on gets no "Halloween 2026" (spec v2.1 §8).
-const HALLOWEEN = { name: 'Halloween 2026', date: '2026-10-31', goesLiveAt: '16:00', over: '2026-11-01' }
+const HALLOWEEN_GOES_LIVE_AT = '16:00'
 // The safety net (spec §7): a Live night still on at 3:00 am local is ended.
 const AUTO_END_AT = '03:00'
+
+// The next Halloween at ms that isn't over, in the zone: { year, name, at (its 4:00 pm), over (Nov 1, 3:00 am) }.
+// Starting from ms's UTC year is safe in any zone: Nov 1 of the year before is long gone.
+function nextHalloween(ms, timeZone) {
+  for (let year = new Date(ms).getUTCFullYear(); ; year++) {
+    const over = zonedTime(`${year}-11-01`, AUTO_END_AT, timeZone)
+    if (ms < over) return { year, name: `Halloween ${year}`, at: zonedTime(`${year}-10-31`, HALLOWEEN_GOES_LIVE_AT, timeZone), over }
+  }
+}
+
 // An Ended night goes Past by itself at noon local after that 3:00 am (spec v2.1 §3).
 const PAST_AT = '12:00'
 const TEST_NIGHT = 'Test night'
@@ -167,7 +176,6 @@ const LAST_YEAR_SHAPE = [
   { start: '19:00', end: '19:30', share: 0.343931 },
   { start: '19:30', end: '20:00', share: 0.098266 },
 ]
-const ESTIMATED_NAME = 'Halloween 2025 (estimated)'
 const MAX_LAST_YEAR = 100_000
 
 // The ready checklist's marks (sign-in-simplify 06), kept on the Household.
@@ -205,21 +213,19 @@ export function openLedger(db, config) {
   const opened = new Map() // household id → its Ledger, so seq and the soundboard cooldown live on
 
   return {
-    // Sign-up (spec v2.1 §8), by when it happens in the Household's zone, with its join key and TV link:
-    // - before Oct 31, 4:00 pm: a live Test night (starter costumes, no golden tickets) and "Halloween 2026",
+    // Sign-up (spec v2.1 §8), by when it happens in the Household's zone, with its join key and TV link, makes
+    // the next Halloween not yet over ("Halloween 2027", from Nov 1 2026, 3:00 am):
+    // - before its Oct 31, 4:00 pm: a live Test night (starter costumes, no golden tickets) and the Halloween,
     //   Upcoming, going live Oct 31 at 4:00 pm (starter costumes, 5 golden tickets);
-    // - from then until Nov 1, 3:00 am: only "Halloween 2026", live now (with no Race against and no Expected
-    //   kids yet, it has no golden tickets to draw);
-    // - after: only a live Test night.
+    // - from then until Nov 1, 3:00 am: only the Halloween, live now (with no Race against and no Expected
+    //   kids yet, it has no golden tickets to draw).
     // The Test night is an ordinary Event, remembered by id in households.test_night_event_id. Returns the id.
     createHousehold({ displayName, timeZone }) {
       const name = displayNameOf(displayName)
       if (!isTimeZone(timeZone)) throw new BadCommand('A household needs its time zone')
       const at = now()
-      const halloweenAt = zonedTime(HALLOWEEN.date, HALLOWEEN.goesLiveAt, timeZone)
-      const halloweenOver = zonedTime(HALLOWEEN.over, AUTO_END_AT, timeZone)
-      const testNight = at < halloweenAt || at >= halloweenOver
-      const halloween = at < halloweenOver
+      const halloween = nextHalloween(at, timeZone)
+      const testNight = at < halloween.at
       return db.transaction(() => {
         const { id } = db
           .query('INSERT INTO households (display_name, time_zone, join_key, join_code, tv_token, watch_code, signed_up_at, last_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id')
@@ -237,10 +243,8 @@ export function openLedger(db, config) {
           const test = withCostumes(insertEvent.get(id, TEST_NIGHT, 'live', 0, null, at))
           db.query('UPDATE households SET test_night_event_id = ? WHERE id = ?').run(test.id, id)
         }
-        if (halloween) {
-          const live = at >= halloweenAt
-          withCostumes(insertEvent.get(id, HALLOWEEN.name, live ? 'live' : 'upcoming', 5, live ? null : halloweenAt, live ? at : null))
-        }
+        if (testNight) withCostumes(insertEvent.get(id, halloween.name, 'upcoming', 5, halloween.at, null))
+        else withCostumes(insertEvent.get(id, halloween.name, 'live', 5, null, at))
         return id
       })()
     },
@@ -1126,7 +1130,8 @@ export function openLedger(db, config) {
       // "About how many kids came last year?" (spec v2.1 §7): the total spread over 2025's shape as the Estimated
       // past event, the Household's default Race against. Entering it sets it on every Upcoming or open Event
       // racing None (createEvent starts new ones on it); changing it reshapes the same Event; null clears it,
-      // and its racers go back to None. Nothing racing another night is touched. Open racers resync.
+      // and its racers go back to None. Nothing racing another night is touched. Open racers resync. It's named
+      // for the year before the Household's next Halloween ("Halloween 2026 (estimated)" from Nov 1 2026), and keeps it.
       setLastYear({ total }) {
         if (!canEstimateLastYear()) throw new BadCommand('Last year’s estimate is switched off')
         const existing = estimatedEvent()
@@ -1139,7 +1144,7 @@ export function openLedger(db, config) {
         if (!Number.isInteger(total) || total < 1 || total > MAX_LAST_YEAR) throw new BadCommand('Last year needs a whole number of kids')
         const id = existing?.id ?? db
           .query("INSERT INTO events (household_id, name, counts_only, state, estimated) VALUES (?, ?, 1, 'past', 1) RETURNING id")
-          .get(householdId, ESTIMATED_NAME).id
+          .get(householdId, `Halloween ${nextHalloween(now(), household().time_zone).year - 1} (estimated)`).id
         db.query('DELETE FROM ghost_buckets WHERE event_id = ?').run(id)
         const insert = db.query('INSERT INTO ghost_buckets (event_id, slot_start, slot_end, count) VALUES (?, ?, ?, ?)')
         for (const b of lastYearBuckets(total)) insert.run(id, b.start, b.end, b.count)
