@@ -15,5 +15,5 @@ const extensions = await Promise.all((process.env.EXTENSIONS ?? '').split(/[\s,]
 const app = startServer({ configPath, extensions })
 console.log(`Count Dracula on ${app.url}`)
 console.log(`  TV:    ${app.url}/tv`)
-const [first] = app.ledger.households()
-if (first) console.log(`  Phone: ${app.url}/door?key=${app.ledger.household(first.id).joinKey()}`)
+// Never a join link: the log outlives the key's secrecy (a journal, a hosting log). Phones join from Setup.
+console.log(`  Setup: ${app.url}/setup`)

@@ -182,11 +182,11 @@ CDN on the night.
 
 ```bash
 cp config/config.example.json config/config.json
-bun start                                          # prints the TV and phone URLs
+bun start                                          # prints the TV and Setup URLs
 bun test
 ```
 
-- **Phone**: `http://<host>:3131/door?key=<join key>` (the server prints it), or enter the code on the homepage.
+- **Phone**: `http://<host>:3131/door?key=<join key>` (Setup's **Add a helper** shows it), or enter the code on the homepage.
 - **TV**: `http://<host>:3131/tv`. Click **Start the night** once to turn the sound on. `/tv?border`
   checks for overscan.
 - **Setup**: `http://<host>:3131/setup`. Google sign-in needs HTTPS and its environment (see `docker/.env.example`);
