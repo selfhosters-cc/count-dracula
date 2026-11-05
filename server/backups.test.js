@@ -74,5 +74,5 @@ describe('VACUUM INTO backups', () => {
     }
     expect(made).toHaveLength(81)
     expect(kept).toEqual([...expected].sort())
-  })
+  }, 30_000) // 81 real VACUUM INTO copies: about 0.5 s, but once past bun's 5 s default on a busy machine
 })
